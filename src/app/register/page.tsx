@@ -8,16 +8,39 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = React.useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
+
+  const [password, setPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+
+  const [num1, setNum1] = React.useState(0);
+  const [num2, setNum2] = React.useState(0);
+  const [captcha, setCaptcha] = React.useState('');
+
+  React.useEffect(() => {
+    setNum1(Math.floor(Math.random() * 10) + 1);
+    setNum2(Math.floor(Math.random() * 10) + 1);
+  }, []);
+
+  const passwordValidations = {
+    length: password.length >= 8,
+    specialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password),
+    number: /\d/.test(password),
+  };
+
+  const allPasswordReqsMet = Object.values(passwordValidations).every(Boolean);
+  const passwordsMatch = password && password === confirmPassword;
+  const isCaptchaCorrect = num1 > 0 && parseInt(captcha) === num1 + num2;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-           <div className="mx-auto mb-4">
+          <div className="mx-auto mb-4">
             <AhorroYaLogo className="h-12 w-12 text-primary" />
           </div>
           <CardTitle className="font-headline text-2xl">Crea tu cuenta</CardTitle>
@@ -40,8 +63,17 @@ export default function RegisterPage() {
               <Input id="email" type="email" placeholder="tu@email.com" required />
             </div>
             <div className="space-y-2 relative">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input id="password" type={showPassword ? 'text' : 'password'} required />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Contraseña</Label>
+                {allPasswordReqsMet && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+              </div>
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -50,7 +82,40 @@ export default function RegisterPage() {
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-             <div className="space-y-3">
+            {password.length > 0 && (
+              <div className="text-xs text-muted-foreground grid grid-cols-2 gap-x-4">
+                 <div className={`flex items-center gap-2 ${passwordValidations.length ? 'text-green-500' : ''}`}>
+                  {passwordValidations.length ? <CheckCircle2 className="h-3 w-3" /> : null} 8+ caracteres
+                </div>
+                <div className={`flex items-center gap-2 ${passwordValidations.number ? 'text-green-500' : ''}`}>
+                   {passwordValidations.number ? <CheckCircle2 className="h-3 w-3" /> : null} Un número
+                </div>
+                 <div className={`flex items-center gap-2 ${passwordValidations.specialChar ? 'text-green-500' : ''}`}>
+                  {passwordValidations.specialChar ? <CheckCircle2 className="h-3 w-3" /> : null} Un carácter especial
+                </div>
+              </div>
+            )}
+             <div className="space-y-2 relative">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                {passwordsMatch && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+              </div>
+              <Input 
+                id="confirmPassword" 
+                type={showConfirmPassword ? 'text' : 'password'} 
+                required 
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+               <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-[2.25rem] text-muted-foreground"
+              >
+                {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+            <div className="space-y-3">
               <Label>Tipo de cuenta</Label>
               <RadioGroup defaultValue="personal" className="grid grid-cols-3 gap-4">
                 <div>
@@ -81,6 +146,19 @@ export default function RegisterPage() {
                   </Label>
                 </div>
               </RadioGroup>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="captcha">¿Cuánto es {num1} + {num2}?</Label>
+                {isCaptchaCorrect && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+              </div>
+              <Input 
+                id="captcha" 
+                type="number" 
+                required 
+                value={captcha}
+                onChange={(e) => setCaptcha(e.target.value)}
+              />
             </div>
             <Button type="submit" className="w-full">
               Crear Cuenta
