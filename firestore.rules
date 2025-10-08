@@ -1,0 +1,296 @@
+/**
+ * @fileoverview Firestore Security Rules for "Ahorro Ya" Expense Tracking App.
+ *
+ * Core Philosophy:
+ * This ruleset implements a multi-tenant security model with a strong emphasis on data ownership and tenant isolation.
+ * Users can only access data related to tenants they are members of, with the tenant owner having additional privileges.
+ *
+ * Data Structure:
+ * - /tenants/{tenantId}: Stores tenant information, including the owner's UID.
+ * - /memberships/{membershipId}: Maps users to tenants and defines their roles (admin, member).
+ * - /users/{userId}: Stores user profile information.
+ * - Other collections (e.g., /expenses, /categories): Store tenant-specific data, each document including a 'tenantId' field.
+ *
+ * Key Security Decisions:
+ * - Strict Tenant Isolation: Users can only access resources within a tenant if they have a valid membership.
+ * - Owner-Only Access: Tenant owners have full access to their tenants' data.
+ * - No Public Listing: Collections containing private user data cannot be listed publicly.
+ * - Superadmin Role: The `isSuperadmin` flag in the `users` collection allows for administrative bypass, but requires a `get()` call.
+ * - Denormalization:  `tenantId` is included in almost every collection's documents, which is used for simpler, more performant rules.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Checks if the request is authenticated.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Authentication is required for most operations.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner of the specified user ID.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Enforces user-based ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner of the specified user ID, and that the resource exists.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Enforces user-based ownership and resource existence for destructive operations.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user is a member of the tenant.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Checks if a user is a member of a specific tenant.
+     */
+    function isTenantMember(tenantId) {
+        return exists(/databases/$(database)/documents/memberships/$(tenantId + "_" + request.auth.uid));
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner of the tenant.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Checks if a user is the owner of a specific tenant, by comparing the tenant's ownerUid field with the request's auth UID.
+     */
+    function isTenantOwner(tenantId) {
+        return get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid;
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner of the tenant and that the resource exists.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Checks if a user is the owner of a specific tenant and resource existence, by comparing the tenant's ownerUid field with the request's auth UID.
+     */
+    function isExistingTenantOwner(tenantId) {
+      return isTenantOwner(tenantId) && resource != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user is a superadmin.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     */
+    function isSuperAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperadmin == true;
+    }
+
+    /**
+     * @description Rules for the /tenants collection.
+     * @path /tenants/{tenantId}
+     * @allow Signed-in user creating a tenant with their UID as ownerUid. (create)
+     * @deny Unauthenticated user attempting to read tenant data.
+     * @principle Enforces tenant ownership and prevents unauthorized access.
+     */
+    match /tenants/{tenantId} {
+      allow get: if isSignedIn() && (isTenantMember(tenantId) || isTenantOwner(tenantId) || isSuperAdmin());
+      allow list: if false;
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isExistingTenantOwner(tenantId) || isSuperAdmin();
+      allow delete: if isExistingTenantOwner(tenantId) || isSuperAdmin();
+    }
+
+    /**
+     * @description Rules for the /memberships collection.
+     * @path /memberships/{membershipId}
+     * @allow Tenant owner or superadmin creating a membership. (create)
+     * @deny Non-tenant owner attempting to delete a membership.
+     * @principle Restricts membership management to tenant owners.
+     */
+    match /memberships/{membershipId} {
+      allow get: if isSignedIn() && (resource.data.uid == request.auth.uid || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if false;
+      allow create: if isSignedIn() && (isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /users collection.
+     * @path /users/{userId}
+     * @allow Signed-in user reading their own profile. (get)
+     * @deny Unauthenticated user attempting to create a user profile. (create)
+     * @principle Enforces user-based ownership for profile management.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isSuperAdmin();
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId) || isSuperAdmin();
+      allow delete: if isExistingOwner(userId) || isSuperAdmin();
+    }
+
+     /**
+      * @description Rules for the /currencies collection.
+      * @path /currencies/{currencyCode}
+      * @allow Any user can read currency data. (get, list)
+      * @deny Unauthenticated user attempting to write currency data.
+      */
+    match /currencies/{currencyCode} {
+      allow get, list: if true;
+      allow create, update, delete: if false; // TODO: Add admin role validation if needed.
+    }
+
+    /**
+     * @description Rules for the /fx_rates collection.
+     * @path /fx_rates/{fxRateId}
+     * @allow Tenant member or superadmin reading fx rate data. (get)
+     * @deny Non-tenant member attempting to create fx rate data. (create)
+     */
+    match /fx_rates/{fxRateId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /categories collection.
+     * @path /categories/{categoryId}
+     * @allow Tenant member reading category data. (get)
+     * @deny Non-tenant member attempting to create category data. (create)
+     */
+    match /categories/{categoryId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /subcategories collection.
+     * @path /subcategories/{subcategoryId}
+     * @allow Tenant member reading subcategory data. (get)
+     * @deny Non-tenant member attempting to create subcategory data. (create)
+     */
+    match /subcategories/{subcategoryId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /entities collection.
+     * @path /entities/{entityId}
+     * @allow Tenant member reading entity data. (get)
+     * @deny Non-tenant member attempting to create entity data. (create)
+     */
+    match /entities/{entityId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /expenses collection.
+     * @path /expenses/{expenseId}
+     * @allow Tenant member and expense owner reading expense data. (get)
+     * @deny Non-tenant member attempting to create expense data. (create)
+     */
+    match /expenses/{expenseId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isOwner(resource.data.userId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isOwner(resource.data.userId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /budgets collection.
+     * @path /budgets/{budgetId}
+     * @allow Tenant member reading budget data. (get)
+     * @deny Non-tenant member attempting to create budget data. (create)
+     */
+    match /budgets/{budgetId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /alerts collection.
+     * @path /alerts/{alertId}
+     * @allow Tenant member reading alert data. (get)
+     * @deny Non-tenant member attempting to create alert data. (create)
+     */
+    match /alerts/{alertId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /receipts_raw collection.
+     * @path /receipts_raw/{receiptRawId}
+     * @allow Tenant member and receipt owner reading receipt data. (get)
+     * @deny Non-tenant member attempting to create receipt data. (create)
+     */
+    match /receipts_raw/{receiptRawId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isOwner(resource.data.userId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isOwner(resource.data.userId) || isSuperAdmin());
+      allow create: if isSignedIn() && (isTenantMember(request.resource.data.tenantId) || isTenantOwner(request.resource.data.tenantId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow delete: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+    }
+
+    /**
+     * @description Rules for the /receipts_fingerprints collection.
+     * @path /receipts_fingerprints/{receiptFingerprintId}
+     * @allow Any signed-in user can read receipt fingerprint data. (get, list)
+     * @deny Unauthenticated user attempting to write receipt fingerprint data.
+     */
+    match /receipts_fingerprints/{receiptFingerprintId} {
+      allow get, list: if isSignedIn(); // Any signed-in user can read
+      allow create: if false; // TODO: Add Tenant Admin Role validation if needed.
+      allow update: if false; // TODO: Add Tenant Admin Role validation if needed.
+      allow delete: if false; // TODO: Add Tenant Admin Role validation if needed.
+    }
+
+    /**
+     * @description Rules for the /audit_logs collection.
+     * @path /audit_logs/{auditLogId}
+     * @allow Tenant member reading audit log data. (get)
+     * @deny Non-tenant member attempting to create audit log data. (create)
+     */
+    match /audit_logs/{auditLogId} {
+      allow get: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow list: if isSignedIn() && (isTenantMember(resource.data.tenantId) || isTenantOwner(resource.data.tenantId) || isSuperAdmin());
+      allow create: if false; // TODO: Add Tenant Admin Role validation if needed.
+      allow update: if false; // TODO: Add Tenant Admin Role validation if needed.
+      allow delete: if false; // TODO: Add Tenant Admin Role validation if needed.
+    }
+  }
+}

@@ -1,0 +1,878 @@
+{
+  "entities": {
+    "Tenant": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Tenant",
+      "type": "object",
+      "description": "Represents a tenant in the system. Tenants can be personal, family, or company accounts.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the tenant."
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of tenant (PERSONAL, FAMILY, COMPANY)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the tenant."
+        },
+        "baseCurrency": {
+          "type": "string",
+          "description": "Base currency for the tenant (e.g., ARS)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the tenant was created.",
+          "format": "date-time"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "User ID of the tenant owner. (Relationship: User 1:N Tenant)"
+        },
+        "settings": {
+          "type": "string",
+          "description": "Settings for the tenant, such as quiet hours and rollover preferences. Represented as a JSON string."
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "name",
+        "baseCurrency",
+        "createdAt",
+        "ownerUid",
+        "settings"
+      ]
+    },
+    "Membership": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Membership",
+      "type": "object",
+      "description": "Represents a user's membership in a tenant.",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Membership)"
+        },
+        "uid": {
+          "type": "string",
+          "description": "User ID of the member. (Relationship: User 1:N Membership)"
+        },
+        "role": {
+          "type": "string",
+          "description": "Role of the member within the tenant (admin, member)."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the membership (active, invited, revoked)."
+        },
+        "joinedAt": {
+          "type": "string",
+          "description": "Timestamp of when the user joined the tenant.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "tenantId",
+        "uid",
+        "role",
+        "status",
+        "joinedAt"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the system.",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique identifier for the user, matching the authentication UID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL of the user's profile photo.",
+          "format": "uri"
+        },
+        "tenantIds": {
+          "type": "array",
+          "description": "References to Tenants. (Relationship: User 1:N Tenant)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isSuperadmin": {
+          "type": "boolean",
+          "description": "Indicates if the user has superadmin privileges."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email"
+      ]
+    },
+    "Currency": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Currency",
+      "type": "object",
+      "description": "Represents a currency.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Currency code (e.g., ARS, USD)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the currency (e.g., Argentine Peso)."
+        }
+      },
+      "required": [
+        "code",
+        "name"
+      ]
+    },
+    "FxRate": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "FxRate",
+      "type": "object",
+      "description": "Represents a foreign exchange rate.",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N FxRate)"
+        },
+        "code": {
+          "type": "string",
+          "description": "Currency code (e.g., USD)."
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of the exchange rate.",
+          "format": "date-time"
+        },
+        "rateToARS": {
+          "type": "number",
+          "description": "Exchange rate to ARS."
+        }
+      },
+      "required": [
+        "tenantId",
+        "code",
+        "date",
+        "rateToARS"
+      ]
+    },
+    "Category": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Category",
+      "type": "object",
+      "description": "Represents an expense category.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the category."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Category)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the category."
+        },
+        "color": {
+          "type": "string",
+          "description": "Color associated with the category (hex code)."
+        },
+        "order": {
+          "type": "number",
+          "description": "Order of the category."
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "name",
+        "color",
+        "order"
+      ]
+    },
+    "Subcategory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Subcategory",
+      "type": "object",
+      "description": "Represents an expense subcategory.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the subcategory."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Subcategory)"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Reference to Category. (Relationship: Category 1:N Subcategory)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the subcategory."
+        },
+        "order": {
+          "type": "number",
+          "description": "Order of the subcategory."
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "categoryId",
+        "name",
+        "order"
+      ]
+    },
+    "Entity": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Entity",
+      "type": "object",
+      "description": "Represents a business or bank entity.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the entity."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Entity)"
+        },
+        "cuit": {
+          "type": "string",
+          "description": "CUIT (tax ID) of the entity, unique per tenant."
+        },
+        "razonSocial": {
+          "type": "string",
+          "description": "Business name of the entity."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "Type of entity (comercio, banco, servicio, otro)."
+        },
+        "direccion": {
+          "type": "string",
+          "description": "Address of the entity (optional)."
+        },
+        "pendingCuit": {
+          "type": "boolean",
+          "description": "Indicates if the CUIT is pending verification."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the entity was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of when the entity was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "cuit",
+        "razonSocial",
+        "tipo",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Expense": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Expense",
+      "type": "object",
+      "description": "Represents an expense record.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the expense."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Expense)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Expense)"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of the expense.",
+          "format": "date-time"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount of the expense."
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency of the expense."
+        },
+        "amountARS": {
+          "type": "number",
+          "description": "Amount of the expense in ARS."
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Reference to Category. (Relationship: Category 1:N Expense)"
+        },
+        "subcategoryId": {
+          "type": "string",
+          "description": "Reference to Subcategory. (Relationship: Subcategory 1:N Expense)"
+        },
+        "entityCuit": {
+          "type": "string",
+          "description": "CUIT of the entity associated with the expense."
+        },
+        "entityName": {
+          "type": "string",
+          "description": "Name of the entity associated with the expense."
+        },
+        "ivaPercent": {
+          "type": "number",
+          "description": "IVA percentage applied to the expense."
+        },
+        "hasIva": {
+          "type": "boolean",
+          "description": "Indicates if the expense includes IVA."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method used for the expense."
+        },
+        "isRecurring": {
+          "type": "boolean",
+          "description": "Indicates if the expense is recurring."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes about the expense."
+        },
+        "source": {
+          "type": "string",
+          "description": "Source of the expense data (manual, ocr)."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the expense (posted, draft)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the expense was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of when the expense was last updated.",
+          "format": "date-time"
+        },
+        "deleted": {
+          "type": "boolean",
+          "description": "Indicates if the expense has been soft deleted."
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "userId",
+        "date",
+        "amount",
+        "currency",
+        "amountARS",
+        "categoryId",
+        "paymentMethod",
+        "isRecurring",
+        "source",
+        "status",
+        "createdAt",
+        "updatedAt",
+        "deleted"
+      ]
+    },
+    "Budget": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Budget",
+      "type": "object",
+      "description": "Represents a monthly budget for a category/subcategory.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the budget."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Budget)"
+        },
+        "year": {
+          "type": "number",
+          "description": "Year of the budget."
+        },
+        "month": {
+          "type": "number",
+          "description": "Month of the budget (1-12)."
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Reference to Category. (Relationship: Category 1:N Budget)"
+        },
+        "subcategoryId": {
+          "type": "string",
+          "description": "Reference to Subcategory. (Relationship: Subcategory 1:N Budget)"
+        },
+        "amountARS": {
+          "type": "number",
+          "description": "Budget amount in ARS."
+        },
+        "rolloverFromPrevARS": {
+          "type": "number",
+          "description": "Amount rolled over from the previous month."
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "year",
+        "month",
+        "categoryId",
+        "amountARS",
+        "rolloverFromPrevARS"
+      ]
+    },
+    "Alert": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Alert",
+      "type": "object",
+      "description": "Represents an alert notification.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the alert."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Alert)"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of alert (budget, recurring, ocr)."
+        },
+        "level": {
+          "type": "number",
+          "description": "Alert level (e.g., 80 for 80% of budget)."
+        },
+        "payload": {
+          "type": "string",
+          "description": "Details of the alert as a JSON string."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the alert (pending, sent, dismissed)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the alert was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "type",
+        "level",
+        "payload",
+        "status",
+        "createdAt"
+      ]
+    },
+    "ReceiptRaw": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ReceiptRaw",
+      "type": "object",
+      "description": "Represents raw OCR data from a receipt.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the raw receipt data."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N ReceiptRaw)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N ReceiptRaw)"
+        },
+        "expenseId": {
+          "type": "string",
+          "description": "Reference to Expense. (Relationship: Expense 1:N ReceiptRaw)"
+        },
+        "ocrPayload": {
+          "type": "string",
+          "description": "Raw OCR payload as a JSON string."
+        },
+        "parsedFields": {
+          "type": "string",
+          "description": "Normalized parsed fields from the OCR payload as a JSON string."
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "Fingerprint of the receipt data for deduplication."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the raw receipt data was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "userId",
+        "ocrPayload",
+        "parsedFields",
+        "fingerprint",
+        "createdAt"
+      ]
+    },
+    "ReceiptFingerprint": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ReceiptFingerprint",
+      "type": "object",
+      "description": "Represents a fingerprint used for deduplicating receipts.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier composed as {tenantId}_{fingerprint}."
+        },
+        "exists": {
+          "type": "boolean",
+          "description": "Indicates if the fingerprint exists."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the fingerprint was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "exists",
+        "createdAt"
+      ]
+    },
+    "AuditLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AuditLog",
+      "type": "object",
+      "description": "Represents an audit log entry.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the audit log entry."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N AuditLog)"
+        },
+        "entity": {
+          "type": "string",
+          "description": "Name of the entity being audited (e.g., expenses, entities)."
+        },
+        "entityId": {
+          "type": "string",
+          "description": "ID of the entity being audited."
+        },
+        "action": {
+          "type": "string",
+          "description": "Action performed on the entity (create, update, delete, softdelete)."
+        },
+        "before": {
+          "type": "string",
+          "description": "State of the entity before the action as a JSON string."
+        },
+        "after": {
+          "type": "string",
+          "description": "State of the entity after the action as a JSON string."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N AuditLog)"
+        },
+        "ts": {
+          "type": "string",
+          "description": "Timestamp of when the audit log entry was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "entity",
+        "entityId",
+        "action",
+        "before",
+        "after",
+        "userId",
+        "ts"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/tenants/{tenantId}",
+        "definition": {
+          "entityName": "Tenant",
+          "schema": {
+            "$ref": "#/backend/entities/Tenant"
+          },
+          "description": "Represents a tenant in the system. Includes denormalized 'ownerUid' for authorization independence.",
+          "params": [
+            {
+              "name": "tenantId",
+              "description": "Unique identifier for the tenant."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/memberships/{membershipId}",
+        "definition": {
+          "entityName": "Membership",
+          "schema": {
+            "$ref": "#/backend/entities/Membership"
+          },
+          "description": "Represents a user's membership in a tenant.  Includes 'tenantId', 'uid', and 'role' for efficient queries and authorization.",
+          "params": [
+            {
+              "name": "membershipId",
+              "description": "Unique identifier for the membership."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Represents a user in the system.  User profile data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user, matching the authentication UID."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/currencies/{currencyCode}",
+        "definition": {
+          "entityName": "Currency",
+          "schema": {
+            "$ref": "#/backend/entities/Currency"
+          },
+          "description": "Represents a currency.",
+          "params": [
+            {
+              "name": "currencyCode",
+              "description": "Currency code (e.g., ARS, USD)."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/fx_rates/{fxRateId}",
+        "definition": {
+          "entityName": "FxRate",
+          "schema": {
+            "$ref": "#/backend/entities/FxRate"
+          },
+          "description": "Represents a foreign exchange rate. Includes denormalized 'tenantId' for authorization independence.",
+          "params": [
+            {
+              "name": "fxRateId",
+              "description": "Unique identifier for the fxRate."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/categories/{categoryId}",
+        "definition": {
+          "entityName": "Category",
+          "schema": {
+            "$ref": "#/backend/entities/Category"
+          },
+          "description": "Represents an expense category. Includes denormalized 'tenantId' for authorization independence.",
+          "params": [
+            {
+              "name": "categoryId",
+              "description": "Unique identifier for the category."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/subcategories/{subcategoryId}",
+        "definition": {
+          "entityName": "Subcategory",
+          "schema": {
+            "$ref": "#/backend/entities/Subcategory"
+          },
+          "description": "Represents an expense subcategory. Includes denormalized 'tenantId' for authorization independence.",
+          "params": [
+            {
+              "name": "subcategoryId",
+              "description": "Unique identifier for the subcategory."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/entities/{entityId}",
+        "definition": {
+          "entityName": "Entity",
+          "schema": {
+            "$ref": "#/backend/entities/Entity"
+          },
+          "description": "Represents a business or bank entity. Includes denormalized 'tenantId' for authorization independence.",
+          "params": [
+            {
+              "name": "entityId",
+              "description": "Unique identifier for the entity."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/expenses/{expenseId}",
+        "definition": {
+          "entityName": "Expense",
+          "schema": {
+            "$ref": "#/backend/entities/Expense"
+          },
+          "description": "Represents an expense record. Includes denormalized 'tenantId' and 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "expenseId",
+              "description": "Unique identifier for the expense."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/budgets/{budgetId}",
+        "definition": {
+          "entityName": "Budget",
+          "schema": {
+            "$ref": "#/backend/entities/Budget"
+          },
+          "description": "Represents a monthly budget for a category/subcategory. Includes denormalized 'tenantId' for authorization independence.",
+          "params": [
+            {
+              "name": "budgetId",
+              "description": "Unique identifier for the budget."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/alerts/{alertId}",
+        "definition": {
+          "entityName": "Alert",
+          "schema": {
+            "$ref": "#/backend/entities/Alert"
+          },
+          "description": "Represents an alert notification. Includes denormalized 'tenantId' for authorization independence.",
+          "params": [
+            {
+              "name": "alertId",
+              "description": "Unique identifier for the alert."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/receipts_raw/{receiptRawId}",
+        "definition": {
+          "entityName": "ReceiptRaw",
+          "schema": {
+            "$ref": "#/backend/entities/ReceiptRaw"
+          },
+          "description": "Represents raw OCR data from a receipt. Includes denormalized 'tenantId' and 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "receiptRawId",
+              "description": "Unique identifier for the raw receipt data."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/receipts_fingerprints/{receiptFingerprintId}",
+        "definition": {
+          "entityName": "ReceiptFingerprint",
+          "schema": {
+            "$ref": "#/backend/entities/ReceiptFingerprint"
+          },
+          "description": "Represents a fingerprint used for deduplicating receipts.",
+          "params": [
+            {
+              "name": "receiptFingerprintId",
+              "description": "Unique identifier composed as {tenantId}_{fingerprint}."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/audit_logs/{auditLogId}",
+        "definition": {
+          "entityName": "AuditLog",
+          "schema": {
+            "$ref": "#/backend/entities/AuditLog"
+          },
+          "description": "Represents an audit log entry. Includes denormalized 'tenantId' for authorization independence.",
+          "params": [
+            {
+              "name": "auditLogId",
+              "description": "Unique identifier for the audit log entry."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore structure is designed to support a multi-tenant expense tracking application, \"Ahorro Ya,\" with a focus on security, scalability, and maintainability. It implements key principles such as Authorization Independence via Denormalization, Structural Segregation, and Access Modeling to ensure robust security rules and efficient queries.\n\n**Authorization Independence:**  Authorization data, specifically tenant membership and roles, is denormalized across several collections. The `Membership` collection stores the role of a user within a tenant.  Instead of relying on `get()` calls in security rules to check a user's role, the tenantId is embedded in almost every collection, so it can be validated against the tenants that a user is a member of. Furthermore, many collections include the userId, which is used for path-based ownership.\n\n**Structural Segregation:** Data with different access requirements are stored in separate collections.  For example, User data is stored globally in `/users/{uid}`, while tenant-specific data (expenses, categories, etc.) are stored in collections where each document includes a `tenantId` field.  This allows for simpler and more targeted security rules.\n\n**Access Modeling:**\n*   **User Data:** User profiles are stored in `/users/{uid}`, leveraging path-based ownership. This is used to store the user's basic information. The `users` collection is separated from `tenants` and `memberships`. An alternative strategy could have been to put everything under `/users/{uid}`, with the `user` document containing an array of tenantIds. But this approach introduces many complexities and edge cases, so it was explicitly avoided.\n*   **Tenant Data:** Tenants are stored in `/tenants/{tenantId}`, with `ownerUid` representing the tenant owner. Memberships are stored in `/memberships/{membershipId}`, including tenantId and userId fields. This allows for direct queries on memberships and easier role-based access control.\n*   **Tenant-Owned Data:** All tenant-owned data (expenses, categories, subcategories, entities, budgets, alerts, receipt_raws) include the `tenantId` field. This enables efficient filtering and enforces tenant-level isolation.\n*   **Collaborative Data:** No collections use the Membership Map pattern.\n*   **Global Roles:** The `users` collection includes a boolean field `isSuperadmin`. This enables superadmin bypass in security rules, but requires a `get()` call. A better solution would be to create `/roles_superadmin/{userId}` collection.\n\n**QAPs (Rules are not Filters):** The structure facilitates secure `list` operations.  By including the `tenantId` in almost all collections, security rules can easily enforce that a user can only list documents belonging to tenants they are a member of.  For example, a user can only list expenses where `expense.tenantId in user.tenants`.\n\n**Invariants:**\n*   **Ownership:** The `ownerUid` field in the `tenants` collection and `userId` field in the `expenses` and `receipts_raw` collections enforce ownership. The `memberships` collection establishes relationships and roles within tenants.\n*   **Timestamps:** `createdAt` and `updatedAt` timestamps are present in relevant collections to track data modification history.\n*   **Denormalized Data:**  Denormalization (e.g., including tenantId in most documents) helps avoid complex joins and enables atomic operations.\n\nThis structure, combined with well-defined security rules, ensures a secure, scalable, and easily debuggable application."
+  }
+}
