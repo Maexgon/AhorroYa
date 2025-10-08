@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AhorroYaLogo } from '@/components/shared/icons';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 export default function RegisterPage() {
   return (
@@ -29,6 +30,38 @@ export default function RegisterPage() {
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
               <Input id="password" type="password" required />
+            </div>
+             <div className="space-y-3">
+              <Label>Tipo de cuenta</Label>
+              <RadioGroup defaultValue="personal" className="grid grid-cols-3 gap-4">
+                <div>
+                  <RadioGroupItem value="personal" id="personal" className="peer sr-only" />
+                  <Label
+                    htmlFor="personal"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Personal
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem value="familiar" id="familiar" className="peer sr-only" />
+                  <Label
+                    htmlFor="familiar"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Familiar
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem value="empresa" id="empresa" className="peer sr-only" />
+                  <Label
+                    htmlFor="empresa"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Empresa
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
             <Button type="submit" className="w-full">
               Crear Cuenta
