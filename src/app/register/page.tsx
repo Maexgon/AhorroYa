@@ -1,12 +1,18 @@
+'use client';
+
 import Link from 'next/link';
+import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function RegisterPage() {
+  const [showPassword, setShowPassword] = React.useState(false);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary/50 p-4">
       <Card className="w-full max-w-md">
@@ -19,17 +25,30 @@ export default function RegisterPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4">
-             <div className="space-y-2">
-              <Label htmlFor="name">Nombre</Label>
-              <Input id="name" type="text" placeholder="Tu Nombre" required />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">Nombre</Label>
+                <Input id="firstName" type="text" placeholder="Tu Nombre" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Apellido</Label>
+                <Input id="lastName" type="text" placeholder="Tu Apellido" required />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" placeholder="tu@email.com" required />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label htmlFor="password">Contraseña</Label>
-              <Input id="password" type="password" required />
+              <Input id="password" type={showPassword ? 'text' : 'password'} required />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-[2.25rem] text-muted-foreground"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
             </div>
              <div className="space-y-3">
               <Label>Tipo de cuenta</Label>
