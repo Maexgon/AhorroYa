@@ -13,7 +13,7 @@ export default function RegisterPage() {
            <div className="mx-auto mb-4">
             <AhorroYaLogo className="h-12 w-12 text-primary" />
           </div>
-          <CardTitle className="font-headline text-2xl">Crea tu cuenta</CreaTitle>
+          <CardTitle className="font-headline text-2xl">Crea tu cuenta</CardTitle>
           <CardDescription>Comienza a tomar el control de tus finanzas hoy mismo.</CardDescription>
         </CardHeader>
         <CardContent>
