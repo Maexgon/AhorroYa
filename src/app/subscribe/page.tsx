@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Check } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from '@/firebase';
-import { getFirestore, writeBatch, doc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
+import { useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { getFirestore, writeBatch, doc, collection, query, where, getDocs } from "firebase/firestore";
 import { AhorroYaLogo } from '@/components/shared/icons';
 
 
@@ -50,6 +50,8 @@ export default function SubscribePage() {
 
         setIsLoading(plan.planId);
         const firestore = getFirestore();
+        let tenantDoc;
+        let tenantId;
 
         try {
             // 1. Find the user's tenant
@@ -61,8 +63,8 @@ export default function SubscribePage() {
                 throw new Error("No se encontró un tenant pendiente para este usuario. Contacta a soporte.");
             }
 
-            const tenantDoc = querySnapshot.docs[0];
-            const tenantId = tenantDoc.id;
+            tenantDoc = querySnapshot.docs[0];
+            tenantId = tenantDoc.id;
 
             // 2. Create license and update tenant status in a batch
             const batch = writeBatch(firestore);
@@ -79,7 +81,7 @@ export default function SubscribePage() {
                 empresa: 10,
             };
 
-            batch.set(licenseRef, {
+            const licenseData = {
                 tenantId: tenantId,
                 plan: plan.planId,
                 status: 'active',
@@ -87,9 +89,11 @@ export default function SubscribePage() {
                 endDate: endDate.toISOString(),
                 maxUsers: maxUsersMapping[plan.planId as keyof typeof maxUsersMapping],
                 paymentId: `sim_${crypto.randomUUID()}` // Simulated payment ID
-            });
+            };
+            batch.set(licenseRef, licenseData);
             
-            batch.update(tenantRef, { status: "active" });
+            const tenantUpdateData = { status: "active" };
+            batch.update(tenantRef, tenantUpdateData);
             
             await batch.commit();
 
@@ -101,11 +105,23 @@ export default function SubscribePage() {
 
         } catch (error: any) {
             console.error("Error activating plan: ", error);
-            toast({
-                variant: 'destructive',
-                title: 'Error al activar el plan',
-                description: error.message || 'Ocurrió un problema. Por favor, intenta de nuevo.',
-            });
+             // Determine if the error is from getDocs or batch.commit and create contextual error
+            if (error.code && error.code.includes('permission-denied')) {
+                 const operation = tenantId ? 'write' : 'list';
+                 const path = tenantId ? `batch-write(licenses, tenants/${tenantId})` : 'tenants';
+
+                 errorEmitter.emit('permission-error', new FirestorePermissionError({
+                     path: path,
+                     operation: operation,
+                     requestResourceData: operation === 'write' ? '...' : undefined // Can add data later
+                 }));
+            } else {
+                 toast({
+                     variant: 'destructive',
+                     title: 'Error al activar el plan',
+                     description: error.message || 'Ocurrió un problema. Por favor, intenta de nuevo.',
+                 });
+            }
         } finally {
             setIsLoading('');
         }
