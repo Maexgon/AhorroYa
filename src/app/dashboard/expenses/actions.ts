@@ -20,7 +20,8 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
     }
 
     try {
-        // Correctly initialize Firebase on the server for this action
+        // Correctly initialize Firebase on the server for this action.
+        // This ensures that if the app is already initialized, we use the existing instance.
         const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
         const storage = getStorage(app); 
         
