@@ -11,7 +11,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -19,11 +19,41 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MultiSelect } from '@/components/shared/multi-select';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Bar, BarChart, ResponsiveContainer, Cell } from 'recharts';
+import { Progress } from '@/components/ui/progress';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Membership now includes displayName
 interface MembershipWithDisplayName extends Membership {
     displayName: string;
 }
+
+const barData = [
+  { name: "Comida", total: 48900 },
+  { name: "Transporte", total: 18750 },
+  { name: "Vivienda", total: 125000 },
+  { name: "Ocio", total: 32500 },
+  { name: "Compras", total: 21000 },
+];
+
+const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
+const recentExpenses = [
+  { icon: Utensils, entity: "Don Julio", category: "Restaurantes", amount: 25500 },
+  { icon: ShoppingCart, entity: "Supermercado Coto", category: "Supermercado", amount: 18345 },
+  { icon: Bus, entity: "SUBE", category: "Transporte", amount: 1500 },
+  { icon: Film, entity: "Cine Hoyts", category: "Ocio", amount: 9800 },
+  { icon: Home, entity: "Alquiler Depto", category: "Vivienda", amount: 125000 },
+];
+
+const budgets = [
+    { name: "Comida", spent: 48900, total: 60000, color: "bg-green-500" },
+    { name: "Transporte", spent: 18750, total: 20000, color: "bg-blue-500" },
+    { name: "Ocio", spent: 32500, total: 30000, color: "bg-red-500" },
+    { name: "Vivienda", spent: 125000, total: 125000, color: "bg-yellow-500" },
+];
+
 
 function OwnerDashboard() {
   const { user } = useUser();
@@ -198,10 +228,110 @@ function OwnerDashboard() {
             </div>
         </div>
         
-        {/* Placeholder for charts */}
-        <div className="text-center py-10">
-            <p className="text-muted-foreground">Los gráficos se mostrarán aquí.</p>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+            <Card className="lg:col-span-4">
+              <CardHeader>
+                <CardTitle>Análisis de Gastos</CardTitle>
+                 <CardDescription>Resumen por categoría del último mes.</CardDescription>
+              </CardHeader>
+              <CardContent className="pl-2">
+                 <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={barData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                     <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                      {barData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle>Presupuestos</CardTitle>
+                <CardDescription>Tu progreso de gastos del mes.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                 {budgets.map(budget => {
+                    const percentage = (budget.spent / budget.total) * 100;
+                    return (
+                        <div key={budget.name}>
+                            <div className="flex justify-between text-sm mb-1 font-medium">
+                                <span>{budget.name}</span>
+                                <span className="text-muted-foreground">
+                                    ${budget.spent.toLocaleString('es-AR')} / ${budget.total.toLocaleString('es-AR')}
+                                </span>
+                            </div>
+                            <Progress value={percentage > 100 ? 100 : percentage} className="h-2" />
+                             {percentage > 100 && <p className="text-xs text-destructive mt-1">Excedido por ${(budget.spent - budget.total).toLocaleString('es-AR')}</p>}
+                        </div>
+                    )
+                })}
+              </CardContent>
+            </Card>
         </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+            <Card className="lg:col-span-4">
+            <CardHeader className="flex flex-row items-center justify-between pb-4">
+              <div>
+                <CardTitle>Gastos Recientes</CardTitle>
+                <CardDescription>Tus últimas transacciones registradas.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Entidad</TableHead>
+                    <TableHead className="hidden sm:table-cell">Categoría</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentExpenses.map((expense, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="bg-muted p-2 rounded-md hidden sm:block">
+                            <expense.icon className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <span className="font-medium">{expense.entity}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">{expense.category}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        ${expense.amount.toLocaleString('es-AR')}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-3 flex flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-accent" />
+                Recomendaciones IA
+              </CardTitle>
+              <CardDescription>Sugerencias para optimizar tus finanzas.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 flex items-center justify-center">
+                <div className="text-center p-4 border-2 border-dashed rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                        Notamos que tus gastos en <span className="text-foreground font-medium">"Ocio"</span> superaron el presupuesto.
+                    </p>
+                    <p className="mt-2 font-medium text-foreground">
+                        Considera reasignar <span className="text-primary">$2,500</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
+                    </p>
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button variant="outline" className="w-full">Ver más insights</Button>
+            </CardFooter>
+          </Card>
+        </div>
+
 
     </div>
   );
