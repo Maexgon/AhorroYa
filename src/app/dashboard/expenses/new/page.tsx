@@ -20,7 +20,7 @@ import { CalendarIcon, UploadCloud, ArrowLeft, FileCheck2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { uploadReceiptAction } from './actions';
+import { uploadReceiptAction } from '../actions';
 
 
 const expenseFormSchema = z.object({
@@ -400,4 +400,6 @@ export default function NewExpensePage() {
     </div>
   );
 }
+    
+
     
