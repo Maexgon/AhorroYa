@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { getFirestore, writeBatch, doc } from "firebase/firestore";
 import { FirebaseError } from 'firebase/app';
+import { errorEmitter, FirestorePermissionError } from '@/firebase';
+
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -80,15 +82,16 @@ export default function RegisterPage() {
       const userRef = doc(firestore, "users", user.uid);
       const tenantRef = doc(firestore, "tenants", crypto.randomUUID());
       const membershipRef = doc(firestore, "memberships", `${tenantRef.id}_${user.uid}`);
-
-      batch.set(userRef, {
+      
+      const userData = {
         uid: user.uid,
         displayName: displayName,
         email: user.email,
         photoURL: user.photoURL,
         tenantIds: [tenantRef.id],
         isSuperadmin: false,
-      });
+      };
+      batch.set(userRef, userData);
       
       const tenantNameMapping = {
         personal: `Espacio de ${firstName}`,
@@ -96,7 +99,7 @@ export default function RegisterPage() {
         empresa: `Empresa de ${firstName}`,
       }
 
-      batch.set(tenantRef, {
+      const tenantData = {
         type: accountType.toUpperCase(),
         name: tenantNameMapping[accountType as keyof typeof tenantNameMapping] || `Espacio de ${firstName}`,
         baseCurrency: "ARS",
@@ -104,24 +107,42 @@ export default function RegisterPage() {
         ownerUid: user.uid,
         status: "pending",
         settings: JSON.stringify({ quietHours: true, rollover: false }),
-      });
+      };
+      batch.set(tenantRef, tenantData);
 
-      batch.set(membershipRef, {
+      const membershipData = {
         tenantId: tenantRef.id,
         uid: user.uid,
         role: 'owner',
         status: 'active',
         joinedAt: new Date().toISOString()
-      });
+      };
+      batch.set(membershipRef, membershipData);
       
-      await batch.commit();
-
-      toast({
-        title: "¡Cuenta creada!",
-        description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
+      batch.commit().catch(error => {
+        errorEmitter.emit(
+          'permission-error',
+          new FirestorePermissionError({
+            path: 'batch-write', // batch operations don't have a single path
+            operation: 'write', 
+            requestResourceData: {
+                user: userData,
+                tenant: tenantData,
+                membership: membershipData,
+            }
+          })
+        );
+         // Don't toast here, let the listener handle it.
+      }).then(() => {
+        if (!errorEmitter) { // Only proceed if no error was emitted
+          toast({
+            title: "¡Cuenta creada!",
+            description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
+          });
+          router.push('/subscribe');
+        }
       });
 
-      router.push('/subscribe');
 
     } catch (error) {
       let title = "Error al crear la cuenta";
@@ -151,6 +172,9 @@ export default function RegisterPage() {
         description,
       });
     } finally {
+      // Because batch.commit is non-blocking, we might want to move setIsLoading(false)
+      // inside the .then() and .catch() blocks if we want to wait for completion.
+      // For now, we leave it here for a responsive UI.
       setIsLoading(false);
     }
   };
