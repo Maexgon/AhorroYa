@@ -38,6 +38,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = React.useState(false);
 
   React.useEffect(() => {
+    // These will only run on the client, after initial hydration
     setNum1(Math.floor(Math.random() * 10) + 1);
     setNum2(Math.floor(Math.random() * 10) + 1);
   }, []);
@@ -119,29 +120,30 @@ export default function RegisterPage() {
       };
       batch.set(membershipRef, membershipData);
       
-      batch.commit().catch(error => {
-        errorEmitter.emit(
-          'permission-error',
-          new FirestorePermissionError({
-            path: 'batch-write', // batch operations don't have a single path
-            operation: 'write', 
-            requestResourceData: {
-                user: userData,
-                tenant: tenantData,
-                membership: membershipData,
-            }
-          })
-        );
-         // Don't toast here, let the listener handle it.
-      }).then(() => {
-        if (!errorEmitter) { // Only proceed if no error was emitted
+      await batch.commit()
+        .then(() => {
           toast({
             title: "¡Cuenta creada!",
             description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
           });
           router.push('/subscribe');
-        }
-      });
+        })
+        .catch(error => {
+            errorEmitter.emit(
+              'permission-error',
+              new FirestorePermissionError({
+                path: 'batch-write', // batch operations don't have a single path
+                operation: 'write', 
+                requestResourceData: {
+                    user: userData,
+                    tenant: tenantData,
+                    membership: membershipData,
+                }
+              })
+            );
+             // Don't toast here, let the listener handle it.
+             // We also don't redirect, because the operation failed.
+        });
 
 
     } catch (error) {
@@ -172,9 +174,6 @@ export default function RegisterPage() {
         description,
       });
     } finally {
-      // Because batch.commit is non-blocking, we might want to move setIsLoading(false)
-      // inside the .then() and .catch() blocks if we want to wait for completion.
-      // For now, we leave it here for a responsive UI.
       setIsLoading(false);
     }
   };
@@ -318,4 +317,5 @@ export default function RegisterPage() {
       </Card>
     </div>
   );
-}
+
+    
