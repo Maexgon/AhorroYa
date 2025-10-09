@@ -50,7 +50,6 @@ export default function SubscribePage() {
 
         setIsLoading(plan.planId);
         const firestore = getFirestore();
-        let tenantDoc;
         let tenantId;
 
         try {
@@ -60,10 +59,19 @@ export default function SubscribePage() {
             const querySnapshot = await getDocs(q);
 
             if (querySnapshot.empty) {
+                // This is a normal scenario if the user re-visits the page.
+                // We can check if they have an active tenant and redirect.
+                const activeQuery = query(tenantsRef, where("ownerUid", "==", user.uid), where("status", "==", "active"));
+                const activeSnapshot = await getDocs(activeQuery);
+                if (!activeSnapshot.empty) {
+                    toast({ title: 'Ya tienes un plan activo.', description: 'Redirigiendo al dashboard.' });
+                    router.push('/dashboard');
+                    return;
+                }
                 throw new Error("No se encontró un tenant pendiente para este usuario. Contacta a soporte.");
             }
 
-            tenantDoc = querySnapshot.docs[0];
+            const tenantDoc = querySnapshot.docs[0];
             tenantId = tenantDoc.id;
 
             // 2. Create license and update tenant status in a batch
@@ -95,6 +103,7 @@ export default function SubscribePage() {
             const tenantUpdateData = { status: "active" };
             batch.update(tenantRef, tenantUpdateData);
             
+            // This commit is the second potential failure point
             await batch.commit();
 
             toast({
@@ -104,16 +113,22 @@ export default function SubscribePage() {
             router.push('/dashboard');
 
         } catch (error: any) {
-            console.error("Error activating plan: ", error);
-             // Determine if the error is from getDocs or batch.commit and create contextual error
-            if (error.code && error.code.includes('permission-denied')) {
+             if (error.code && error.code.includes('permission-denied')) {
                  const operation = tenantId ? 'write' : 'list';
-                 const path = tenantId ? `batch-write(licenses, tenants/${tenantId})` : 'tenants';
+                 let path;
+                 let requestResourceData;
+
+                 if (operation === 'list') {
+                    path = 'tenants';
+                 } else {
+                    path = `batch-write(licenses, tenants/${tenantId})`;
+                    requestResourceData = '...'; // Data is complex, providing placeholder
+                 }
 
                  errorEmitter.emit('permission-error', new FirestorePermissionError({
                      path: path,
                      operation: operation,
-                     requestResourceData: operation === 'write' ? '...' : undefined // Can add data later
+                     requestResourceData: requestResourceData
                  }));
             } else {
                  toast({
