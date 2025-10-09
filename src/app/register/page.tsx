@@ -15,6 +15,7 @@ import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, updateP
 import { getFirestore, writeBatch, doc } from "firebase/firestore";
 import { FirebaseError } from 'firebase/app';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
+import { defaultCategories } from '@/lib/default-categories';
 
 
 export default function RegisterPage() {
@@ -114,13 +115,38 @@ export default function RegisterPage() {
       const membershipData = {
         tenantId: tenantRef.id,
         uid: user.uid,
-        displayName: displayName, // Denormalize user's display name
+        displayName: displayName,
         role: 'owner',
         status: 'active',
         joinedAt: new Date().toISOString()
       };
       batch.set(membershipRef, membershipData);
       
+      // Add default categories and subcategories
+      defaultCategories.forEach((category, catIndex) => {
+        const categoryId = crypto.randomUUID();
+        const categoryRef = doc(firestore, "categories", categoryId);
+        batch.set(categoryRef, {
+            id: categoryId,
+            tenantId: tenantRef.id,
+            name: category.name,
+            color: category.color,
+            order: catIndex
+        });
+
+        category.subcategories.forEach((subcategoryName, subCatIndex) => {
+            const subcategoryId = crypto.randomUUID();
+            const subcategoryRef = doc(firestore, "subcategories", subcategoryId);
+            batch.set(subcategoryRef, {
+                id: subcategoryId,
+                tenantId: tenantRef.id,
+                categoryId: categoryId,
+                name: subcategoryName,
+                order: subCatIndex
+            });
+        });
+      });
+
       await batch.commit()
         .then(() => {
           toast({
@@ -130,20 +156,14 @@ export default function RegisterPage() {
           router.push('/subscribe');
         })
         .catch(error => {
+             // We don't have a good way to represent the batch write data for the error
             errorEmitter.emit(
               'permission-error',
               new FirestorePermissionError({
-                path: 'batch-write', // batch operations don't have a single path
+                path: 'batch-write',
                 operation: 'write', 
-                requestResourceData: {
-                    user: userData,
-                    tenant: tenantData,
-                    membership: membershipData,
-                }
               })
             );
-             // Don't toast here, let the listener handle it.
-             // We also don't redirect, because the operation failed.
         });
 
 
@@ -320,3 +340,4 @@ export default function RegisterPage() {
   );
 
     
+
