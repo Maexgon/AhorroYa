@@ -51,6 +51,9 @@ export default function SubscribePage() {
         setIsLoading(plan.planId);
         const firestore = getFirestore();
         let tenantId;
+        let operation: 'list' | 'write' = 'list'; // Start by assuming the read operation
+        let path: string = 'tenants';
+        let requestResourceData: any = undefined;
 
         try {
             // 1. Find the user's tenant
@@ -59,8 +62,6 @@ export default function SubscribePage() {
             const querySnapshot = await getDocs(q);
 
             if (querySnapshot.empty) {
-                // This is a normal scenario if the user re-visits the page.
-                // We can check if they have an active tenant and redirect.
                 const activeQuery = query(tenantsRef, where("ownerUid", "==", user.uid), where("status", "==", "active"));
                 const activeSnapshot = await getDocs(activeQuery);
                 if (!activeSnapshot.empty) {
@@ -74,10 +75,14 @@ export default function SubscribePage() {
             const tenantDoc = querySnapshot.docs[0];
             tenantId = tenantDoc.id;
 
-            // 2. Create license and update tenant status in a batch
-            const batch = writeBatch(firestore);
+            // Switch context for the write operation
+            operation = 'write';
             const licenseRef = doc(firestore, "licenses", crypto.randomUUID());
             const tenantRef = doc(firestore, "tenants", tenantId);
+            path = `batch-write(licenses/${licenseRef.id}, tenants/${tenantRef.id})`;
+
+            // 2. Create license and update tenant status in a batch
+            const batch = writeBatch(firestore);
             
             const startDate = new Date();
             const endDate = new Date();
@@ -96,14 +101,16 @@ export default function SubscribePage() {
                 startDate: startDate.toISOString(),
                 endDate: endDate.toISOString(),
                 maxUsers: maxUsersMapping[plan.planId as keyof typeof maxUsersMapping],
-                paymentId: `sim_${crypto.randomUUID()}` // Simulated payment ID
+                paymentId: `sim_${crypto.randomUUID()}`, // Simulated payment ID
+                ownerUid: user.uid, // Add ownerUid to the license data
             };
             batch.set(licenseRef, licenseData);
             
             const tenantUpdateData = { status: "active" };
             batch.update(tenantRef, tenantUpdateData);
             
-            // This commit is the second potential failure point
+            requestResourceData = { license: licenseData, tenant: tenantUpdateData };
+
             await batch.commit();
 
             toast({
@@ -113,30 +120,12 @@ export default function SubscribePage() {
             router.push('/dashboard');
 
         } catch (error: any) {
-             if (error.code && error.code.includes('permission-denied')) {
-                 const operation = tenantId ? 'write' : 'list';
-                 let path;
-                 let requestResourceData;
-
-                 if (operation === 'list') {
-                    path = 'tenants';
-                 } else {
-                    path = `batch-write(licenses, tenants/${tenantId})`;
-                    requestResourceData = '...'; // Data is complex, providing placeholder
-                 }
-
-                 errorEmitter.emit('permission-error', new FirestorePermissionError({
-                     path: path,
-                     operation: operation,
-                     requestResourceData: requestResourceData
-                 }));
-            } else {
-                 toast({
-                     variant: 'destructive',
-                     title: 'Error al activar el plan',
-                     description: error.message || 'Ocurrió un problema. Por favor, intenta de nuevo.',
-                 });
-            }
+            // All Firebase permission errors will be caught here
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: path,
+                operation: operation,
+                requestResourceData: requestResourceData
+            }));
         } finally {
             setIsLoading('');
         }
