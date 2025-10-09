@@ -1,11 +1,8 @@
 "use server";
 
+import { initializeFirebase } from "@/firebase/config";
 import { getStorage, ref, uploadBytes } from "firebase/storage";
 import { processReceipt, type ProcessReceiptOutput } from "@/ai/flows/ocr-receipt-processing";
-
-// No es necesario inicializar Firebase App aquí.
-// El SDK Admin en el entorno del servidor lo manejará automáticamente
-// usando las credenciales del entorno.
 
 type ActionResult = {
     data?: ProcessReceiptOutput;
@@ -22,7 +19,11 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
     }
 
     try {
-        const storage = getStorage(); // Obtiene la instancia de Storage con las credenciales del servidor
+        // Initialize Firebase on the server
+        const app = initializeFirebase();
+        // Pass the initialized app to getStorage
+        const storage = getStorage(app); 
+        
         const filePath = `receipts/${tenantId}/${userId}/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, filePath);
         
@@ -49,7 +50,6 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
 
     } catch (error: any) {
         console.error("[Server Action Error] uploadReceiptAction:", error);
-        // Devuelve un mensaje de error más descriptivo
         return { error: `Error en el servidor: ${error.code || error.message}` };
     }
 }
