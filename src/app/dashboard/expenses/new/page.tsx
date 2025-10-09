@@ -11,15 +11,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, writeBatch, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, UploadCloud, ArrowLeft } from 'lucide-react';
+import { CalendarIcon, UploadCloud, ArrowLeft, FileCheck2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
+import { processReceipt } from '@/ai/flows/ocr-receipt-processing';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
 
 const expenseFormSchema = z.object({
   receipt: z.any().optional(),
@@ -42,8 +45,9 @@ export default function NewExpensePage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
 
-  const { control, handleSubmit, watch, formState: { errors } } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, formState: { errors }, setValue } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       currency: 'ARS',
@@ -52,6 +56,7 @@ export default function NewExpensePage() {
   });
 
   const selectedCategoryId = watch('categoryId');
+  const selectedReceipt = watch('receipt');
 
   // Fetch Tenant
   const tenantsQuery = useMemoFirebase(() => {
@@ -76,21 +81,120 @@ export default function NewExpensePage() {
   const { data: subcategories } = useCollection(subcategoriesQuery);
 
 
+  React.useEffect(() => {
+    const handleReceiptProcessing = async () => {
+      if (selectedReceipt && activeTenant && user) {
+        setIsProcessingReceipt(true);
+        toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos. Por favor, espera.' });
+
+        try {
+          const storage = getStorage();
+          const filePath = `receipts/${activeTenant.id}/${user.uid}/${Date.now()}_${selectedReceipt.name}`;
+          const storageRef = ref(storage, filePath);
+          
+          await uploadBytes(storageRef, selectedReceipt);
+          const gcsUri = await getDownloadURL(storageRef);
+
+          const result = await processReceipt({
+            gcsUri: gcsUri,
+            tenantId: activeTenant.id,
+            userId: user.uid,
+            fileType: selectedReceipt.type.includes('pdf') ? 'pdf' : 'image',
+          });
+
+          if (result) {
+            if (result.razonSocial) setValue('entityName', result.razonSocial, { shouldValidate: true });
+            if (result.cuit) setValue('entityCuit', result.cuit, { shouldValidate: true });
+            if (result.fecha) setValue('date', new Date(result.fecha), { shouldValidate: true });
+            if (result.total) setValue('amount', result.total, { shouldValidate: true });
+            if (result.medioPago) setValue('paymentMethod', result.medioPago.toLowerCase(), { shouldValidate: true });
+            toast({ title: '¡Datos Extraídos!', description: 'Los campos del formulario han sido actualizados. Por favor, revísalos.' });
+          } else {
+             toast({ variant: 'destructive', title: 'Error de Procesamiento', description: 'No se pudieron extraer datos del recibo.' });
+          }
+
+        } catch (error) {
+          console.error("Error processing receipt: ", error);
+          toast({ variant: 'destructive', title: 'Error', description: 'Ocurrió un problema al procesar el recibo.' });
+        } finally {
+          setIsProcessingReceipt(false);
+        }
+      }
+    };
+
+    handleReceiptProcessing();
+  }, [selectedReceipt, activeTenant, user, setValue, toast]);
+
+
   const onSubmit = async (data: ExpenseFormValues) => {
+    if (!activeTenant || !user) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
+        return;
+    }
     setIsSubmitting(true);
     toast({ title: "Procesando...", description: "Guardando el gasto." });
-    
-    // Here we will add the logic to process the receipt with AI
-    // and save the expense and entity to Firestore.
 
-    console.log(data); // For now, we just log the data
+    try {
+        const batch = writeBatch(firestore);
 
-    // Simulate async operation
-    await new Promise(resolve => setTimeout(resolve, 1500));
+        // 1. Check if entity exists or create it
+        const entitiesRef = collection(firestore, 'entities');
+        const q = query(entitiesRef, where('tenantId', '==', activeTenant.id), where('cuit', '==', data.entityCuit));
+        const entitySnapshot = await (await fetch(q.toString())).json();
 
-    toast({ title: "¡Éxito!", description: "El gasto ha sido guardado correctamente." });
-    setIsSubmitting(false);
-    router.push('/dashboard/expenses');
+
+        let entityId;
+        if (entitySnapshot.empty) {
+            const newEntityRef = doc(entitiesRef);
+            entityId = newEntityRef.id;
+            batch.set(newEntityRef, {
+                id: entityId,
+                tenantId: activeTenant.id,
+                cuit: data.entityCuit,
+                razonSocial: data.entityName,
+                tipo: 'comercio', // default type
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            });
+        } else {
+            entityId = entitySnapshot.docs[0].id;
+        }
+
+        // 2. Create the expense document
+        const newExpenseRef = doc(collection(firestore, 'expenses'));
+        batch.set(newExpenseRef, {
+            id: newExpenseRef.id,
+            tenantId: activeTenant.id,
+            userId: user.uid,
+            date: data.date.toISOString(),
+            amount: data.amount,
+            currency: data.currency,
+            amountARS: data.currency === 'ARS' ? data.amount : data.amount, // TODO: Add currency conversion
+            categoryId: data.categoryId,
+            subcategoryId: data.subcategoryId || null,
+            entityCuit: data.entityCuit,
+            entityName: data.entityName,
+            paymentMethod: data.paymentMethod,
+            notes: data.notes || '',
+            source: selectedReceipt ? 'ocr' : 'manual',
+            status: 'posted',
+            isRecurring: false,
+            deleted: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
+        
+        await batch.commit();
+
+        toast({ title: "¡Éxito!", description: "El gasto ha sido guardado correctamente." });
+        router.push('/dashboard/expenses');
+
+    } catch (error) {
+        console.error("Error saving expense:", error);
+        toast({ variant: 'destructive', title: 'Error al Guardar', description: 'No se pudo guardar el gasto.' });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -118,16 +222,31 @@ export default function NewExpensePage() {
                         <CardContent>
                              <div className="flex items-center justify-center w-full">
                                 <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
-                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        <UploadCloud className="w-8 h-8 mb-4 text-muted-foreground" />
-                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click para subir</span> o arrastra</p>
-                                        <p className="text-xs text-muted-foreground">PNG, JPG, PDF (MAX. 5MB)</p>
+                                    <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
+                                        { isProcessingReceipt ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                                                <p className="text-sm text-muted-foreground">Procesando...</p>
+                                            </>
+                                        ) : selectedReceipt ? (
+                                             <>
+                                                <FileCheck2 className="w-8 h-8 mb-4 text-green-500" />
+                                                <p className="mb-2 text-sm text-muted-foreground font-semibold">{selectedReceipt.name}</p>
+                                                <p className="text-xs text-muted-foreground">Click para reemplazar</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <UploadCloud className="w-8 h-8 mb-4 text-muted-foreground" />
+                                                <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click para subir</span> o arrastra</p>
+                                                <p className="text-xs text-muted-foreground">PNG, JPG, PDF (MAX. 5MB)</p>
+                                            </>
+                                        )}
                                     </div>
                                     <Controller
                                         name="receipt"
                                         control={control}
                                         render={({ field }) => (
-                                             <Input id="dropzone-file" type="file" className="hidden" onChange={(e) => field.onChange(e.target.files?.[0])} />
+                                             <Input id="dropzone-file" type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => field.onChange(e.target.files?.[0])} disabled={isProcessingReceipt} />
                                         )}
                                     />
                                 </label>
@@ -261,7 +380,7 @@ export default function NewExpensePage() {
 
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" disabled={isSubmitting}>
+                            <Button type="submit" disabled={isSubmitting || isProcessingReceipt}>
                                 {isSubmitting ? 'Guardando...' : 'Guardar Gasto'}
                             </Button>
                         </CardFooter>
