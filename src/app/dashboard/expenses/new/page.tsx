@@ -20,8 +20,7 @@ import { CalendarIcon, UploadCloud, ArrowLeft, FileCheck2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceipt } from '@/ai/flows/ocr-receipt-processing';
-import { getStorage, ref, uploadBytes } from "firebase/storage";
+import { uploadReceiptAction } from './actions';
 
 
 const expenseFormSchema = z.object({
@@ -46,7 +45,8 @@ export default function NewExpensePage() {
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [selectedFileName, setSelectedFileName] = React.useState<string | null>(null);
+
 
   const { control, handleSubmit, watch, formState: { errors }, setValue, register } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
@@ -57,9 +57,6 @@ export default function NewExpensePage() {
   });
 
   const selectedCategoryId = watch('categoryId');
-  const receiptFile = watch('receipt');
-  const selectedFileName = receiptFile?.[0]?.name;
-
 
   // Fetch Tenant
   const tenantsQuery = useMemoFirebase(() => {
@@ -88,34 +85,34 @@ export default function NewExpensePage() {
     const file = event.target.files?.[0];
     if (!file || !activeTenant || !user) return;
     
-    setValue('receipt', event.target.files);
+    setSelectedFileName(file.name);
     setIsProcessingReceipt(true);
     toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos. Por favor, espera.' });
 
     try {
-        const storage = getStorage();
-        const filePath = `receipts/${activeTenant.id}/${user.uid}/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, filePath);
-        
-        // This is where the upload happens. If CORS is not configured, it will fail here.
-        // The proper fix is to configure CORS on the GCS bucket.
-        // A workaround is to use a server-side function to handle the upload.
-        await uploadBytes(storageRef, file);
-        const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
+        const formData = new FormData();
+        formData.append('receipt', file);
+        formData.append('tenantId', activeTenant.id);
+        formData.append('userId', user.uid);
 
-        const result = await processReceipt({
-            gcsUri: gcsUri,
-            tenantId: activeTenant.id,
-            userId: user.uid,
-            fileType: file.type.includes('pdf') ? 'pdf' : 'image',
-        });
+        const result = await uploadReceiptAction(formData);
         
-        if (result) {
-            if (result.razonSocial) setValue('entityName', result.razonSocial, { shouldValidate: true });
-            if (result.cuit) setValue('entityCuit', result.cuit, { shouldValidate: true });
-            if (result.fecha) setValue('date', new Date(result.fecha), { shouldValidate: true });
-            if (result.total) setValue('amount', result.total, { shouldValidate: true });
-            if (result.medioPago) setValue('paymentMethod', result.medioPago.toLowerCase(), { shouldValidate: true });
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        if (result.data) {
+            const { data } = result;
+            if (data.razonSocial) setValue('entityName', data.razonSocial, { shouldValidate: true });
+            if (data.cuit) setValue('entityCuit', data.cuit, { shouldValidate: true });
+            if (data.fecha) {
+                // The date can come as YYYY-MM-DD, we need to adjust for timezone issues.
+                const dateParts = data.fecha.split('-').map(p => parseInt(p, 10));
+                const utcDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+                setValue('date', utcDate, { shouldValidate: true });
+            }
+            if (data.total) setValue('amount', data.total, { shouldValidate: true });
+            if (data.medioPago) setValue('paymentMethod', data.medioPago.toLowerCase(), { shouldValidate: true });
             toast({ title: '¡Datos Extraídos!', description: 'Los campos del formulario han sido actualizados. Por favor, revísalos.' });
         } else {
             toast({ variant: 'destructive', title: 'Error de Procesamiento', description: 'No se pudieron extraer datos del recibo.' });
@@ -123,16 +120,13 @@ export default function NewExpensePage() {
 
     } catch (error: any) {
         console.error("Error processing receipt: ", error);
-        if (error.code === 'storage/unauthorized') {
-             toast({ 
-                variant: 'destructive', 
-                title: 'Error de Permisos (CORS)', 
-                description: 'La configuración de seguridad de Firebase Storage (CORS) está bloqueando la subida. Esto debe ser configurado en la consola de Google Cloud.',
-                duration: 10000,
-            });
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: 'Ocurrió un problema al procesar el recibo.' });
-        }
+        toast({ 
+            variant: 'destructive', 
+            title: 'Error al procesar recibo', 
+            description: error.message || 'Ocurrió un problema al procesar el recibo.',
+            duration: 10000,
+        });
+        setSelectedFileName(null);
     } finally {
         setIsProcessingReceipt(false);
     }
