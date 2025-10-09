@@ -116,6 +116,10 @@
           "type": "string",
           "description": "User ID of the member. (Relationship: User 1:N Membership)"
         },
+        "displayName": {
+          "type": "string",
+          "description": "Denormalized display name of the user for efficient lookups."
+        },
         "role": {
           "type": "string",
           "description": "Role of the member within the tenant (owner, admin, member)."
@@ -133,6 +137,7 @@
       "required": [
         "tenantId",
         "uid",
+        "displayName",
         "role",
         "status",
         "joinedAt"

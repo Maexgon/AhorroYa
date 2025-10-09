@@ -114,6 +114,7 @@ export default function RegisterPage() {
       const membershipData = {
         tenantId: tenantRef.id,
         uid: user.uid,
+        displayName: displayName, // Denormalize user's display name
         role: 'owner',
         status: 'active',
         joinedAt: new Date().toISOString()

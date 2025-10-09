@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, query, where } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, User as AppUser, Category } from '@/lib/types';
+import type { Tenant, License, Membership, Category } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -19,6 +19,11 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MultiSelect } from '@/components/shared/multi-select';
+
+// Membership now includes displayName
+interface MembershipWithDisplayName extends Membership {
+    displayName: string;
+}
 
 function OwnerDashboard() {
   const { user } = useUser();
@@ -55,21 +60,10 @@ function OwnerDashboard() {
         where('tenantId', '==', activeTenant.id)
     );
   }, [firestore, activeTenant]);
-  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<any>(membersQuery);
+  // We now expect 'displayName' to be on the membership document
+  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<MembershipWithDisplayName>(membersQuery);
   
-  const userIds = useMemoFirebase(() => memberships?.map(m => m.uid) || [], [memberships]);
-  
-  // 4. Fetch user details for the members
-  const usersQuery = useMemoFirebase(() => {
-    if (!firestore || !userIds || userIds.length === 0) return null;
-    return query(
-        collection(firestore, 'users'),
-        where('uid', 'in', userIds)
-    );
-  }, [firestore, userIds]);
-  const { data: users, isLoading: isLoadingUsers } = useCollection<AppUser>(usersQuery);
-
-  // 5. Fetch categories for the active tenant
+  // 4. Fetch categories for the active tenant
     const categoriesQuery = useMemoFirebase(() => {
     if (!firestore || !activeTenant) return null;
     return query(
@@ -85,7 +79,7 @@ function OwnerDashboard() {
     to: new Date(),
   });
 
-  const isLoading = isLoadingTenants || isLoadingLicense || isLoadingMemberships || isLoadingUsers || isLoadingCategories;
+  const isLoading = isLoadingTenants || isLoadingLicense || isLoadingMemberships || isLoadingCategories;
 
   if (isLoading) {
     return (
@@ -95,7 +89,8 @@ function OwnerDashboard() {
     );
   }
 
-  const userOptions = users?.map(u => ({ value: u.uid, label: u.displayName })) || [];
+  // Use memberships directly for user options
+  const userOptions = memberships?.map(m => ({ value: m.uid, label: m.displayName })) || [];
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   const currencyOptions = [{ value: 'ARS', label: 'ARS' }, { value: 'USD', label: 'USD' }];
 
