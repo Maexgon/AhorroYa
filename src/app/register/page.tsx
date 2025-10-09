@@ -68,18 +68,18 @@ export default function RegisterPage() {
       const auth = getAuth();
       const firestore = getFirestore();
       
-      // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       const displayName = `${firstName} ${lastName}`;
 
       await updateProfile(user, { displayName });
+      await sendEmailVerification(user);
 
-      // 2. Create User and Tenant docs in Firestore using a batch
       const batch = writeBatch(firestore);
 
       const userRef = doc(firestore, "users", user.uid);
       const tenantRef = doc(firestore, "tenants", crypto.randomUUID());
+      const membershipRef = doc(firestore, "memberships", `${tenantRef.id}_${user.uid}`);
 
       batch.set(userRef, {
         uid: user.uid,
@@ -102,20 +102,26 @@ export default function RegisterPage() {
         baseCurrency: "ARS",
         createdAt: new Date().toISOString(),
         ownerUid: user.uid,
+        status: "pending",
         settings: JSON.stringify({ quietHours: true, rollover: false }),
+      });
+
+      batch.set(membershipRef, {
+        tenantId: tenantRef.id,
+        uid: user.uid,
+        role: 'owner',
+        status: 'active',
+        joinedAt: new Date().toISOString()
       });
       
       await batch.commit();
 
-      // 3. Send verification email
-      await sendEmailVerification(userCredential.user);
-
       toast({
-        title: "¡Cuenta creada exitosamente!",
-        description: "Te hemos enviado un correo de verificación. Por favor, revisa tu bandeja de entrada.",
+        title: "¡Cuenta creada!",
+        description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
       });
 
-      router.push('/login');
+      router.push('/subscribe');
 
     } catch (error) {
       let title = "Error al crear la cuenta";
