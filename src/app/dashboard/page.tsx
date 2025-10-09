@@ -108,6 +108,10 @@ function OwnerDashboard() {
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
+  
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+
 
   const isLoading = isLoadingTenants || isLoadingLicense || isLoadingMemberships || isLoadingCategories;
 
@@ -167,15 +171,15 @@ function OwnerDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                  <MultiSelect
                     options={userOptions}
-                    selected={[]}
-                    onChange={() => {}}
+                    selected={selectedUsers}
+                    onChange={setSelectedUsers}
                     placeholder="Miembros"
                     className="w-full"
                 />
                 <MultiSelect
                     options={categoryOptions}
-                    selected={[]}
-                    onChange={() => {}}
+                    selected={selectedCategories}
+                    onChange={setSelectedCategories}
                     placeholder="Categorías"
                     className="w-full"
                 />
