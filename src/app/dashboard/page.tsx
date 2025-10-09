@@ -6,7 +6,7 @@ import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, writeBatch } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category } from '@/lib/types';
@@ -23,6 +23,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { defaultCategories } from '@/lib/default-categories';
+import { doc } from 'firebase/firestore';
+
 
 // Membership now includes displayName
 interface MembershipWithDisplayName extends Membership {
@@ -58,6 +61,8 @@ const budgets = [
 function OwnerDashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isSeeding, setIsSeeding] = useState(false);
 
   // 1. Fetch current user's active tenant
   const tenantsQuery = useMemoFirebase(() => {
@@ -112,6 +117,50 @@ function OwnerDashboard() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
 
+  const handleSeedCategories = async () => {
+    if (!firestore || !activeTenant) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el tenant activo.' });
+        return;
+    }
+    setIsSeeding(true);
+    try {
+        const batch = writeBatch(firestore);
+
+        defaultCategories.forEach((category, catIndex) => {
+            const categoryId = crypto.randomUUID();
+            const categoryRef = doc(firestore, "categories", categoryId);
+            batch.set(categoryRef, {
+                id: categoryId,
+                tenantId: activeTenant.id,
+                name: category.name,
+                color: category.color,
+                order: catIndex
+            });
+
+            category.subcategories.forEach((subcategoryName, subCatIndex) => {
+                const subcategoryId = crypto.randomUUID();
+                const subcategoryRef = doc(firestore, "subcategories", subcategoryId);
+                batch.set(subcategoryRef, {
+                    id: subcategoryId,
+                    tenantId: activeTenant.id,
+                    categoryId: categoryId,
+                    name: subcategoryName,
+                    order: subCatIndex
+                });
+            });
+        });
+
+        await batch.commit();
+        toast({ title: '¡Éxito!', description: 'Las categorías por defecto han sido creadas. La página se refrescará.' });
+        // The useCollection hook will automatically pick up the new categories.
+    } catch (error) {
+        console.error("Error seeding categories:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron crear las categorías.' });
+    } finally {
+        setIsSeeding(false);
+    }
+  };
+
 
   const isLoading = isLoadingTenants || isLoadingLicense || isLoadingMemberships || isLoadingCategories;
 
@@ -122,6 +171,8 @@ function OwnerDashboard() {
       </div>
     );
   }
+
+  const showSeedButton = !isLoadingCategories && (!categories || categories.length === 0);
 
   // Use memberships directly for user options
   const userOptions = memberships?.map(m => ({ value: m.uid, label: m.displayName })) || [];
@@ -161,6 +212,22 @@ function OwnerDashboard() {
                 </DropdownMenu>
             </div>
         </div>
+
+        {showSeedButton && (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Configuración Inicial Requerida</CardTitle>
+                    <CardDescription>
+                        Parece que tu cuenta no tiene categorías de gastos. Puedes crearlas ahora usando nuestra plantilla por defecto.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                    <Button onClick={handleSeedCategories} disabled={isSeeding}>
+                        {isSeeding ? 'Creando...' : 'Generar Categorías por Defecto'}
+                    </Button>
+                </CardFooter>
+            </Card>
+        )}
 
         <Button className='w-full md:w-auto'>
             <Plus className="mr-2 h-4 w-4" /> Nuevo Gasto
