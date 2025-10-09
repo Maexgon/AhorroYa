@@ -21,7 +21,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceipt } from '@/ai/flows/ocr-receipt-processing';
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes } from "firebase/storage";
 
 
 const expenseFormSchema = z.object({
@@ -46,8 +46,9 @@ export default function NewExpensePage() {
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const { control, handleSubmit, watch, formState: { errors }, setValue } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, formState: { errors }, setValue, register } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       currency: 'ARS',
@@ -56,7 +57,9 @@ export default function NewExpensePage() {
   });
 
   const selectedCategoryId = watch('categoryId');
-  const selectedReceipt = watch('receipt');
+  const receiptFile = watch('receipt');
+  const selectedFileName = receiptFile?.[0]?.name;
+
 
   // Fetch Tenant
   const tenantsQuery = useMemoFirebase(() => {
@@ -81,49 +84,59 @@ export default function NewExpensePage() {
   const { data: subcategories } = useCollection(subcategoriesQuery);
 
 
-  React.useEffect(() => {
-    const handleReceiptProcessing = async () => {
-      if (selectedReceipt && activeTenant && user) {
-        setIsProcessingReceipt(true);
-        toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos. Por favor, espera.' });
+  const handleReceiptChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !activeTenant || !user) return;
+    
+    setValue('receipt', event.target.files);
+    setIsProcessingReceipt(true);
+    toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos. Por favor, espera.' });
 
-        try {
-          const storage = getStorage();
-          const filePath = `receipts/${activeTenant.id}/${user.uid}/${Date.now()}_${selectedReceipt.name}`;
-          const storageRef = ref(storage, filePath);
-          
-          await uploadBytes(storageRef, selectedReceipt);
-          const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
+    try {
+        const storage = getStorage();
+        const filePath = `receipts/${activeTenant.id}/${user.uid}/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, filePath);
+        
+        // This is where the upload happens. If CORS is not configured, it will fail here.
+        // The proper fix is to configure CORS on the GCS bucket.
+        // A workaround is to use a server-side function to handle the upload.
+        await uploadBytes(storageRef, file);
+        const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
 
-          const result = await processReceipt({
+        const result = await processReceipt({
             gcsUri: gcsUri,
             tenantId: activeTenant.id,
             userId: user.uid,
-            fileType: selectedReceipt.type.includes('pdf') ? 'pdf' : 'image',
-          });
-
-          if (result) {
+            fileType: file.type.includes('pdf') ? 'pdf' : 'image',
+        });
+        
+        if (result) {
             if (result.razonSocial) setValue('entityName', result.razonSocial, { shouldValidate: true });
             if (result.cuit) setValue('entityCuit', result.cuit, { shouldValidate: true });
             if (result.fecha) setValue('date', new Date(result.fecha), { shouldValidate: true });
             if (result.total) setValue('amount', result.total, { shouldValidate: true });
             if (result.medioPago) setValue('paymentMethod', result.medioPago.toLowerCase(), { shouldValidate: true });
             toast({ title: '¡Datos Extraídos!', description: 'Los campos del formulario han sido actualizados. Por favor, revísalos.' });
-          } else {
-             toast({ variant: 'destructive', title: 'Error de Procesamiento', description: 'No se pudieron extraer datos del recibo.' });
-          }
-
-        } catch (error) {
-          console.error("Error processing receipt: ", error);
-          toast({ variant: 'destructive', title: 'Error', description: 'Ocurrió un problema al procesar el recibo.' });
-        } finally {
-          setIsProcessingReceipt(false);
+        } else {
+            toast({ variant: 'destructive', title: 'Error de Procesamiento', description: 'No se pudieron extraer datos del recibo.' });
         }
-      }
-    };
 
-    handleReceiptProcessing();
-  }, [selectedReceipt, activeTenant, user, setValue, toast]);
+    } catch (error: any) {
+        console.error("Error processing receipt: ", error);
+        if (error.code === 'storage/unauthorized') {
+             toast({ 
+                variant: 'destructive', 
+                title: 'Error de Permisos (CORS)', 
+                description: 'La configuración de seguridad de Firebase Storage (CORS) está bloqueando la subida. Esto debe ser configurado en la consola de Google Cloud.',
+                duration: 10000,
+            });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: 'Ocurrió un problema al procesar el recibo.' });
+        }
+    } finally {
+        setIsProcessingReceipt(false);
+    }
+  };
 
 
   const onSubmit = async (data: ExpenseFormValues) => {
@@ -175,7 +188,7 @@ export default function NewExpensePage() {
             entityName: data.entityName,
             paymentMethod: data.paymentMethod,
             notes: data.notes || '',
-            source: selectedReceipt ? 'ocr' : 'manual',
+            source: selectedFileName ? 'ocr' : 'manual',
             status: 'posted',
             isRecurring: false,
             deleted: false,
@@ -227,10 +240,10 @@ export default function NewExpensePage() {
                                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
                                                 <p className="text-sm text-muted-foreground">Procesando...</p>
                                             </>
-                                        ) : selectedReceipt ? (
+                                        ) : selectedFileName ? (
                                              <>
                                                 <FileCheck2 className="w-8 h-8 mb-4 text-green-500" />
-                                                <p className="mb-2 text-sm text-muted-foreground font-semibold">{selectedReceipt.name}</p>
+                                                <p className="mb-2 text-sm text-muted-foreground font-semibold">{selectedFileName}</p>
                                                 <p className="text-xs text-muted-foreground">Click para reemplazar</p>
                                             </>
                                         ) : (
@@ -241,12 +254,14 @@ export default function NewExpensePage() {
                                             </>
                                         )}
                                     </div>
-                                    <Controller
-                                        name="receipt"
-                                        control={control}
-                                        render={({ field }) => (
-                                             <Input id="dropzone-file" type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => field.onChange(e.target.files?.[0])} disabled={isProcessingReceipt} />
-                                        )}
+                                     <Input 
+                                        id="dropzone-file" 
+                                        type="file" 
+                                        className="hidden" 
+                                        accept="image/*,application/pdf" 
+                                        {...register('receipt')}
+                                        onChange={handleReceiptChange}
+                                        disabled={isProcessingReceipt} 
                                     />
                                 </label>
                             </div> 
@@ -391,3 +406,4 @@ export default function NewExpensePage() {
     </div>
   );
 }
+    
