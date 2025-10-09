@@ -232,7 +232,7 @@ function OwnerDashboard() {
 
         <Button asChild className='w-full md:w-auto'>
             <Link href="/dashboard/expenses">
-                <Plus className="mr-2 h-4 w-4" /> Nuevo Gasto
+                <Plus className="mr-2 h-4 w-4" /> Ver Gastos
             </Link>
         </Button>
 
@@ -477,3 +477,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
