@@ -20,7 +20,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MultiSelect } from '@/components/shared/multi-select';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, Cell } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -236,8 +236,9 @@ function OwnerDashboard() {
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={barData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                  <BarChart data={barData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="name" position="top" offset={8} className="fill-foreground" fontSize={12} />
                       {barData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
