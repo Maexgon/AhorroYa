@@ -11,13 +11,9 @@ import { AhorroYaLogo } from '@/components/shared/icons';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-} from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
+import { getFirestore, writeBatch, doc } from "firebase/firestore";
 import { FirebaseError } from 'firebase/app';
-
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -70,8 +66,48 @@ export default function RegisterPage() {
 
     try {
       const auth = getAuth();
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const firestore = getFirestore();
       
+      // 1. Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      const displayName = `${firstName} ${lastName}`;
+
+      await updateProfile(user, { displayName });
+
+      // 2. Create User and Tenant docs in Firestore using a batch
+      const batch = writeBatch(firestore);
+
+      const userRef = doc(firestore, "users", user.uid);
+      const tenantRef = doc(firestore, "tenants", crypto.randomUUID());
+
+      batch.set(userRef, {
+        uid: user.uid,
+        displayName: displayName,
+        email: user.email,
+        photoURL: user.photoURL,
+        tenantIds: [tenantRef.id],
+        isSuperadmin: false,
+      });
+      
+      const tenantNameMapping = {
+        personal: `Espacio de ${firstName}`,
+        familiar: `Familia ${lastName}`,
+        empresa: `Empresa de ${firstName}`,
+      }
+
+      batch.set(tenantRef, {
+        type: accountType.toUpperCase(),
+        name: tenantNameMapping[accountType as keyof typeof tenantNameMapping] || `Espacio de ${firstName}`,
+        baseCurrency: "ARS",
+        createdAt: new Date().toISOString(),
+        ownerUid: user.uid,
+        settings: JSON.stringify({ quietHours: true, rollover: false }),
+      });
+      
+      await batch.commit();
+
+      // 3. Send verification email
       await sendEmailVerification(userCredential.user);
 
       toast({
@@ -99,6 +135,7 @@ export default function RegisterPage() {
             description = "La contraseña debe tener al menos 6 caracteres.";
             break;
           default:
+            description = error.message;
             break;
         }
       }
