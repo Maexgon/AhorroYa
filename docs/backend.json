@@ -336,6 +336,10 @@
           "type": "string",
           "description": "Address of the entity (optional)."
         },
+        "telefono": {
+          "type": "string",
+          "description": "Phone number of the entity (optional)."
+        },
         "pendingCuit": {
           "type": "boolean",
           "description": "Indicates if the CUIT is pending verification."

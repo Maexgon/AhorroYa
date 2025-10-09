@@ -25,6 +25,7 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { defaultCategories } from '@/lib/default-categories';
 import { doc } from 'firebase/firestore';
+import Link from 'next/link';
 
 
 // Membership now includes displayName
@@ -229,9 +230,12 @@ function OwnerDashboard() {
             </Card>
         )}
 
-        <Button className='w-full md:w-auto'>
-            <Plus className="mr-2 h-4 w-4" /> Nuevo Gasto
+        <Button asChild className='w-full md:w-auto'>
+            <Link href="/dashboard/expenses">
+                <Plus className="mr-2 h-4 w-4" /> Nuevo Gasto
+            </Link>
         </Button>
+
 
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
