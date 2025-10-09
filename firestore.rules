@@ -64,7 +64,7 @@ service cloud.firestore {
       * @example: allow update, delete: if isExistingOwner(resource.data.ownerId);
       */
     function isExistingOwner(userId) {
-       return isOwner(userId) && exists(resource);
+       return isOwner(userId) && existsAfter(/databases/$(database)/documents/$(resource.path));
     }
 
     /**
@@ -96,7 +96,7 @@ service cloud.firestore {
      */
     match /tenants/{tenantId} {
       // Anyone can read any tenant document.
-      allow get: if isSignedIn();
+      allow get: if isSignedIn() || isSuperadmin();
 
       // Only the owner can create a tenant.
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
@@ -195,7 +195,7 @@ service cloud.firestore {
         allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
 
         // Only members of the tenant can update or delete an existing rate, and the document must exist.
-        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) || isSuperadmin();
+        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && existsAfter(/databases/$(database)/documents/$(resource.path));
     }
 
     /**
@@ -215,7 +215,7 @@ service cloud.firestore {
         allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
 
         // Only members of the tenant can update or delete an existing category, and the document must exist.
-        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) || isSuperadmin();
+        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && existsAfter(/databases/$(database)/documents/$(resource.path));
     }
 
     /**
@@ -235,7 +235,7 @@ service cloud.firestore {
         allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
 
         // Only members of the tenant can update or delete an existing subcategory, and the document must exist.
-        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) || isSuperadmin();
+        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && existsAfter(/databases/$(database)/documents/$(resource.path));
     }
 
     /**
@@ -255,7 +255,7 @@ service cloud.firestore {
         allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
 
         // Only members of the tenant can update or delete an existing entity, and the document must exist.
-        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) || isSuperadmin();
+        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && existsAfter(/databases/$(database)/documents/$(resource.path));
     }
 
     /**
@@ -295,7 +295,7 @@ service cloud.firestore {
         allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
 
         // Only members of the tenant can update or delete an existing budget, and the document must exist.
-        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) || isSuperadmin();
+        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && existsAfter(/databases/$(database)/documents/$(resource.path));
     }
 
     /**
@@ -315,7 +315,7 @@ service cloud.firestore {
         allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
 
         // Only members of the tenant can update or delete an existing alert, and the document must exist.
-        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) || isSuperadmin();
+        allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && existsAfter(/databases/$(database)/documents/$(resource.path));
     }
 
     /**
