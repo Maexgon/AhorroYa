@@ -31,6 +31,10 @@
           "type": "string",
           "description": "User ID of the tenant owner. (Relationship: User 1:N Tenant)"
         },
+        "status": {
+          "type": "string",
+          "description": "The current status of the tenant (e.g., pending, active, expired)."
+        },
         "settings": {
           "type": "string",
           "description": "Settings for the tenant, such as quiet hours and rollover preferences. Represented as a JSON string."
@@ -43,7 +47,59 @@
         "baseCurrency",
         "createdAt",
         "ownerUid",
+        "status",
         "settings"
+      ]
+    },
+    "License": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "License",
+      "type": "object",
+      "description": "Represents a license for a tenant.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the license."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to the Tenant this license belongs to."
+        },
+        "plan": {
+          "type": "string",
+          "description": "The type of plan (personal, familiar, empresa)."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the license (active, expired)."
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The start date of the license."
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The end date of the license."
+        },
+        "maxUsers": {
+          "type": "number",
+          "description": "The maximum number of users allowed by the license."
+        },
+        "paymentId": {
+          "type": "string",
+          "description": "The ID of the payment transaction (e.g., from Stripe)."
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "plan",
+        "status",
+        "startDate",
+        "endDate",
+        "maxUsers"
       ]
     },
     "Membership": {
@@ -62,7 +118,7 @@
         },
         "role": {
           "type": "string",
-          "description": "Role of the member within the tenant (admin, member)."
+          "description": "Role of the member within the tenant (owner, admin, member)."
         },
         "status": {
           "type": "string",
@@ -660,6 +716,22 @@
             {
               "name": "tenantId",
               "description": "Unique identifier for the tenant."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/licenses/{licenseId}",
+        "definition": {
+          "entityName": "License",
+          "schema": {
+            "$ref": "#/backend/entities/License"
+          },
+          "description": "Represents a license for a tenant. Includes 'tenantId' for authorization.",
+          "params": [
+            {
+              "name": "licenseId",
+              "description": "Unique identifier for the license."
             }
           ]
         }
