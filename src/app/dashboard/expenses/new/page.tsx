@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, writeBatch, doc } from 'firebase/firestore';
+import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -93,7 +93,7 @@ export default function NewExpensePage() {
           const storageRef = ref(storage, filePath);
           
           await uploadBytes(storageRef, selectedReceipt);
-          const gcsUri = await getDownloadURL(storageRef);
+          const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
 
           const result = await processReceipt({
             gcsUri: gcsUri,
@@ -127,7 +127,7 @@ export default function NewExpensePage() {
 
 
   const onSubmit = async (data: ExpenseFormValues) => {
-    if (!activeTenant || !user) {
+    if (!activeTenant || !user || !firestore) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
         return;
     }
@@ -140,8 +140,7 @@ export default function NewExpensePage() {
         // 1. Check if entity exists or create it
         const entitiesRef = collection(firestore, 'entities');
         const q = query(entitiesRef, where('tenantId', '==', activeTenant.id), where('cuit', '==', data.entityCuit));
-        const entitySnapshot = await (await fetch(q.toString())).json();
-
+        const entitySnapshot = await getDocs(q);
 
         let entityId;
         if (entitySnapshot.empty) {
@@ -392,5 +391,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
-    

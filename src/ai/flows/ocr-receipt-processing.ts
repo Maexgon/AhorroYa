@@ -12,7 +12,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ProcessReceiptInputSchema = z.object({
-  gcsUri: z.string().describe('The Google Cloud Storage URI of the receipt image or PDF.'),
+  gcsUri: z.string().describe('The Google Cloud Storage URI of the receipt image or PDF (gs://...).'),
   tenantId: z.string().describe('The ID of the tenant.'),
   userId: z.string().describe('The ID of the user uploading the receipt.'),
   fileType: z.enum(['image', 'pdf']).describe('The type of the uploaded file.'),
