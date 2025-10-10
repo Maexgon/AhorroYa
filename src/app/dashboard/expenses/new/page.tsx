@@ -167,7 +167,7 @@ export default function NewExpensePage() {
             const entitySnapshot = await getDocs(q);
 
             if (entitySnapshot.empty) {
-                const newEntityRef = doc(entitiesRef);
+                const newEntityRef = doc(collection(firestore, 'entities'));
                 batch.set(newEntityRef, {
                     id: newEntityRef.id,
                     tenantId: activeTenant.id,
@@ -426,6 +426,5 @@ export default function NewExpensePage() {
       </main>
     </div>
   );
-}
 
     
