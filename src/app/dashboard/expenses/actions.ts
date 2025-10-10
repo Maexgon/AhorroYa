@@ -1,16 +1,7 @@
 "use server";
 
-import { getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { processReceipt, type ProcessReceiptOutput } from "@/ai/flows/ocr-receipt-processing";
-import { firebaseConfig } from "@/firebase/config";
-
-// Initialize Firebase Admin SDK if not already initialized
-if (!getApps().length) {
-  initializeApp({
-    storageBucket: firebaseConfig.storageBucket
-  });
-}
 
 type SignedURLResponse = {
     success: true;
@@ -52,7 +43,7 @@ export async function getSignedURLAction(tenantId: string, userId: string, file:
 
     } catch (error: any) {
         console.error("[SERVER ACTION CRITICAL] Ocurrió un error en getSignedURLAction:", error);
-        return { success: false, error: `Error en el servidor al generar URL: ${error.code || error.message}` };
+        return { success: false, error: `Error en el servidor al generar URL: ${error.message}` };
     }
 }
 
@@ -80,6 +71,6 @@ export async function processReceiptAction(gcsUri: string, tenantId: string, use
 
     } catch (error: any) {
         console.error("[SERVER ACTION CRITICAL] Ocurrió un error en processReceiptAction:", error);
-        return { error: `Error en el servidor durante el procesamiento de IA: ${error.code || error.message}` };
+        return { error: `Error en el servidor durante el procesamiento de IA: ${error.message}` };
     }
 }
