@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -10,9 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase, useFirebaseApp } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes } from 'firebase/storage';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -21,7 +21,7 @@ import { CalendarIcon, UploadCloud, ArrowLeft, FileCheck2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceiptAction } from '../actions';
+import { uploadReceiptAction, processReceiptAction } from '../actions';
 
 
 const expenseFormSchema = z.object({
@@ -44,7 +44,6 @@ export default function NewExpensePage() {
   const { toast } = useToast();
   const { user } = useUser();
   const firestore = useFirestore();
-  const firebaseApp = useFirebaseApp(); // Get the firebase app instance
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
   const [selectedFileName, setSelectedFileName] = React.useState<string | null>(null);
@@ -89,21 +88,26 @@ export default function NewExpensePage() {
 
     setSelectedFileName(file.name);
     setIsProcessingReceipt(true);
-    toast({ title: 'Subiendo Recibo...', description: 'El archivo se está enviando a la nube.' });
+    toast({ title: 'Preparando subida...', description: 'El archivo se está preparando.' });
 
     try {
-        // STEP 1: Upload the file directly from the client
-        const storage = getStorage(firebaseApp);
-        const filePath = `receipts/${activeTenant.id}/${user.uid}/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, filePath);
+        // STEP 1: Upload the file via Server Action
+        const formData = new FormData();
+        formData.append('receipt', file);
+        formData.append('tenantId', activeTenant.id);
+        formData.append('userId', user.uid);
 
-        await uploadBytes(storageRef, file);
+        toast({ title: 'Subiendo Recibo...', description: 'El archivo se está enviando al servidor.' });
+        const uploadResult = await uploadReceiptAction(formData);
+
+        if (!uploadResult.success || !uploadResult.gcsUri) {
+            throw new Error(uploadResult.error || 'Error desconocido al subir el archivo.');
+        }
         
         toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos.' });
 
         // STEP 2: Call the IA processing action with the GCS URI
-        const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
-        const result = await processReceiptAction(gcsUri, activeTenant.id, user.uid, file.type);
+        const result = await processReceiptAction(uploadResult.gcsUri, activeTenant.id, user.uid, file.type);
         
         if (result.error) {
             throw new Error(result.error);
@@ -407,6 +411,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-    
-
-    
