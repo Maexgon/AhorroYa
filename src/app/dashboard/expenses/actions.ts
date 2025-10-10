@@ -1,9 +1,16 @@
 "use server";
 
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getStorage, ref, getSignedUrl } from "firebase/storage";
+import { getApp, getApps, initializeApp } from 'firebase-admin/app';
+import { getStorage } from 'firebase-admin/storage';
 import { processReceipt, type ProcessReceiptOutput } from "@/ai/flows/ocr-receipt-processing";
 import { firebaseConfig } from "@/firebase/config";
+
+// Initialize Firebase Admin SDK if not already initialized
+if (!getApps().length) {
+  initializeApp({
+    storageBucket: firebaseConfig.storageBucket
+  });
+}
 
 type SignedURLResponse = {
     success: true;
@@ -23,24 +30,24 @@ export async function getSignedURLAction(tenantId: string, userId: string, file:
     }
 
     try {
-        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-        const storage = getStorage(app);
-        
+        const bucket = getStorage().bucket();
         const filePath = `receipts/${tenantId}/${userId}/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, filePath);
+        const fileRef = bucket.file(filePath);
         
+        const expires = Date.now() + 15 * 60 * 1000; // 15 minutos
+
         // Generar la URL firmada para la operación 'put'
-        const signedUrl = await getSignedUrl(storageRef, {
+        const [signedUrl] = await fileRef.getSignedUrl({
           action: 'write',
           contentType: file.type,
-          expires: Date.now() + 15 * 60 * 1000, // 15 minutos
+          expires: expires,
         });
 
         console.log("[SERVER ACTION SUCCESS] URL Firmada generada.");
         return { 
             success: true, 
             url: signedUrl,
-            gcsUri: `gs://${storageRef.bucket}/${storageRef.fullPath}`
+            gcsUri: `gs://${bucket.name}/${filePath}`
         };
 
     } catch (error: any) {
