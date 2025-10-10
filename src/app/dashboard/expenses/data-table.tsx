@@ -56,7 +56,7 @@ export function DataTable<TData, TValue>({
     data,
     columns,
     meta: {
-      onDelete, // This line connects the delete function to the table's metadata
+      onDelete: onDelete,
     },
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
