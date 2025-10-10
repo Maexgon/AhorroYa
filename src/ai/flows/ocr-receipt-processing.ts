@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -36,7 +37,7 @@ export async function processReceipt(input: ProcessReceiptInput): Promise<Proces
 
 const doclingParseTool = ai.defineTool({
   name: 'doclingParse',
-  description: 'Call the Docling service to parse a receipt image or PDF and extract data.',
+  description: 'Call the Docling service to parse a receipt image or PDF and extract structured data.',
   inputSchema: z.object({
     gcsUri: z.string().describe('The Google Cloud Storage URI of the receipt image or PDF.'),
     tenantId: z.string().describe('The ID of the tenant.'),
@@ -47,6 +48,7 @@ const doclingParseTool = ai.defineTool({
 },
 async (input) => {
   const parseUrl = process.env.DOCLING_PARSE_URL ?? 'http://localhost:8080/parse';
+  console.log(`Calling Docling service at ${parseUrl} with input:`, JSON.stringify(input));
   const response = await fetch(parseUrl, {
     method: 'POST',
     headers: {
@@ -55,10 +57,13 @@ async (input) => {
     body: JSON.stringify(input),
   });
   if (!response.ok) {
-    console.error('Error calling Docling service:', response.status, response.statusText);
+    const errorBody = await response.text();
+    console.error('Error calling Docling service:', response.status, response.statusText, errorBody);
     throw new Error(`Failed to call Docling service: ${response.status} ${response.statusText}`);
   }
-  return await response.json() as ProcessReceiptOutput;
+  const result = await response.json();
+  console.log('Received from Docling service:', result);
+  return result as ProcessReceiptOutput;
 }
 );
 
@@ -67,13 +72,11 @@ const processReceiptPrompt = ai.definePrompt({
   tools: [doclingParseTool],
   input: {schema: ProcessReceiptInputSchema},
   output: {schema: ProcessReceiptOutputSchema},
-  prompt: `You are an AI assistant helping to process receipts.
-  The user will provide a link to a receipt image or PDF stored in Google Cloud Storage. Your task is to use the doclingParse tool to extract the relevant information from the receipt, such as the CUIT, business name, date, total amount, IVA, invoice number and payment method.
-  Return the extracted information in JSON format.
-  Make sure to return all the fields even if they are not present on the receipt.
-  If there is an error calling the tool, return empty values for all the fields.
-  Do not attempt to call functions, use await keywords, or perform any complex logic within the Handlebars template string.
-  `,
+  prompt: `You are an AI assistant designed to process receipts.
+The user has provided a file located at the Google Cloud Storage URI: {{{gcsUri}}}.
+Your ONLY task is to call the 'doclingParse' tool with the provided input to extract the receipt data.
+Do not attempt any other action. Call the tool and return its output directly.
+`,
 });
 
 const processReceiptFlow = ai.defineFlow(
@@ -83,11 +86,17 @@ const processReceiptFlow = ai.defineFlow(
     outputSchema: ProcessReceiptOutputSchema,
   },
   async input => {
+    console.log('Starting processReceiptFlow with input:', input);
     try {
       const {output} = await processReceiptPrompt(input);
-      return output!;
-    } catch (e) {
-      console.error('Error in processReceiptFlow:', e);
+      console.log('processReceiptPrompt output:', output);
+      if (!output) {
+        throw new Error('The AI prompt did not return any output.');
+      }
+      return output;
+    } catch (e: any) {
+      console.error('Error in processReceiptFlow:', e.message);
+      // Return a structured error or empty values
       return {
         cuit: '',
         razonSocial: '',
