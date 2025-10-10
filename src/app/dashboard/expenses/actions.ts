@@ -28,6 +28,7 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
         const filePath = `receipts/${tenantId}/${userId}/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, filePath);
         
+        // Convertir el archivo a un ArrayBuffer y luego a un Buffer para la subida
         const fileBuffer = Buffer.from(await file.arrayBuffer());
         
         await uploadBytes(storageRef, fileBuffer, {
@@ -50,7 +51,9 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
         return { data: result };
 
     } catch (error: any) {
+        // Loguear el error completo en el servidor para un mejor diagnóstico
         console.error("[Server Action Error] uploadReceiptAction:", error);
+        // Devolver un mensaje de error más específico si es posible
         return { error: `Error en el servidor: ${error.code || error.message}` };
     }
 }
