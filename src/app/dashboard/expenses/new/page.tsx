@@ -17,15 +17,10 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud } from 'lucide-react';
+import { CalendarIcon, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceiptAction } from '../actions';
-import { cn } from '@/lib/utils';
-import { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
-
-const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
@@ -47,8 +42,6 @@ export default function NewExpensePage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
-  const [dragActive, setDragActive] = React.useState(false);
 
   const { control, handleSubmit, watch, formState: { errors }, setValue } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
@@ -86,96 +79,6 @@ export default function NewExpensePage() {
   }, [firestore, activeTenant, selectedCategoryId]);
   const { data: subcategories } = useCollection(subcategoriesQuery);
   
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-    });
-  };
-
-  const handleReceiptChange = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const file = files[0];
-
-    if (!activeTenant || !user) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario. Intenta recargar la página.' });
-        return;
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-        toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: `El archivo no debe superar 1MB.` });
-        return;
-    }
-
-    setIsProcessingReceipt(true);
-    toast({ title: 'Procesando Recibo...', description: 'El archivo se está leyendo.' });
-
-    try {
-        const base64Content = await fileToBase64(file);
-        const fileType = file.type.startsWith('image/') ? 'image' : 'pdf';
-        
-        const result = await processReceiptAction(base64Content, fileType, activeTenant.id, user.uid);
-
-        if (!result.success || !result.data) {
-            throw new Error(result.error || 'Error desconocido al procesar el recibo.');
-        }
-        
-        const processedData = result.data as ProcessReceiptOutput;
-
-        // Populate form with AI data
-        if (processedData.razonSocial) setValue('entityName', processedData.razonSocial);
-        if (processedData.cuit) setValue('entityCuit', processedData.cuit.replace(/[^0-9]/g, ''));
-        if (processedData.fecha) {
-            const date = new Date(processedData.fecha + 'T12:00:00Z'); // Assume local timezone
-            if (!isNaN(date.getTime())) {
-                setValue('date', date);
-            }
-        }
-        if (processedData.total) setValue('amount', processedData.total);
-        if (processedData.medioPago) {
-          const paymentMethodMap: { [key: string]: string } = {
-            'efectivo': 'cash',
-            'tarjeta de debito': 'debit',
-            'tarjeta de credito': 'credit',
-            'transferencia': 'transfer'
-          };
-          const mappedMethod = paymentMethodMap[processedData.medioPago.toLowerCase()];
-          if (mappedMethod) {
-            setValue('paymentMethod', mappedMethod);
-          }
-        }
-
-        toast({ title: '¡Datos Extraídos!', description: 'Revisa y completa los campos restantes.' });
-
-    } catch (error: any) {
-        console.error("Error processing receipt:", error);
-        toast({ variant: 'destructive', title: 'Error al Procesar', description: error.message || 'No se pudo procesar el recibo.' });
-    } finally {
-        setIsProcessingReceipt(false);
-    }
-  };
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-        setDragActive(true);
-    } else if (e.type === "dragleave") {
-        setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        handleReceiptChange(e.dataTransfer.files);
-    }
-  };
-
 
   const onSubmit = async (data: ExpenseFormValues) => {
     if (!activeTenant || !user || !firestore) {
@@ -258,56 +161,11 @@ export default function NewExpensePage() {
 
       <main className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-2xl">
-            <Card className="mb-8">
-                <CardHeader>
-                    <CardTitle>Carga Rápida con IA</CardTitle>
-                    <CardDescription>Arrastra o selecciona un archivo de recibo (PNG, PDF - máx 1MB) para autocompletar el formulario.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div
-                        onDragEnter={handleDrag}
-                        onDragLeave={handleDrag}
-                        onDragOver={handleDrag}
-                        onDrop={handleDrop}
-                        className={cn(
-                            "relative flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg transition-colors",
-                            { "border-primary bg-primary/10": dragActive },
-                            { "cursor-not-allowed opacity-50": isProcessingReceipt }
-                        )}
-                    >
-                        {isProcessingReceipt ? (
-                            <>
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                <p className="mt-4 text-sm text-muted-foreground">Procesando...</p>
-                            </>
-                        ) : (
-                            <>
-                                <UploadCloud className="h-10 w-10 text-muted-foreground" />
-                                <p className="mt-4 text-sm text-muted-foreground">
-                                    Arrastra un archivo aquí o{' '}
-                                    <label htmlFor="receipt-upload" className="font-medium text-primary underline cursor-pointer">
-                                        búscalo en tu dispositivo
-                                    </label>
-                                </p>
-                                <input
-                                    id="receipt-upload"
-                                    type="file"
-                                    className="hidden"
-                                    accept="image/png, application/pdf"
-                                    onChange={(e) => handleReceiptChange(e.target.files)}
-                                    disabled={isProcessingReceipt}
-                                />
-                            </>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-
             <form onSubmit={handleSubmit(onSubmit)}>
                 <Card>
                     <CardHeader>
                         <CardTitle>Detalles del Gasto</CardTitle>
-                        <CardDescription>Completa o ajusta la información del gasto manualmente.</CardDescription>
+                        <CardDescription>Completa la información del gasto manualmente.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
@@ -428,7 +286,7 @@ export default function NewExpensePage() {
 
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" disabled={isSubmitting || isProcessingReceipt}>
+                        <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? 'Guardando...' : 'Guardar Gasto'}
                         </Button>
                     </CardFooter>
