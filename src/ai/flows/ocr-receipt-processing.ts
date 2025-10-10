@@ -36,43 +36,50 @@ export async function processReceipt(input: ProcessReceiptInput): Promise<Proces
   return processReceiptFlow(input);
 }
 
-// This tool is now a placeholder. The logic is directly in the prompt.
-// We could replace this with a real call to an external OCR service if needed.
+// This tool simulates a call to an external OCR service like Docling.
 const doclingParseTool = ai.defineTool({
   name: 'doclingParse',
-  description: 'Parses a receipt document and extracts structured data.',
-  inputSchema: ProcessReceiptInputSchema,
+  description: 'Parses a receipt document image or PDF and extracts structured data.',
+  inputSchema: z.object({
+    base64Content: z.string(),
+    fileType: z.enum(['image', 'pdf']),
+  }),
   outputSchema: ProcessReceiptOutputSchema,
 },
 async (input) => {
-  // In a real scenario, this would call an external OCR service
-  // with the base64Content. For now, we rely on the prompt's capabilities.
-  console.log(`Simulating call to Docling service for receiptId: ${input.receiptId}`);
-  // This is a mock. The actual processing will happen in the prompt that receives the image.
-  return {};
+    // In a real-world scenario, this would make an API call to Docling.
+    // For this app, we are using the multi-modal capabilities of the LLM itself
+    // to perform the OCR inside the prompt. This tool definition is here
+    // to guide the model, but the core logic is in the prompt's `prompt` field.
+    console.log('doclingParseTool invoked. The real work happens in the prompt.');
+    // The model will extract the data from the image provided in the prompt.
+    // This function's return is bypassed as the model generates the output directly.
+    return {};
 }
 );
 
 
 const processReceiptPrompt = ai.definePrompt({
   name: 'processReceiptPrompt',
-  // The tool is available but the prompt text will guide the LLM
-  // to extract info from the image directly.
   tools: [doclingParseTool], 
   input: {schema: ProcessReceiptInputSchema},
   output: {schema: ProcessReceiptOutputSchema},
   prompt: `You are an expert AI specializing in extracting information from Argentinian receipts.
-Analyze the provided document and extract the following fields. If a field is not present, omit it.
+Your task is to analyze the provided receipt document and extract key information.
 
-- cuit: The CUIT number (Clave Única de Identificación Tributaria).
-- razonSocial: The business name.
-- fecha: The date of the transaction in YYYY-MM-DD format.
-- total: The final total amount as a number.
-- iva: The IVA (Impuesto al Valor Agregado) amount, if specified.
-- nFactura: The invoice or ticket number.
-- medioPago: The payment method (e.g., 'Efectivo', 'Tarjeta de Debito').
+Analyze the document provided in the input and extract the following fields:
+- CUIT (Clave Única de Identificación Tributaria)
+- Razón Social (Business Name)
+- Fecha (Date of the transaction in YYYY-MM-DD format)
+- Total (The final total amount as a number)
+- IVA (The VAT amount, if specified)
+- N° Factura (The invoice or ticket number)
+- Medio de Pago (Payment method, e.g., 'Efectivo', 'Tarjeta de Debito')
 
-Here is the document: {{media url=base64Content}}
+If a field is not present in the document, omit it from the output.
+
+Document to process:
+{{media url=base64Content}}
 `,
 });
 
@@ -83,17 +90,24 @@ const processReceiptFlow = ai.defineFlow(
     outputSchema: ProcessReceiptOutputSchema,
   },
   async input => {
-    console.log('Starting processReceiptFlow with input for receiptId:', input.receiptId);
+    console.log('Starting processReceiptFlow for receiptId:', input.receiptId);
     try {
       const {output} = await processReceiptPrompt(input);
       console.log('processReceiptPrompt output:', output);
+      
       if (!output) {
         throw new Error('The AI prompt did not return any output.');
       }
+      // Basic validation to check if at least one key has a value
+      const hasData = Object.values(output).some(v => v !== undefined && v !== null && v !== '');
+      if (!hasData) {
+         console.warn('AI output was generated but all fields are empty.');
+      }
+
       return output;
     } catch (e: any) {
       console.error('Error in processReceiptFlow:', e.message);
-      // Return a structured error or empty values
+      // Return a structured error or empty values to avoid crashing the client
       return {
         cuit: '',
         razonSocial: '',
