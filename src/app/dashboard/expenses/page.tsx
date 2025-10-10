@@ -7,32 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Plus, ArrowLeft } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import { useCollection, type WithId } from '@/firebase/firestore/use-collection';
+import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Expense, Category, Subcategory } from '@/lib/types';
 import { DataTable } from './data-table';
 import { columns } from './columns';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { useToast } from '@/hooks/use-toast';
-import { deleteExpenseAction } from './actions';
-
 
 export default function ExpensesPage() {
     const { user } = useUser();
     const firestore = useFirestore();
-    const { toast } = useToast();
-
-    const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
-    const [isDeleting, setIsDeleting] = React.useState(false);
-
 
     // Fetch Tenant
     const tenantsQuery = useMemoFirebase(() => {
@@ -80,30 +62,6 @@ export default function ExpensesPage() {
 
     const isLoading = isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
 
-    const handleDeleteClick = (expenseId: string) => {
-        setExpenseToDelete(expenseId);
-    };
-
-    const handleConfirmDelete = async () => {
-        if (!expenseToDelete) return;
-        setIsDeleting(true);
-        const result = await deleteExpenseAction(expenseToDelete);
-        setIsDeleting(false);
-
-        if (result.success) {
-            toast({ title: '¡Éxito!', description: 'El gasto ha sido eliminado.' });
-            setExpenseToDelete(null); // Close dialog
-            // The useCollection hook will automatically update the list
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Error al eliminar',
-                description: result.error || 'No se pudo eliminar el gasto.',
-            });
-        }
-    };
-
-
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">
             <header className="sticky top-0 z-40 w-full border-b bg-background">
@@ -141,31 +99,11 @@ export default function ExpensesPage() {
                                 columns={columns} 
                                 data={tableData}
                                 categories={categories || []}
-                                onDelete={handleDeleteClick}
                             />
                        )}
                     </CardContent>
                 </Card>
             </main>
-
-            <AlertDialog open={!!expenseToDelete} onOpenChange={(open) => !open && setExpenseToDelete(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Esta acción no se puede deshacer. El gasto se marcará como eliminado
-                        y no será visible en la aplicación.
-                    </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setExpenseToDelete(null)} disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting}>
-                        {isDeleting ? 'Eliminando...' : 'Confirmar'}
-                    </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
         </div>
     );
 }
