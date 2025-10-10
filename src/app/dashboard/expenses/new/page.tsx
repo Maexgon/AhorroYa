@@ -20,7 +20,7 @@ import { CalendarIcon, UploadCloud, ArrowLeft, FileCheck2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { uploadReceiptAction } from '../actions';
+import { getSignedURLAction, processReceiptAction } from '../actions';
 
 
 const expenseFormSchema = z.object({
@@ -84,18 +84,39 @@ export default function NewExpensePage() {
   const handleReceiptChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !activeTenant || !user) return;
-    
+
     setSelectedFileName(file.name);
     setIsProcessingReceipt(true);
-    toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos. Por favor, espera.' });
+    toast({ title: 'Preparando subida segura...', description: 'Generando URL para el recibo.' });
 
     try {
-        const formData = new FormData();
-        formData.append('receipt', file);
-        formData.append('tenantId', activeTenant.id);
-        formData.append('userId', user.uid);
+        // PASO 1: Obtener la URL firmada desde el servidor
+        const signedUrlResult = await getSignedURLAction(activeTenant.id, user.uid, {
+            name: file.name,
+            type: file.type,
+        });
 
-        const result = await uploadReceiptAction(formData);
+        if (!signedUrlResult.success) {
+            throw new Error(signedUrlResult.error);
+        }
+        
+        toast({ title: 'Subiendo Recibo...', description: 'El archivo se está enviando a la nube.' });
+
+        // PASO 2: Subir el archivo directamente a GCS usando la URL firmada
+        const uploadResponse = await fetch(signedUrlResult.url, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type },
+        });
+
+        if (!uploadResponse.ok) {
+            throw new Error(`Error al subir el archivo: ${uploadResponse.statusText}`);
+        }
+        
+        toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos.' });
+
+        // PASO 3: Llamar a la acción de procesamiento de IA
+        const result = await processReceiptAction(signedUrlResult.gcsUri, activeTenant.id, user.uid, file.type);
         
         if (result.error) {
             throw new Error(result.error);
@@ -106,14 +127,13 @@ export default function NewExpensePage() {
             if (data.razonSocial) setValue('entityName', data.razonSocial, { shouldValidate: true });
             if (data.cuit) setValue('entityCuit', data.cuit, { shouldValidate: true });
             if (data.fecha) {
-                // The date can come as YYYY-MM-DD, we need to adjust for timezone issues.
                 const dateParts = data.fecha.split('-').map(p => parseInt(p, 10));
                 const utcDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
                 setValue('date', utcDate, { shouldValidate: true });
             }
             if (data.total) setValue('amount', data.total, { shouldValidate: true });
             if (data.medioPago) setValue('paymentMethod', data.medioPago.toLowerCase(), { shouldValidate: true });
-            toast({ title: '¡Datos Extraídos!', description: 'Los campos del formulario han sido actualizados. Por favor, revísalos.' });
+            toast({ title: '¡Datos Extraídos!', description: 'Los campos del formulario han sido actualizados.' });
         } else {
             toast({ variant: 'destructive', title: 'Error de Procesamiento', description: 'No se pudieron extraer datos del recibo.' });
         }
@@ -122,7 +142,7 @@ export default function NewExpensePage() {
         console.error("Error processing receipt: ", error);
         toast({ 
             variant: 'destructive', 
-            title: 'Error al procesar recibo', 
+            title: 'Error en el proceso', 
             description: error.message || 'Ocurrió un problema al procesar el recibo.',
             duration: 10000,
         });

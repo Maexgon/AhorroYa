@@ -1,58 +1,65 @@
 "use server";
 
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getStorage, ref, uploadBytes } from "firebase/storage";
+import { getStorage, ref, getSignedUrl } from "firebase/storage";
 import { processReceipt, type ProcessReceiptOutput } from "@/ai/flows/ocr-receipt-processing";
-import { firebaseConfig } from "@/firebase/config"; // Importar la configuración
+import { firebaseConfig } from "@/firebase/config";
 
-type ActionResult = {
-    data?: ProcessReceiptOutput;
-    error?: string;
-}
+type SignedURLResponse = {
+    success: true;
+    url: string;
+    gcsUri: string;
+} | {
+    success: false;
+    error: string;
+};
 
-export async function uploadReceiptAction(formData: FormData): Promise<ActionResult> {
-    console.log("[SERVER ACTION START] uploadReceiptAction");
-    const file = formData.get('receipt') as File | null;
-    const tenantId = formData.get('tenantId') as string | null;
-    const userId = formData.get('userId') as string | null;
-
+// ACCIÓN 1: Generar una URL firmada para la subida segura desde el cliente.
+export async function getSignedURLAction(tenantId: string, userId: string, file: { type: string, name: string }): Promise<SignedURLResponse> {
+    console.log("[SERVER ACTION START] getSignedURLAction");
     if (!file || !tenantId || !userId) {
         console.error("[SERVER ACTION ERROR] Faltan datos:", { hasFile: !!file, hasTenantId: !!tenantId, hasUserId: !!userId });
-        return { error: 'Faltan datos para procesar el recibo (archivo, tenantId, o userId).' };
+        return { success: false, error: 'Faltan datos para generar la URL (archivo, tenantId, o userId).' };
     }
-    
-    console.log(`[SERVER ACTION INFO] File: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
 
     try {
-        console.log("[SERVER ACTION INFO] Inicializando Firebase...");
         const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-        console.log("[SERVER ACTION SUCCESS] Firebase inicializado. Project ID:", app.options.projectId);
-        
-        const storage = getStorage(app); 
-        console.log("[SERVER ACTION INFO] Instancia de Storage obtenida.");
+        const storage = getStorage(app);
         
         const filePath = `receipts/${tenantId}/${userId}/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, filePath);
-        console.log("[SERVER ACTION INFO] Referencia de Storage creada:", storageRef.fullPath);
         
-        console.log("[SERVER ACTION INFO] Convirtiendo archivo a Buffer...");
-        const fileBuffer = Buffer.from(await file.arrayBuffer());
-        console.log("[SERVER ACTION SUCCESS] Archivo convertido a Buffer. Length:", fileBuffer.length);
-        
-        console.log("[SERVER ACTION INFO] Subiendo archivo a Firebase Storage...");
-        await uploadBytes(storageRef, fileBuffer, {
-            contentType: file.type,
+        // Generar la URL firmada para la operación 'put'
+        const signedUrl = await getSignedUrl(storageRef, {
+          action: 'write',
+          contentType: file.type,
+          expires: Date.now() + 15 * 60 * 1000, // 15 minutos
         });
-        console.log("[SERVER ACTION SUCCESS] Archivo subido exitosamente a:", filePath);
-        
-        const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
-        console.log("[SERVER ACTION INFO] Llamando al flujo de IA con GCS URI:", gcsUri);
 
+        console.log("[SERVER ACTION SUCCESS] URL Firmada generada.");
+        return { 
+            success: true, 
+            url: signedUrl,
+            gcsUri: `gs://${storageRef.bucket}/${storageRef.fullPath}`
+        };
+
+    } catch (error: any) {
+        console.error("[SERVER ACTION CRITICAL] Ocurrió un error en getSignedURLAction:", error);
+        return { success: false, error: `Error en el servidor al generar URL: ${error.code || error.message}` };
+    }
+}
+
+
+// ACCIÓN 2: Procesar el recibo después de que se haya subido.
+export async function processReceiptAction(gcsUri: string, tenantId: string, userId: string, fileType: string): Promise<{ data?: ProcessReceiptOutput; error?: string; }> {
+    console.log("[SERVER ACTION START] processReceiptAction con GCS URI:", gcsUri);
+
+    try {
         const result = await processReceipt({
             gcsUri: gcsUri,
             tenantId: tenantId,
             userId: userId,
-            fileType: file.type.includes('pdf') ? 'pdf' : 'image',
+            fileType: fileType.includes('pdf') ? 'pdf' : 'image',
         });
         console.log("[SERVER ACTION SUCCESS] El flujo de IA devolvió un resultado.");
 
@@ -65,12 +72,7 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
         return { data: result };
 
     } catch (error: any) {
-        // Loguear el error completo en el servidor para un mejor diagnóstico
-        console.error("[SERVER ACTION CRITICAL] Ocurrió un error en uploadReceiptAction:", error);
-        console.error("[SERVER ACTION CRITICAL] Código de error:", error.code);
-        console.error("[SERVER ACTION CRITICAL] Mensaje de error:", error.message);
-        console.error("[SERVER ACTION CRITICAL] Stack de error:", error.stack);
-        // Devolver un mensaje de error más específico si es posible
-        return { error: `Error en el servidor: ${error.code || error.message}` };
+        console.error("[SERVER ACTION CRITICAL] Ocurrió un error en processReceiptAction:", error);
+        return { error: `Error en el servidor durante el procesamiento de IA: ${error.code || error.message}` };
     }
 }
