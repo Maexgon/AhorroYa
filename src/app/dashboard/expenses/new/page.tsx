@@ -21,7 +21,7 @@ import { CalendarIcon, ArrowLeft, UploadCloud, File as FileIcon, X } from 'lucid
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceiptAction } from './actions';
+import { processReceiptAction } from '../actions';
 import { getStorage, ref, uploadBytes } from "firebase/storage";
 
 
@@ -53,7 +53,6 @@ export default function NewExpensePage() {
     defaultValues: {
       entityName: '',
       entityCuit: '',
-      date: new Date(),
       amount: 0,
       currency: 'ARS',
       categoryId: '',
@@ -423,3 +422,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    
