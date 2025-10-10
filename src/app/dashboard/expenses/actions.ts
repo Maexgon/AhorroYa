@@ -1,7 +1,7 @@
 
 'use server';
 
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection } from 'firebase/firestore';
 import { processReceipt, type ProcessReceiptInput } from '@/ai/flows/ocr-receipt-processing';
 import { initializeFirebase } from '@/firebase/config';
 import { getApps } from 'firebase/app';
