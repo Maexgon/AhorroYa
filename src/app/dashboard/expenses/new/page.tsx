@@ -118,7 +118,14 @@ export default function NewExpensePage() {
         
         const processedData = result.data as ProcessReceiptOutput;
         
-        toast({ title: '¡Recibo procesado!', description: 'Revisa los datos y ajusta si es necesario.' });
+        toast({
+          title: 'Respuesta de la IA (Datos Crudos)',
+          description: (
+            <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
+              <code className="text-white">{JSON.stringify(processedData, null, 2)}</code>
+            </pre>
+          ),
+        });
         
         if (processedData.razonSocial) setValue('entityName', processedData.razonSocial);
         if (processedData.cuit) setValue('entityCuit', processedData.cuit.replace(/[^0-9]/g, ''));
@@ -174,10 +181,10 @@ export default function NewExpensePage() {
         }
         
         const newExpenseRef = doc(collection(firestore, 'expenses'));
-        const newReceiptRef = receiptBase64 ? doc(collection(firestore, 'receipts_raw')) : null;
-
+        
         // 2. Handle Receipt if it exists
-        if (newReceiptRef && receiptBase64 && receiptFile) {
+        if (receiptBase64 && receiptFile) {
+             const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
              batch.set(newReceiptRef, {
                 id: newReceiptRef.id,
                 tenantId: activeTenant.id,
@@ -420,3 +427,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    
