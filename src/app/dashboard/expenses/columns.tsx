@@ -22,6 +22,14 @@ export type ExpenseRow = Expense & {
   subcategory?: Subcategory;
 }
 
+// We need to add a meta property to our column definitions
+// to pass the delete function to the cell renderer.
+declare module '@tanstack/react-table' {
+  interface ColumnMeta<TData, TValue> {
+    onDelete: (expenseId: string) => void
+  }
+}
+
 
 export const columns: ColumnDef<ExpenseRow>[] = [
   {
@@ -135,8 +143,9 @@ export const columns: ColumnDef<ExpenseRow>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row, column }) => {
       const expense = row.original
+      const onDelete = column.columnDef.meta?.onDelete;
 
       return (
         <DropdownMenu>
@@ -155,7 +164,12 @@ export const columns: ColumnDef<ExpenseRow>[] = [
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Editar Gasto</DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">Eliminar Gasto</DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+              onClick={() => onDelete?.(expense.id)}
+            >
+              Eliminar Gasto
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )

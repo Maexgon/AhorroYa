@@ -37,12 +37,14 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   categories: Category[]
+  onDelete: (expenseId: string) => void;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
-  categories
+  categories,
+  onDelete,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -53,6 +55,9 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    meta: {
+      onDelete,
+    },
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
