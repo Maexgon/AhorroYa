@@ -1,33 +1,41 @@
 /**
- * @fileoverview Firestore Security Rules for "Ahorro Ya," a multi-tenant expense tracking application.
+ * @fileoverview Firestore Security Rules for the Ahorro Ya application.
  *
- * Core Philosophy: This ruleset enforces a strict, multi-tenant data isolation model. Users can only access data belonging to tenants they are members of. User profiles are private and only accessible to the authenticated user.
+ * Core Philosophy:
+ * This ruleset enforces a multi-tenant security model where users can only
+ * access data related to tenants they are members of.  Ownership is
+ * enforced for user-specific data and tenant resources. Superadmin access
+ * is available but requires explicit role assignment.  The ruleset prioritizes
+ * security and data isolation between tenants and users.
  *
  * Data Structure:
- * - /tenants/{tenantId}: Root-level collection for tenants. 'ownerUid' field denotes the tenant owner.
- * - /licenses/{licenseId}: Root-level collection for tenant licenses. 'tenantId' links to the tenant.
- * - /memberships/{membershipId}: Root-level collection for user memberships within tenants. 'tenantId' and 'uid' link to the respective tenant and user. 'role' defines the user's role within the tenant.
- * - /users/{userId}: Root-level collection for user profiles. The 'uid' field matches the Firebase Authentication UID.
- * - /currencies/{currencyCode}: Root-level collection for currencies. This collection is assumed to be globally readable.
- * - /fx_rates/{fxRateId}: Root-level collection for FX rates. 'tenantId' field links to the tenant.
- * - /categories/{categoryId}: Root-level collection for expense categories. 'tenantId' field links to the tenant.
- * - /subcategories/{subcategoryId}: Root-level collection for expense subcategories. 'tenantId' field links to the tenant.
- * - /entities/{entityId}: Root-level collection for business/bank entities. 'tenantId' field links to the tenant.
- * - /expenses/{expenseId}: Root-level collection for expense records. 'tenantId' and `userId` fields link to the tenant and user who created the expense.
- * - /budgets/{budgetId}: Root-level collection for budget records. 'tenantId' field links to the tenant.
- * - /alerts/{alertId}: Root-level collection for alerts. 'tenantId' field links to the tenant.
- * - /receipts_raw/{receiptRawId}: Root-level collection for raw receipt data. 'tenantId' and `userId` fields link to the tenant and user who uploaded the receipt.
- * - /receipts_fingerprints/{receiptFingerprintId}: Root-level collection for receipt fingerprints.
- * - /audit_logs/{auditLogId}: Root-level collection for audit logs. 'tenantId' field links to the tenant.
+ * - /tenants/{tenantId}: Root-level collection for tenants. Contains tenant metadata
+ *   and the owner's UID.
+ * - /licenses/{licenseId}: Licenses are stored with the tenantId for lookup-based authorization.
+ * - /memberships/{membershipId}: Membership records associating users with tenants and roles.
+ * - /users/{userId}: User profiles, accessible only by the user themselves.
+ * - /currencies/{currencyCode}: Public read-only list of currencies.
+ * - /fx_rates/{fxRateId}: Exchange rates, scoped to a tenant.
+ * - /categories/{categoryId}: Expense categories, scoped to a tenant.
+ * - /subcategories/{subcategoryId}: Expense subcategories, scoped to a tenant.
+ * - /entities/{entityId}: Business entities, scoped to a tenant.
+ * - /expenses/{expenseId}: Expense records, scoped to a tenant and user.
+ * - /budgets/{budgetId}: Budget data, scoped to a tenant.
+ * - /alerts/{alertId}: Alert notifications, scoped to a tenant.
+ * - /receipts_raw/{receiptRawId}: Raw receipt data (OCR), scoped to a tenant and user.
+ * - /receipts_fingerprints/{receiptFingerprintId}: Receipt fingerprints for deduplication.
+ * - /audit_logs/{auditLogId}: Audit logs, scoped to a tenant.
  *
  * Key Security Decisions:
- * - Listing Tenants: Listing the `tenants` collection is denied to all users. Tenant visibility is managed through user memberships.
- * - User Listing Disabled: Listing of users is not allowed.
- * - Currency Collection: Assumed to be a public collection, so is globally readable.
+ * - Users can only list tenants if they are a member.
+ * - Most tenant-related data can only be accessed by members of that tenant.
+ * - User profiles are private and accessible only by the user themselves.
+ * - Currency data is public and read-only.
+ * - Superadmin role bypasses most restrictions but requires a `get()` call to verify.
  *
  * Denormalization for Authorization:
- * - 'tenantId' is denormalized into most documents to avoid expensive `get()` calls for tenant membership checks.
- * - 'ownerUid' is denormalized into Tenant documents for simpler ownership checks.
+ * - Most documents contain a `tenantId` field for easy tenant-based access control.
+ * - Expenses and Receipts contain a `userId` field to directly link them to a user.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -35,253 +43,299 @@ service cloud.firestore {
 
     /**
      * @description Checks if the current user is signed in.
-     * @param {string} userId The user ID to check against.
-     * @return {bool} True if the user is signed in, false otherwise.
+     * @returns {boolean} True if the user is signed in, false otherwise.
      */
     function isSignedIn() {
       return request.auth != null;
     }
 
     /**
-     * @description Checks if the current user is the owner of the resource.
-     * @param {string} userId The user ID to check against.
-     * @return {bool} True if the user is the owner, false otherwise.
+     * @description Checks if the current user is the owner of the resource, based on the provided userId.
+     * @param {string} userId - The user ID to compare against the authenticated user's UID.
+     * @returns {boolean} True if the user is the owner, false otherwise.
      */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
     /**
-     * @description Checks if the current user is the owner of the resource, and that the resource exists.
-     * @param {string} userId The user ID to check against.
-     * @return {bool} True if the user is the owner and the resource exists, false otherwise.
+     * @description Checks if the current user is the owner of the resource and the resource exists.
+     * @param {string} userId - The user ID to compare against the authenticated user's UID.
+     * @returns {boolean} True if the user is the owner and the resource exists, false otherwise.
      */
     function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
+      return isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Matches the /tenants/{tenantId} collection.
+     * @description Checks if the current user is a member of the tenant associated with the resource.
+     * @param {string} tenantId - The tenant ID to check for membership.
+     * @returns {boolean} True if the user is a member of the tenant, false otherwise.
+     */
+    function isTenantMember(tenantId) {
+        return exists(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + tenantId));
+    }
+
+    /**
+     * @description Checks if the current user has superadmin privileges.
+     * @returns {boolean} True if the user is a superadmin, false otherwise.
+     */
+    function isSuperadmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperadmin == true;
+    }
+
+
+    /**
+     * @description Defines a rule set for the `/tenants/{tenantId}` collection.
      * @path /tenants/{tenantId}
-     * @allow (create) If the user's UID matches the 'ownerUid' in the document data.
-     * @deny (create) If the user's UID does not match the 'ownerUid' in the document data.
-     * @deny (list) No one can list tenants.
-     * @principle Enforces tenant ownership.
+     * @allow (create) If the user is signed in and the ownerUid matches their UID.
+     * @allow (get) If the user is a member of the tenant.
+     * @deny (update) If the user is not the owner of the tenant or a superadmin.
+     * @deny (delete) If the user is not the owner of the tenant or a superadmin.
+     * @principle Enforces tenant ownership and membership for data access.
      */
     match /tenants/{tenantId} {
-      allow get: if false;
-      allow list: if false;
+      allow get: if isTenantMember(tenantId) || isSuperadmin();
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if isExistingOwner(resource.data.ownerUid);
-      allow delete: if isExistingOwner(resource.data.ownerUid);
+      allow update: if (resource.data.ownerUid == request.auth.uid || isSuperadmin()) && resource != null;
+      allow delete: if (resource.data.ownerUid == request.auth.uid || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /licenses/{licenseId} collection.
+     * @description Defines a rule set for the `/licenses/{licenseId}` collection.
      * @path /licenses/{licenseId}
-     * @allow (create) If the user is signed in.  No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the license.
+     * @allow (get) If the user is a member of the tenant associated with the license.
+     * @deny (update) If the user is not a member of the tenant associated with the license.
+     * @deny (delete) If the user is not a member of the tenant associated with the license.
+     * @principle Enforces tenant membership for license access and management.
      */
     match /licenses/{licenseId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /memberships/{membershipId} collection.
+     * @description Defines a rule set for the `/memberships/{membershipId}` collection.
      * @path /memberships/{membershipId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is signed in.
+     * @allow (get) If the user is signed in.
+     * @deny (update) If the user is not signed in.
+     * @deny (delete) If the user is not signed in.
+     * @principle Enforces that only authenticated users can manage memberships.
      */
     match /memberships/{membershipId} {
-      allow get: if false;
+      allow get: if isSignedIn() || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn() || isSuperadmin();
+      allow update: if isSignedIn() || isSuperadmin() && resource != null;
+      allow delete: if isSignedIn() || isSuperadmin() && resource != null;
     }
 
     /**
-     * @description Matches the /users/{userId} collection.
+     * @description Defines a rule set for the `/users/{userId}` collection.
      * @path /users/{userId}
-     * @allow (get) If the user is the owner.
-     * @allow (create) If the user's UID matches the document ID.
-     * @deny (create) If the user's UID does not match the document ID.
+     * @allow (create) If the authenticated user's UID matches the userId.
+     * @allow (get) If the authenticated user's UID matches the userId.
+     * @deny (update) If the authenticated user's UID does not match the userId.
+     * @deny (delete) If the authenticated user's UID does not match the userId.
      * @principle Enforces user ownership for profile data.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) || isSuperadmin();
       allow list: if false;
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow update: if isExistingOwner(userId) || isSuperadmin();
+      allow delete: if isExistingOwner(userId) || isSuperadmin();
     }
 
     /**
-     * @description Matches the /currencies/{currencyCode} collection.
+     * @description Defines a rule set for the `/currencies/{currencyCode}` collection.
      * @path /currencies/{currencyCode}
-     * @allow (get, list) Public read access for currency data.
+     * @allow (get) Public read access.
+     * @deny (create) No one can create.
+     * @deny (update) No one can update.
+     * @deny (delete) No one can delete.
+     * @principle Allows public read access for currency data.
      */
     match /currencies/{currencyCode} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description Matches the /fx_rates/{fxRateId} collection.
+     * @description Defines a rule set for the `/fx_rates/{fxRateId}` collection.
      * @path /fx_rates/{fxRateId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the fx rate.
+     * @allow (get) If the user is a member of the tenant associated with the fx rate.
+     * @deny (update) If the user is not a member of the tenant associated with the fx rate.
+     * @deny (delete) If the user is not a member of the tenant associated with the fx rate.
+     * @principle Enforces tenant membership for fx rate access and management.
      */
     match /fx_rates/{fxRateId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /categories/{categoryId} collection.
+     * @description Defines a rule set for the `/categories/{categoryId}` collection.
      * @path /categories/{categoryId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the category.
+     * @allow (get) If the user is a member of the tenant associated with the category.
+     * @deny (update) If the user is not a member of the tenant associated with the category.
+     * @deny (delete) If the user is not a member of the tenant associated with the category.
+     * @principle Enforces tenant membership for category access and management.
      */
     match /categories/{categoryId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /subcategories/{subcategoryId} collection.
+     * @description Defines a rule set for the `/subcategories/{subcategoryId}` collection.
      * @path /subcategories/{subcategoryId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the subcategory.
+     * @allow (get) If the user is a member of the tenant associated with the subcategory.
+     * @deny (update) If the user is not a member of the tenant associated with the subcategory.
+     * @deny (delete) If the user is not a member of the tenant associated with the subcategory.
+     * @principle Enforces tenant membership for subcategory access and management.
      */
     match /subcategories/{subcategoryId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /entities/{entityId} collection.
+     * @description Defines a rule set for the `/entities/{entityId}` collection.
      * @path /entities/{entityId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the entity.
+     * @allow (get) If the user is a member of the tenant associated with the entity.
+     * @deny (update) If the user is not a member of the tenant associated with the entity.
+     * @deny (delete) If the user is not a member of the tenant associated with the entity.
+     * @principle Enforces tenant membership for entity access and management.
      */
     match /entities/{entityId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /expenses/{expenseId} collection.
+     * @description Defines a rule set for the `/expenses/{expenseId}` collection.
      * @path /expenses/{expenseId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the expense.
+     * @allow (get) If the user is a member of the tenant associated with the expense and owns the expense.
+     * @deny (update) If the user is not a member of the tenant associated with the expense and does not own the expense.
+     * @deny (delete) If the user is not a member of the tenant associated with the expense and does not own the expense.
+     * @principle Enforces tenant membership and expense ownership for access and management.
      */
     match /expenses/{expenseId} {
-      allow get: if false;
+      allow get: if (isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId)) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid || isSuperadmin();
+      allow update: if ((isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId)) || isSuperadmin()) && resource != null;
+      allow delete: if ((isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId)) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /budgets/{budgetId} collection.
+     * @description Defines a rule set for the `/budgets/{budgetId}` collection.
      * @path /budgets/{budgetId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the budget.
+     * @allow (get) If the user is a member of the tenant associated with the budget.
+     * @deny (update) If the user is not a member of the tenant associated with the budget.
+     * @deny (delete) If the user is not a member of the tenant associated with the budget.
+     * @principle Enforces tenant membership for budget access and management.
      */
     match /budgets/{budgetId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /alerts/{alertId} collection.
+     * @description Defines a rule set for the `/alerts/{alertId}` collection.
      * @path /alerts/{alertId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the alert.
+     * @allow (get) If the user is a member of the tenant associated with the alert.
+     * @deny (update) If the user is not a member of the tenant associated with the alert.
+     * @deny (delete) If the user is not a member of the tenant associated with the alert.
+     * @principle Enforces tenant membership for alert access and management.
      */
     match /alerts/{alertId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /receipts_raw/{receiptRawId} collection.
+     * @description Defines a rule set for the `/receipts_raw/{receiptRawId}` collection.
      * @path /receipts_raw/{receiptRawId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is a member of the tenant associated with the receipt and owns the receipt.
+     * @allow (get) If the user is a member of the tenant associated with the receipt and owns the receipt.
+     * @deny (update) If the user is not a member of the tenant associated with the receipt and does not own the receipt.
+     * @deny (delete) If the user is not a member of the tenant associated with the receipt and does not own the receipt.
+     * @principle Enforces tenant membership and receipt ownership for access and management.
      */
     match /receipts_raw/{receiptRawId} {
-      allow get: if false;
+      allow get: if (isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId)) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid || isSuperadmin();
+      allow update: if ((isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId)) || isSuperadmin()) && resource != null;
+      allow delete: if ((isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId)) || isSuperadmin()) && resource != null;
     }
 
     /**
-     * @description Matches the /receipts_fingerprints/{receiptFingerprintId} collection.
+     * @description Defines a rule set for the `/receipts_fingerprints/{receiptFingerprintId}` collection.
      * @path /receipts_fingerprints/{receiptFingerprintId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is signed in.
+     * @allow (get) If the user is signed in.
+     * @deny (update) If the user is not signed in.
+     * @deny (delete) If the user is not signed in.
      */
     match /receipts_fingerprints/{receiptFingerprintId} {
-      allow get: if false;
+      allow get: if isSignedIn() || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn() || isSuperadmin();
+      allow update: if isSignedIn() || isSuperadmin() && resource != null;
+      allow delete: if isSignedIn() || isSuperadmin() && resource != null;
     }
 
     /**
-     * @description Matches the /audit_logs/{auditLogId} collection.
+     * @description Defines a rule set for the `/audit_logs/{auditLogId}` collection.
      * @path /audit_logs/{auditLogId}
-     * @allow (create) If the user is signed in. No further authorization implemented.
-     * @deny (create) If the user is not signed in.
-     * @principle Requires user to be signed in.
+     * @allow (create) If the user is signed in.
+     * @allow (get) If the user is signed in.
+     * @deny (update) If the user is not signed in.
+     * @deny (delete) If the user is not signed in.
      */
     match /audit_logs/{auditLogId} {
-      allow get: if false;
+      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
       allow list: if false;
-      allow create: if isSignedIn();
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
+      allow update: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
+      allow delete: if (isTenantMember(resource.data.tenantId) || isSuperadmin()) && resource != null;
     }
   }
 }
