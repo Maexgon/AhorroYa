@@ -56,7 +56,7 @@ export function DataTable<TData, TValue>({
     data,
     columns,
     meta: {
-      onDelete,
+      onDelete, // This line connects the delete function to the table's metadata
     },
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -66,6 +66,11 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    initialState: {
+        pagination: {
+            pageSize: 10,
+        }
+    },
     state: {
       sorting,
       columnFilters,
@@ -87,9 +92,11 @@ export function DataTable<TData, TValue>({
         />
         <Select
             onValueChange={(value) => {
-                const currentFilter = table.getColumn("category")?.getFilterValue() as string[] | undefined;
-                const newFilter = value ? (currentFilter ? [...currentFilter, value] : [value]) : [];
-                table.getColumn("category")?.setFilterValue(value ? [value] : undefined);
+                if (value === 'all') {
+                    table.getColumn("category")?.setFilterValue(undefined);
+                } else {
+                    table.getColumn("category")?.setFilterValue(value);
+                }
             }}
         >
             <SelectTrigger className="w-[180px]">
