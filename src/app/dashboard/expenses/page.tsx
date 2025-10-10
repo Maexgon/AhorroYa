@@ -15,6 +15,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
@@ -31,6 +33,7 @@ export default function ExpensesPage() {
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
+    const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
     // Fetch Tenant
     const tenantsQuery = useMemoFirebase(() => {
@@ -65,6 +68,12 @@ export default function ExpensesPage() {
         setExpenseToDelete(expenseId);
         setIsAlertDialogOpen(true);
     };
+    
+    const resetDeleteDialog = () => {
+        setIsAlertDialogOpen(false);
+        setExpenseToDelete(null);
+        setDeleteConfirmationText('');
+    }
 
     const handleDeleteExpense = async () => {
         if (!expenseToDelete) return;
@@ -81,8 +90,7 @@ export default function ExpensesPage() {
             toast({ variant: 'destructive', title: 'Error', description: result.error });
         }
 
-        setIsAlertDialogOpen(false);
-        setExpenseToDelete(null);
+        resetDeleteDialog();
     };
 
 
@@ -150,15 +158,29 @@ export default function ExpensesPage() {
             <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Esta acción marcará el gasto como eliminado. No se podrá recuperar
-                        directamente desde la aplicación.
-                    </AlertDialogDescription>
+                        <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción marcará el gasto como eliminado de forma permanente. Para confirmar, escribe <strong className="text-foreground">BORRAR</strong> en el campo de abajo.
+                        </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <div className="py-2">
+                        <Label htmlFor="delete-confirm" className="sr-only">Confirmación</Label>
+                        <Input 
+                            id="delete-confirm"
+                            value={deleteConfirmationText}
+                            onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                            placeholder='Escribe "BORRAR"'
+                        />
+                    </div>
                     <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setExpenseToDelete(null)}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteExpense}>Continuar</AlertDialogAction>
+                        <AlertDialogCancel onClick={resetDeleteDialog}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={handleDeleteExpense}
+                            disabled={deleteConfirmationText !== 'BORRAR'}
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            Continuar
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

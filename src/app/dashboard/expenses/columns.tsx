@@ -128,9 +128,9 @@ export const columns: ColumnDef<ExpenseRow>[] = [
    {
     id: "actions",
     header: () => <div className="text-center">Acciones</div>,
-    cell: ({ row, column }) => {
+    cell: ({ row, table }) => {
       const expense = row.original
-      const { onDelete } = (column.columnDef.meta as { onDelete: (id: string) => void }) || {}
+      const { onDelete } = table.options.meta as { onDelete: (id: string) => void };
 
       return (
         <div className="flex items-center justify-center gap-2">
@@ -143,7 +143,7 @@ export const columns: ColumnDef<ExpenseRow>[] = [
             variant="ghost"
             size="icon"
             className="text-destructive hover:text-destructive"
-            onClick={() => onDelete?.(expense.id)}
+            onClick={() => onDelete(expense.id)}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
