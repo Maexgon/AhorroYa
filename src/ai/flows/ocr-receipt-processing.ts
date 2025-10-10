@@ -13,7 +13,8 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ProcessReceiptInputSchema = z.object({
-  gcsUri: z.string().describe('The Google Cloud Storage URI of the receipt image or PDF (gs://...).'),
+  receiptId: z.string().describe('The ID of the raw receipt document in Firestore.'),
+  base64Content: z.string().describe("A Base64 encoded string of the receipt image or PDF. Must include MIME type (e.g., 'data:image/png;base64,...')."),
   tenantId: z.string().describe('The ID of the tenant.'),
   userId: z.string().describe('The ID of the user uploading the receipt.'),
   fileType: z.enum(['image', 'pdf']).describe('The type of the uploaded file.'),
@@ -35,47 +36,43 @@ export async function processReceipt(input: ProcessReceiptInput): Promise<Proces
   return processReceiptFlow(input);
 }
 
+// This tool is now a placeholder. The logic is directly in the prompt.
+// We could replace this with a real call to an external OCR service if needed.
 const doclingParseTool = ai.defineTool({
   name: 'doclingParse',
-  description: 'Call the Docling service to parse a receipt image or PDF and extract structured data.',
-  inputSchema: z.object({
-    gcsUri: z.string().describe('The Google Cloud Storage URI of the receipt image or PDF.'),
-    tenantId: z.string().describe('The ID of the tenant.'),
-    userId: z.string().describe('The ID of the user uploading the receipt.'),
-    fileType: z.enum(['image', 'pdf']).describe('The type of the uploaded file.'),
-  }),
+  description: 'Parses a receipt document and extracts structured data.',
+  inputSchema: ProcessReceiptInputSchema,
   outputSchema: ProcessReceiptOutputSchema,
 },
 async (input) => {
-  const parseUrl = process.env.DOCLING_PARSE_URL ?? 'http://localhost:8080/parse';
-  console.log(`Calling Docling service at ${parseUrl} with input:`, JSON.stringify(input));
-  const response = await fetch(parseUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(input),
-  });
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error('Error calling Docling service:', response.status, response.statusText, errorBody);
-    throw new Error(`Failed to call Docling service: ${response.status} ${response.statusText}`);
-  }
-  const result = await response.json();
-  console.log('Received from Docling service:', result);
-  return result as ProcessReceiptOutput;
+  // In a real scenario, this would call an external OCR service
+  // with the base64Content. For now, we rely on the prompt's capabilities.
+  console.log(`Simulating call to Docling service for receiptId: ${input.receiptId}`);
+  // This is a mock. The actual processing will happen in the prompt that receives the image.
+  return {};
 }
 );
 
+
 const processReceiptPrompt = ai.definePrompt({
   name: 'processReceiptPrompt',
-  tools: [doclingParseTool],
+  // The tool is available but the prompt text will guide the LLM
+  // to extract info from the image directly.
+  tools: [doclingParseTool], 
   input: {schema: ProcessReceiptInputSchema},
   output: {schema: ProcessReceiptOutputSchema},
-  prompt: `You are an AI assistant designed to process receipts.
-The user has provided a file located at the Google Cloud Storage URI: {{{gcsUri}}}.
-Your ONLY task is to call the 'doclingParse' tool with the provided input to extract the receipt data.
-Do not attempt any other action. Call the tool and return its output directly.
+  prompt: `You are an expert AI specializing in extracting information from Argentinian receipts.
+Analyze the provided document and extract the following fields. If a field is not present, omit it.
+
+- cuit: The CUIT number (Clave Única de Identificación Tributaria).
+- razonSocial: The business name.
+- fecha: The date of the transaction in YYYY-MM-DD format.
+- total: The final total amount as a number.
+- iva: The IVA (Impuesto al Valor Agregado) amount, if specified.
+- nFactura: The invoice or ticket number.
+- medioPago: The payment method (e.g., 'Efectivo', 'Tarjeta de Debito').
+
+Here is the document: {{media url=base64Content}}
 `,
 });
 
@@ -86,7 +83,7 @@ const processReceiptFlow = ai.defineFlow(
     outputSchema: ProcessReceiptOutputSchema,
   },
   async input => {
-    console.log('Starting processReceiptFlow with input:', input);
+    console.log('Starting processReceiptFlow with input for receiptId:', input.receiptId);
     try {
       const {output} = await processReceiptPrompt(input);
       console.log('processReceiptPrompt output:', output);

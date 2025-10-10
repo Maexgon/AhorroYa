@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Tenant": {
@@ -576,7 +577,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "ReceiptRaw",
       "type": "object",
-      "description": "Represents raw OCR data from a receipt.",
+      "description": "Represents raw OCR data from a receipt, storing the image as Base64.",
       "properties": {
         "id": {
           "type": "string",
@@ -584,27 +585,31 @@
         },
         "tenantId": {
           "type": "string",
-          "description": "Reference to Tenant. (Relationship: Tenant 1:N ReceiptRaw)"
+          "description": "Reference to Tenant."
         },
         "userId": {
           "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N ReceiptRaw)"
+          "description": "Reference to User."
         },
         "expenseId": {
           "type": "string",
-          "description": "Reference to Expense. (Relationship: Expense 1:N ReceiptRaw)"
+          "description": "Reference to the created Expense document (optional)."
+        },
+        "base64Content": {
+            "type": "string",
+            "description": "Base64 encoded content of the receipt file."
+        },
+        "fileType": {
+            "type": "string",
+            "description": "The type of the file (e.g., image, pdf)."
+        },
+        "status": {
+            "type": "string",
+            "description": "The processing status (e.g., processing, processed, error)."
         },
         "ocrPayload": {
           "type": "string",
-          "description": "Raw OCR payload as a JSON string."
-        },
-        "parsedFields": {
-          "type": "string",
-          "description": "Normalized parsed fields from the OCR payload as a JSON string."
-        },
-        "fingerprint": {
-          "type": "string",
-          "description": "Fingerprint of the receipt data for deduplication."
+          "description": "Raw OCR payload as a JSON string from the AI service."
         },
         "createdAt": {
           "type": "string",
@@ -616,9 +621,9 @@
         "id",
         "tenantId",
         "userId",
-        "ocrPayload",
-        "parsedFields",
-        "fingerprint",
+        "base64Content",
+        "fileType",
+        "status",
         "createdAt"
       ]
     },
