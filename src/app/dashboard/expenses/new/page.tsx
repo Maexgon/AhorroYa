@@ -99,7 +99,6 @@ export default function NewExpensePage() {
     setIsProcessingReceipt(true);
     toast({ title: 'Procesando Recibo...', description: 'Convirtiendo y enviando a la IA.' });
 
-
     try {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -113,18 +112,24 @@ export default function NewExpensePage() {
         const result = await processReceiptAction(base64String, activeTenant.id, user.uid, fileType);
         
         if (!result.success || !result.data) {
-            throw new Error(result.error || 'Error desconocido al procesar el recibo.');
+            // Use toast to display the error instead of throwing it
+            toast({
+                variant: "destructive",
+                title: 'Error de IA',
+                description: result.error || 'No se pudo procesar el recibo. Intente con una imagen más clara.',
+            });
+             setReceiptFile(null);
+             setReceiptPreview(null);
+             setReceiptBase64(null);
+             setIsProcessingReceipt(false);
+            return;
         }
         
-        const processedData = result.data as ProcessReceiptOutput;
+        const processedData = result.data;
         
         toast({
-          title: 'Respuesta de la IA (Datos Crudos)',
-          description: (
-            <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
-              <code className="text-white">{JSON.stringify(processedData, null, 2)}</code>
-            </pre>
-          ),
+          title: 'Recibo procesado!',
+          description: 'Los datos extraídos se han cargado en el formulario.',
         });
         
         if (processedData.razonSocial) setValue('entityName', processedData.razonSocial);
@@ -136,15 +141,18 @@ export default function NewExpensePage() {
                 setValue('date', parsedDate);
             }
         }
+        setIsProcessingReceipt(false);
       };
+      reader.onerror = () => {
+          throw new Error("Could not read the file.");
+      }
 
     } catch (error: any) {
         console.error("Error processing receipt:", error);
-        toast({ variant: 'destructive', title: 'Error de IA', description: error.message || 'No se pudo procesar el recibo.' });
+        toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
         setReceiptFile(null);
         setReceiptPreview(null);
         setReceiptBase64(null);
-    } finally {
         setIsProcessingReceipt(false);
     }
   };
@@ -426,5 +434,3 @@ export default function NewExpensePage() {
       </main>
     </div>
   );
-
-    

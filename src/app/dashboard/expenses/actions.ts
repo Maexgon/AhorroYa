@@ -33,8 +33,9 @@ export async function processReceiptAction(
 
         const result = await processReceipt(input);
 
-        if (!result) {
-            return { success: false, error: 'The AI flow did not return any output.' };
+        // Explicitly check for a null/undefined result or an empty output object
+        if (!result || Object.keys(result).length === 0) {
+            return { success: false, error: 'The AI flow did not return any parsable data.' };
         }
 
         return { success: true, data: result };
