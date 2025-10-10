@@ -10,8 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, useFirebaseApp } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes } from 'firebase/storage';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,7 +21,7 @@ import { CalendarIcon, UploadCloud, ArrowLeft, FileCheck2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { getSignedURLAction, processReceiptAction } from '../actions';
+import { processReceiptAction } from '../actions';
 
 
 const expenseFormSchema = z.object({
@@ -43,6 +44,7 @@ export default function NewExpensePage() {
   const { toast } = useToast();
   const { user } = useUser();
   const firestore = useFirestore();
+  const firebaseApp = useFirebaseApp(); // Get the firebase app instance
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
   const [selectedFileName, setSelectedFileName] = React.useState<string | null>(null);
@@ -87,36 +89,21 @@ export default function NewExpensePage() {
 
     setSelectedFileName(file.name);
     setIsProcessingReceipt(true);
-    toast({ title: 'Preparando subida segura...', description: 'Generando URL para el recibo.' });
+    toast({ title: 'Subiendo Recibo...', description: 'El archivo se está enviando a la nube.' });
 
     try {
-        // PASO 1: Obtener la URL firmada desde el servidor
-        const signedUrlResult = await getSignedURLAction(activeTenant.id, user.uid, {
-            name: file.name,
-            type: file.type,
-        });
+        // STEP 1: Upload the file directly from the client
+        const storage = getStorage(firebaseApp);
+        const filePath = `receipts/${activeTenant.id}/${user.uid}/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, filePath);
 
-        if (!signedUrlResult.success) {
-            throw new Error(signedUrlResult.error);
-        }
-        
-        toast({ title: 'Subiendo Recibo...', description: 'El archivo se está enviando a la nube.' });
-
-        // PASO 2: Subir el archivo directamente a GCS usando la URL firmada
-        const uploadResponse = await fetch(signedUrlResult.url, {
-            method: 'PUT',
-            body: file,
-            headers: { 'Content-Type': file.type },
-        });
-
-        if (!uploadResponse.ok) {
-            throw new Error(`Error al subir el archivo: ${uploadResponse.statusText}`);
-        }
+        await uploadBytes(storageRef, file);
         
         toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos.' });
 
-        // PASO 3: Llamar a la acción de procesamiento de IA
-        const result = await processReceiptAction(signedUrlResult.gcsUri, activeTenant.id, user.uid, file.type);
+        // STEP 2: Call the IA processing action with the GCS URI
+        const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
+        const result = await processReceiptAction(gcsUri, activeTenant.id, user.uid, file.type);
         
         if (result.error) {
             throw new Error(result.error);
