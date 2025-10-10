@@ -1,7 +1,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
@@ -65,17 +65,23 @@ function OwnerDashboard() {
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
 
-  // 1. Fetch current user's active tenant
+  // 1. Fetch current user's tenants
   const tenantsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    // SIMPLIFIED QUERY: Remove the 'status' filter to avoid needing a composite index.
     return query(
       collection(firestore, 'tenants'),
-      where('ownerUid', '==', user.uid),
-      where('status', '==', 'active')
+      where('ownerUid', '==', user.uid)
     );
   }, [firestore, user]);
   const { data: tenants, isLoading: isLoadingTenants } = useCollection<Tenant>(tenantsQuery);
-  const activeTenant = tenants?.[0];
+
+  // Filter for the active tenant on the client-side
+  const activeTenant = useMemo(() => {
+    if (!tenants) return undefined;
+    return tenants.find(t => t.status === 'active');
+  }, [tenants]);
+
 
   // 2. Fetch the license for the active tenant
   const licenseQuery = useMemoFirebase(() => {
@@ -477,5 +483,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
