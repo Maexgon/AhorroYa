@@ -17,10 +17,12 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft } from 'lucide-react';
-import { format } from 'date-fns';
+import { CalendarIcon, ArrowLeft, UploadCloud, X } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
+import { processReceiptAction } from '../actions';
+import { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
@@ -42,8 +44,13 @@ export default function NewExpensePage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = React.useState<string | null>(null);
+  const [receiptBase64, setReceiptBase64] = React.useState<string | null>(null);
+  const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
 
-  const { control, handleSubmit, watch, formState: { errors }, setValue } = useForm<ExpenseFormValues>({
+
+  const { control, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       entityName: '',
@@ -78,8 +85,63 @@ export default function NewExpensePage() {
     return query(collection(firestore, 'subcategories'), where('tenantId', '==', activeTenant.id), where('categoryId', '==', selectedCategoryId));
   }, [firestore, activeTenant, selectedCategoryId]);
   const { data: subcategories } = useCollection(subcategoriesQuery);
-  
 
+  const handleReceiptChange = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !user || !activeTenant) return;
+
+    if (file.size > 1024 * 1024) {
+      toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 1MB.' });
+      return;
+    }
+
+    setReceiptFile(file);
+    setIsProcessingReceipt(true);
+    toast({ title: 'Procesando Recibo...', description: 'Convirtiendo y enviando a la IA.' });
+
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        setReceiptPreview(URL.createObjectURL(file));
+        setReceiptBase64(base64String);
+
+        const fileType = file.type.startsWith('image/') ? 'image' : 'pdf';
+        
+        const result = await processReceiptAction(base64String, activeTenant.id, user.uid, fileType);
+        
+        if (!result.success || !result.data) {
+            throw new Error(result.error || 'Error desconocido al procesar el recibo.');
+        }
+        
+        const processedData = result.data as ProcessReceiptOutput;
+        
+        toast({ title: '¡Recibo procesado!', description: 'Revisa los datos y ajusta si es necesario.' });
+        
+        if (processedData.razonSocial) setValue('entityName', processedData.razonSocial);
+        if (processedData.cuit) setValue('entityCuit', processedData.cuit.replace(/[^0-9]/g, ''));
+        if (processedData.total) setValue('amount', processedData.total);
+        if (processedData.fecha) {
+            const parsedDate = parseISO(processedData.fecha);
+            if (!isNaN(parsedDate.getTime())) {
+                setValue('date', parsedDate);
+            }
+        }
+      };
+
+    } catch (error: any) {
+        console.error("Error processing receipt:", error);
+        toast({ variant: 'destructive', title: 'Error de IA', description: error.message || 'No se pudo procesar el recibo.' });
+        setReceiptFile(null);
+        setReceiptPreview(null);
+        setReceiptBase64(null);
+    } finally {
+        setIsProcessingReceipt(false);
+    }
+  };
+  
   const onSubmit = async (data: ExpenseFormValues) => {
     if (!activeTenant || !user || !firestore) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
@@ -91,6 +153,7 @@ export default function NewExpensePage() {
     try {
         const batch = writeBatch(firestore);
 
+        // 1. Handle Entity
         if (data.entityCuit) {
             const entitiesRef = collection(firestore, 'entities');
             const q = query(entitiesRef, where('tenantId', '==', activeTenant.id), where('cuit', '==', data.entityCuit));
@@ -109,8 +172,25 @@ export default function NewExpensePage() {
                 });
             }
         }
-
+        
         const newExpenseRef = doc(collection(firestore, 'expenses'));
+        const newReceiptRef = receiptBase64 ? doc(collection(firestore, 'receipts_raw')) : null;
+
+        // 2. Handle Receipt if it exists
+        if (newReceiptRef && receiptBase64 && receiptFile) {
+             batch.set(newReceiptRef, {
+                id: newReceiptRef.id,
+                tenantId: activeTenant.id,
+                userId: user.uid,
+                expenseId: newExpenseRef.id,
+                base64Content: receiptBase64,
+                fileType: receiptFile.type.startsWith('image/') ? 'image' : 'pdf',
+                status: 'processed',
+                createdAt: new Date().toISOString(),
+            });
+        }
+
+        // 3. Handle Expense
         batch.set(newExpenseRef, {
             id: newExpenseRef.id,
             tenantId: activeTenant.id,
@@ -125,7 +205,7 @@ export default function NewExpensePage() {
             entityName: data.entityName,
             paymentMethod: data.paymentMethod,
             notes: data.notes || '',
-            source: 'manual',
+            source: receiptBase64 ? 'ocr' : 'manual',
             status: 'posted',
             isRecurring: false,
             deleted: false,
@@ -162,10 +242,53 @@ export default function NewExpensePage() {
       <main className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-2xl">
             <form onSubmit={handleSubmit(onSubmit)}>
+                <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle>Cargar Recibo (Opcional)</CardTitle>
+                        <CardDescription>Sube una imagen o PDF de tu recibo para autocompletar los datos con IA.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {isProcessingReceipt ? (
+                             <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-primary/50 rounded-md bg-primary/10">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                <p className="mt-4 text-sm text-primary">Procesando con IA...</p>
+                            </div>
+                        ) : receiptPreview ? (
+                            <div className="relative">
+                                <img src={receiptPreview} alt="Vista previa del recibo" className="w-full h-auto max-h-60 object-contain rounded-md border" />
+                                <Button
+                                    variant="destructive"
+                                    size="icon"
+                                    className="absolute top-2 right-2 h-6 w-6"
+                                    onClick={() => {
+                                        setReceiptFile(null);
+                                        setReceiptPreview(null);
+                                        setReceiptBase64(null);
+                                        reset(watch()); // Keep existing form values
+                                    }}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-center w-full">
+                                <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                        <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
+                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Haz clic para subir</span> o arrastra y suelta</p>
+                                        <p className="text-xs text-muted-foreground">PNG, JPG, PDF (MAX. 1MB)</p>
+                                    </div>
+                                    <input id="dropzone-file" type="file" className="hidden" onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" />
+                                </label>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Detalles del Gasto</CardTitle>
-                        <CardDescription>Completa la información del gasto manualmente.</CardDescription>
+                        <CardDescription>Completa o ajusta la información del gasto.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
@@ -286,7 +409,7 @@ export default function NewExpensePage() {
 
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" disabled={isSubmitting}>
+                        <Button type="submit" disabled={isSubmitting || isProcessingReceipt}>
                             {isSubmitting ? 'Guardando...' : 'Guardar Gasto'}
                         </Button>
                     </CardFooter>
