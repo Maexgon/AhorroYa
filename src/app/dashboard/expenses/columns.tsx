@@ -1,14 +1,14 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown } from "lucide-react"
+import { ArrowUpDown, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import type { Expense, Category, Subcategory } from "@/lib/types"
+import Link from "next/link"
 
 // This type is used to define the shape of our data.
-// You can use a Zod schema here if you want.
 export type ExpenseRow = Expense & {
   category?: Category;
   subcategory?: Subcategory;
@@ -122,6 +122,32 @@ export const columns: ColumnDef<ExpenseRow>[] = [
       }).format(amount)
 
       return <div className="text-right font-mono pr-4">{formatted}</div>
+    },
+  },
+   {
+    id: "actions",
+    header: () => <div className="text-center">Acciones</div>,
+    cell: ({ row, column }) => {
+      const expense = row.original
+      const { onDelete } = (column.columnDef.meta as { onDelete: (id: string) => void }) || {}
+
+      return (
+        <div className="flex items-center justify-center gap-2">
+           <Button variant="ghost" size="icon" asChild>
+                <Link href={`/dashboard/expenses/edit/${expense.id}`}>
+                    <Pencil className="h-4 w-4" />
+                </Link>
+           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDelete?.(expense.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      )
     },
   },
 ]
