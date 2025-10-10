@@ -23,6 +23,8 @@ import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
+import type { Category, Subcategory } from '@/lib/types';
+
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
@@ -78,17 +80,33 @@ export default function NewExpensePage() {
     if (!firestore || !activeTenant) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', activeTenant.id));
   }, [firestore, activeTenant]);
-  const { data: categories } = useCollection(categoriesQuery);
+  const { data: categories } = useCollection<Category>(categoriesQuery);
 
   const subcategoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant || !selectedCategoryId) return null;
-    return query(collection(firestore, 'subcategories'), where('tenantId', '==', activeTenant.id), where('categoryId', '==', selectedCategoryId));
-  }, [firestore, activeTenant, selectedCategoryId]);
-  const { data: subcategories } = useCollection(subcategoriesQuery);
+    if (!firestore || !activeTenant) return null;
+    return query(collection(firestore, 'subcategories'), where('tenantId', '==', activeTenant.id));
+  }, [firestore, activeTenant]);
+  const { data: allSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
+
+  const subcategoriesForSelectedCategory = React.useMemo(() => {
+    if (!allSubcategories || !selectedCategoryId) return [];
+    return allSubcategories.filter(s => s.categoryId === selectedCategoryId);
+  }, [allSubcategories, selectedCategoryId]);
+
+  const categoriesForAI = React.useMemo(() => {
+    if (!categories || !allSubcategories) return '';
+    const data = categories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      subcategories: allSubcategories.filter(sub => sub.categoryId === cat.id).map(sub => ({ id: sub.id, name: sub.name }))
+    }));
+    return JSON.stringify(data, null, 2);
+  }, [categories, allSubcategories]);
+
 
   const handleReceiptChange = async (files: FileList | null) => {
     const file = files?.[0];
-    if (!file || !user || !activeTenant) return;
+    if (!file || !user || !activeTenant || !categoriesForAI) return;
 
     if (file.size > 1024 * 1024) {
       toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 1MB.' });
@@ -108,7 +126,7 @@ export default function NewExpensePage() {
 
         const fileType = file.type.startsWith('image/') ? 'image' : 'pdf';
         
-        const result = await processReceiptAction(base64String, activeTenant.id, user.uid, fileType);
+        const result = await processReceiptAction(base64String, activeTenant.id, user.uid, fileType, categoriesForAI);
         
         setIsProcessingReceipt(false);
 
@@ -139,6 +157,18 @@ export default function NewExpensePage() {
             if (!isNaN(parsedDate.getTime())) {
                 setValue('date', parsedDate);
             }
+        }
+        if (processedData.categoryId) setValue('categoryId', processedData.categoryId);
+        if (processedData.subcategoryId) setValue('subcategoryId', processedData.subcategoryId);
+        if(processedData.medioPago) {
+            const paymentMethodMap: { [key: string]: string } = {
+                'efectivo': 'cash',
+                'tarjeta de debito': 'debit',
+                'tarjeta de credito': 'credit',
+                'transferencia': 'transfer'
+            };
+            const mappedMethod = paymentMethodMap[processedData.medioPago.toLowerCase()];
+            if (mappedMethod) setValue('paymentMethod', mappedMethod);
         }
       };
       reader.onerror = () => {
@@ -406,10 +436,10 @@ export default function NewExpensePage() {
                                 name="subcategoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={!selectedCategoryId || !subcategories || subcategories.length === 0}>
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={!selectedCategoryId || !subcategoriesForSelectedCategory || subcategoriesForSelectedCategory.length === 0}>
                                         <SelectTrigger><SelectValue placeholder="Selecciona una subcategoría" /></SelectTrigger>
                                         <SelectContent>
-                                            {subcategories?.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
+                                            {subcategoriesForSelectedCategory?.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 )}

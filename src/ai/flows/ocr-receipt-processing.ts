@@ -18,6 +18,7 @@ const ProcessReceiptInputSchema = z.object({
   tenantId: z.string().describe('The ID of the tenant.'),
   userId: z.string().describe('The ID of the user uploading the receipt.'),
   fileType: z.enum(['image', 'pdf']).describe('The type of the uploaded file.'),
+  categories: z.string().describe('A JSON string of available categories and subcategories.'),
 });
 export type ProcessReceiptInput = z.infer<typeof ProcessReceiptInputSchema>;
 
@@ -29,6 +30,8 @@ const ProcessReceiptOutputSchema = z.object({
   iva: z.number().optional().describe('The IVA amount on the receipt.'),
   nFactura: z.string().optional().describe('The invoice number.'),
   medioPago: z.string().optional().describe('The payment method used.'),
+  categoryId: z.string().optional().describe('The suggested category ID.'),
+  subcategoryId: z.string().optional().describe('The suggested subcategory ID.'),
 });
 export type ProcessReceiptOutput = z.infer<typeof ProcessReceiptOutputSchema>;
 
@@ -36,47 +39,29 @@ export async function processReceipt(input: ProcessReceiptInput): Promise<Proces
   return processReceiptFlow(input);
 }
 
-// This tool simulates a call to an external OCR service like Docling.
-const doclingParseTool = ai.defineTool({
-  name: 'doclingParse',
-  description: 'Parses a receipt document image or PDF and extracts structured data.',
-  inputSchema: z.object({
-    base64Content: z.string(),
-    fileType: z.enum(['image', 'pdf']),
-  }),
-  outputSchema: ProcessReceiptOutputSchema,
-},
-async (input) => {
-    // In a real-world scenario, this would make an API call to Docling.
-    // For this app, we are using the multi-modal capabilities of the LLM itself
-    // to perform the OCR inside the prompt. This tool definition is here
-    // to guide the model, but the core logic is in the prompt's `prompt` field.
-    console.log('doclingParseTool invoked. The real work happens in the prompt.');
-    // The model will extract the data from the image provided in the prompt.
-    // This function's return is bypassed as the model generates the output directly.
-    return {};
-}
-);
-
 
 const processReceiptPrompt = ai.definePrompt({
   name: 'processReceiptPrompt',
-  tools: [doclingParseTool], 
   input: {schema: ProcessReceiptInputSchema},
   output: {schema: ProcessReceiptOutputSchema},
-  prompt: `You are an expert AI specializing in extracting information from Argentinian receipts.
-Your task is to analyze the provided receipt document and extract key information.
+  prompt: `You are an expert AI specializing in extracting information from Argentinian receipts and categorizing expenses.
 
-Analyze the document provided in the input and extract the following fields:
-- CUIT (Clave Única de Identificación Tributaria)
-- Razón Social (Business Name)
-- Fecha (Date of the transaction in YYYY-MM-DD format)
-- Total (The final total amount as a number)
-- IVA (The VAT amount, if specified)
-- N° Factura (The invoice or ticket number)
-- Medio de Pago (Payment method, e.g., 'Efectivo', 'Tarjeta de Debito')
+Your tasks are:
+1.  Analyze the provided receipt document and extract key information:
+    - CUIT (Clave Única de Identificación Tributaria)
+    - Razón Social (Business Name)
+    - Fecha (Date of the transaction in YYYY-MM-DD format)
+    - Total (The final total amount as a number)
+    - IVA (The VAT amount, if specified)
+    - N° Factura (The invoice or ticket number)
+    - Medio de Pago (Payment method, e.g., 'Efectivo', 'Tarjeta de Debito')
 
-If a field is not present in the document, omit it from the output.
+2.  Based on the receipt content (especially the Razón Social), suggest the most appropriate category and subcategory from the provided list. Return the corresponding 'id' for both the category and subcategory.
+
+If a field is not present in the document or cannot be determined, omit it from the output.
+
+Here are the available categories and subcategories:
+{{{categories}}}
 
 Document to process:
 {{media url=base64Content}}
@@ -106,7 +91,7 @@ const processReceiptFlow = ai.defineFlow(
 
       return output;
     } catch (e: any) {
-      console.error('Error in processReceiptFlow:', e.message);
+      console.error('Error in processReceiptFlow:', e);
       // Return a structured error or empty values to avoid crashing the client
       return {
         cuit: '',
