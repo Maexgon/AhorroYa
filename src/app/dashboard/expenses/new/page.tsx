@@ -46,8 +46,15 @@ export default function NewExpensePage() {
   const { control, handleSubmit, watch, formState: { errors }, setValue } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
+      entityName: '',
+      entityCuit: '',
+      date: new Date(),
+      amount: 0,
       currency: 'ARS',
+      categoryId: '',
+      subcategoryId: '',
       paymentMethod: 'cash',
+      notes: '',
     }
   });
 
@@ -251,7 +258,7 @@ export default function NewExpensePage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
+                                    <Select onValueChange={(value) => { field.onChange(value); setValue('subcategoryId', ''); }} value={field.value}>
                                         <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
                                         <SelectContent>
                                             {categories?.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
@@ -268,7 +275,7 @@ export default function NewExpensePage() {
                                 name="subcategoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedCategoryId || !subcategories || subcategories.length === 0}>
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={!selectedCategoryId || !subcategories || subcategories.length === 0}>
                                         <SelectTrigger><SelectValue placeholder="Selecciona una subcategoría" /></SelectTrigger>
                                         <SelectContent>
                                             {subcategories?.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
@@ -296,3 +303,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    
