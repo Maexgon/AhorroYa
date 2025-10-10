@@ -97,7 +97,6 @@ export default function NewExpensePage() {
 
     setReceiptFile(file);
     setIsProcessingReceipt(true);
-    toast({ title: 'Procesando Recibo...', description: 'Convirtiendo y enviando a la IA.' });
 
     try {
       const reader = new FileReader();
@@ -111,8 +110,9 @@ export default function NewExpensePage() {
         
         const result = await processReceiptAction(base64String, activeTenant.id, user.uid, fileType);
         
+        setIsProcessingReceipt(false);
+
         if (!result.success || !result.data) {
-            // Use toast to display the error instead of throwing it
             toast({
                 variant: "destructive",
                 title: 'Error de IA',
@@ -121,7 +121,6 @@ export default function NewExpensePage() {
              setReceiptFile(null);
              setReceiptPreview(null);
              setReceiptBase64(null);
-             setIsProcessingReceipt(false);
             return;
         }
         
@@ -141,10 +140,10 @@ export default function NewExpensePage() {
                 setValue('date', parsedDate);
             }
         }
-        setIsProcessingReceipt(false);
       };
       reader.onerror = () => {
-          throw new Error("Could not read the file.");
+          setIsProcessingReceipt(false);
+          toast({ variant: 'destructive', title: 'Error de Lectura', description: 'No se pudo leer el archivo seleccionado.' });
       }
 
     } catch (error: any) {
@@ -434,3 +433,5 @@ export default function NewExpensePage() {
       </main>
     </div>
   );
+
+    
