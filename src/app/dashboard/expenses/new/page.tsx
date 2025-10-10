@@ -17,10 +17,13 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft } from 'lucide-react';
-import { format } from 'date-fns';
+import { CalendarIcon, ArrowLeft, UploadCloud, File as FileIcon, X } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
+import { processReceiptAction } from './actions';
+import { getStorage, ref, uploadBytes } from "firebase/storage";
+
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
@@ -42,8 +45,10 @@ export default function NewExpensePage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
+  const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
 
-  const { control, handleSubmit, watch, formState: { errors }, setValue } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       entityName: '',
@@ -81,6 +86,70 @@ export default function NewExpensePage() {
     return query(collection(firestore, 'subcategories'), where('tenantId', '==', activeTenant.id), where('categoryId', '==', selectedCategoryId));
   }, [firestore, activeTenant, selectedCategoryId]);
   const { data: subcategories } = useCollection(subcategoriesQuery);
+
+
+  const handleReceiptChange = async (file: File | null) => {
+    if (!file) {
+      setReceiptFile(null);
+      return;
+    }
+    setReceiptFile(file);
+    
+    if (!activeTenant || !user) {
+        toast({ variant: 'destructive', title: 'Error de autenticación', description: 'No se pudo identificar al usuario o tenant.' });
+        return;
+    }
+    
+    setIsProcessingReceipt(true);
+    toast({ title: 'Subiendo recibo...', description: 'El archivo se está enviando a la nube.' });
+
+    try {
+        const storage = getStorage();
+        const fileType = file.type.startsWith('image/') ? 'image' : 'pdf';
+        const filePath = `receipts/${activeTenant.id}/${user.uid}/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, filePath);
+
+        // Upload file from the client
+        const uploadTask = await uploadBytes(storageRef, file);
+        const gcsUri = `gs://${uploadTask.ref.bucket}/${uploadTask.ref.fullPath}`;
+        
+        toast({ title: 'Procesando Recibo...', description: 'La IA está extrayendo los datos.' });
+
+        // Process with AI
+        const processResult = await processReceiptAction(gcsUri, activeTenant.id, user.uid, fileType);
+        if (!processResult.success || !processResult.data) {
+            throw new Error(processResult.error || 'Error desconocido al procesar el recibo.');
+        }
+
+        const { data } = processResult;
+
+        // Populate form with AI data
+        if (data.razonSocial) setValue('entityName', data.razonSocial);
+        if (data.cuit) setValue('entityCuit', data.cuit);
+        if (data.total) setValue('amount', data.total);
+        if (data.fecha) setValue('date', parseISO(data.fecha));
+        if (data.medioPago) {
+            const paymentMethodMap: { [key: string]: string } = {
+                'efectivo': 'cash',
+                'tarjeta de débito': 'debit',
+                'tarjeta de crédito': 'credit',
+                'transferencia': 'transfer',
+            };
+            const mappedMethod = paymentMethodMap[data.medioPago.toLowerCase()];
+            if (mappedMethod) setValue('paymentMethod', mappedMethod);
+        }
+
+        toast({ title: '¡Datos Extraídos!', description: 'El formulario se ha rellenado con la información del recibo. Por favor, revísalo.' });
+
+    } catch (error: any) {
+        console.error("Error processing receipt:", error);
+        toast({ variant: 'destructive', title: 'Error al Procesar', description: `No se pudo procesar el recibo. ${error.message}` });
+        setReceiptFile(null); // Clear file on error
+    } finally {
+        setIsProcessingReceipt(false);
+    }
+  };
+
 
   const onSubmit = async (data: ExpenseFormValues) => {
     if (!activeTenant || !user || !firestore) {
@@ -131,7 +200,7 @@ export default function NewExpensePage() {
             entityName: data.entityName,
             paymentMethod: data.paymentMethod,
             notes: data.notes || '',
-            source: 'manual',
+            source: receiptFile ? 'ocr' : 'manual',
             status: 'posted',
             isRecurring: false,
             deleted: false,
@@ -166,15 +235,66 @@ export default function NewExpensePage() {
       </header>
 
       <main className="flex-1 p-4 md:p-8">
-        <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="mx-auto max-w-2xl">
-                 <Card>
+        <div className="mx-auto max-w-2xl">
+            <Card className="mb-8">
+                <CardHeader>
+                    <CardTitle>Procesamiento IA</CardTitle>
+                    <CardDescription>Arrastra o selecciona un archivo (PNG, PDF) para que la IA extraiga los datos automáticamente.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isProcessingReceipt ? (
+                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                            <p className="mt-4 text-sm text-muted-foreground">Procesando, por favor espera...</p>
+                        </div>
+                    ) : receiptFile ? (
+                        <div className="flex items-center justify-between p-4 border-2 border-dashed rounded-lg bg-secondary">
+                            <div className="flex items-center gap-3">
+                                <FileIcon className="h-6 w-6 text-primary" />
+                                <span className="text-sm font-medium truncate">{receiptFile.name}</span>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => handleReceiptChange(null)}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    ) : (
+                        <div
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                    handleReceiptChange(e.dataTransfer.files[0]);
+                                }
+                            }}
+                            className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer hover:bg-secondary transition-colors"
+                            onClick={() => document.getElementById('receipt-upload')?.click()}
+                        >
+                            <UploadCloud className="h-12 w-12 text-muted-foreground" />
+                            <p className="mt-4 text-sm text-muted-foreground">Arrastra un archivo aquí o haz clic para seleccionar</p>
+                            <input
+                                id="receipt-upload"
+                                type="file"
+                                accept="image/png, application/pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                        handleReceiptChange(e.target.files[0]);
+                                    }
+                                }}
+                            />
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <form onSubmit={handleSubmit(onSubmit)}>
+                <Card>
                     <CardHeader>
                         <CardTitle>Detalles del Gasto</CardTitle>
                         <CardDescription>Completa la información del gasto manualmente.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <div className="space-y-2">
+                        <div className="space-y-2">
                             <Label htmlFor="entityName">Nombre de la Entidad</Label>
                             <Controller name="entityName" control={control} render={({ field }) => <Input id="entityName" {...field} />} />
                             {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
@@ -185,7 +305,7 @@ export default function NewExpensePage() {
                             {errors.entityCuit && <p className="text-sm text-destructive">{errors.entityCuit.message}</p>}
                         </div>
 
-                         <div className="space-y-2">
+                        <div className="space-y-2">
                             <Label htmlFor="date">Fecha del Gasto</Label>
                             <Controller
                                 name="date"
@@ -292,16 +412,14 @@ export default function NewExpensePage() {
 
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" disabled={isSubmitting}>
+                        <Button type="submit" disabled={isSubmitting || isProcessingReceipt}>
                             {isSubmitting ? 'Guardando...' : 'Guardar Gasto'}
                         </Button>
                     </CardFooter>
                 </Card>
-            </div>
-        </form>
+            </form>
+        </div>
       </main>
     </div>
   );
 }
-
-    
