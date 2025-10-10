@@ -17,14 +17,15 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
+import { uploadAndProcessReceipt } from '@/app/dashboard/expenses/actions';
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
-  entityCuit: z.string().min(11, "El CUIT debe tener 11 dígitos.").max(11, "El CUIT debe tener 11 dígitos."),
+  entityCuit: z.string().min(11, "El CUIT debe tener 11 dígitos.").max(11, "El CUIT debe tener 11 dígitos.").optional().or(z.literal('')),
   date: z.date({ required_error: "La fecha es requerida." }),
   amount: z.coerce.number().min(0.01, "El monto debe ser mayor a 0."),
   currency: z.string().min(1, "La moneda es requerida."),
@@ -42,8 +43,9 @@ export default function NewExpensePage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
 
-  const { control, handleSubmit, watch, formState: { errors }, setValue } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       entityName: '',
@@ -54,6 +56,7 @@ export default function NewExpensePage() {
       subcategoryId: '',
       paymentMethod: 'cash',
       notes: '',
+      date: new Date(),
     }
   });
 
@@ -81,6 +84,55 @@ export default function NewExpensePage() {
   }, [firestore, activeTenant, selectedCategoryId]);
   const { data: subcategories } = useCollection(subcategoriesQuery);
 
+  const handleReceiptChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user || !activeTenant) return;
+
+    setIsProcessingReceipt(true);
+    toast({ title: 'Procesando Recibo...', description: 'El archivo se está subiendo y analizando con IA.' });
+
+    try {
+      const formData = new FormData();
+      formData.append('receipt', file);
+      formData.append('tenantId', activeTenant.id);
+      formData.append('userId', user.uid);
+      
+      const result = await uploadAndProcessReceipt(formData);
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Error desconocido al procesar el recibo.');
+      }
+      
+      const processedData = result.data;
+
+      // Reset form to default values before setting new ones
+      reset({
+        ...watch(), // keep existing values if not provided by AI
+        entityName: processedData.razonSocial || '',
+        entityCuit: processedData.cuit || '',
+        date: processedData.fecha ? new Date(processedData.fecha) : new Date(),
+        amount: processedData.total || 0,
+        // Don't override these, let user choose
+        currency: 'ARS',
+        paymentMethod: 'cash',
+        categoryId: '', 
+        subcategoryId: '',
+        notes: '',
+      });
+
+      toast({ title: '¡Datos Extraídos!', description: 'Por favor, revisa y completa los campos restantes.' });
+
+    } catch (error: any) {
+      console.error("Error processing receipt: ", error);
+      toast({ variant: 'destructive', title: 'Error al Procesar Recibo', description: error.message });
+    } finally {
+      setIsProcessingReceipt(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
+
   const onSubmit = async (data: ExpenseFormValues) => {
     if (!activeTenant || !user || !firestore) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
@@ -92,27 +144,26 @@ export default function NewExpensePage() {
     try {
         const batch = writeBatch(firestore);
 
-        // 1. Check if entity exists or create it
-        const entitiesRef = collection(firestore, 'entities');
-        const q = query(entitiesRef, where('tenantId', '==', activeTenant.id), where('cuit', '==', data.entityCuit));
-        const entitySnapshot = await getDocs(q);
+        // 1. Check if entity exists or create it, only if CUIT is provided
+        if (data.entityCuit) {
+            const entitiesRef = collection(firestore, 'entities');
+            const q = query(entitiesRef, where('tenantId', '==', activeTenant.id), where('cuit', '==', data.entityCuit));
+            const entitySnapshot = await getDocs(q);
 
-        let entityId;
-        if (entitySnapshot.empty) {
-            const newEntityRef = doc(entitiesRef);
-            entityId = newEntityRef.id;
-            batch.set(newEntityRef, {
-                id: entityId,
-                tenantId: activeTenant.id,
-                cuit: data.entityCuit,
-                razonSocial: data.entityName,
-                tipo: 'comercio', // default type
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            });
-        } else {
-            entityId = entitySnapshot.docs[0].id;
+            if (entitySnapshot.empty) {
+                const newEntityRef = doc(entitiesRef);
+                batch.set(newEntityRef, {
+                    id: newEntityRef.id,
+                    tenantId: activeTenant.id,
+                    cuit: data.entityCuit,
+                    razonSocial: data.entityName,
+                    tipo: 'comercio', // default type
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                });
+            }
         }
+
 
         // 2. Create the expense document
         const newExpenseRef = doc(collection(firestore, 'expenses'));
@@ -126,14 +177,14 @@ export default function NewExpensePage() {
             amountARS: data.currency === 'ARS' ? data.amount : data.amount, // TODO: Add currency conversion
             categoryId: data.categoryId,
             subcategoryId: data.subcategoryId || null,
-            entityCuit: data.entityCuit,
+            entityCuit: data.entityCuit || '',
             entityName: data.entityName,
             paymentMethod: data.paymentMethod,
             notes: data.notes || '',
-            source: 'manual',
+            source: 'manual', // Can be updated based on if it came from OCR
             status: 'posted',
             isRecurring: false,
-            deleted: false,
+deleted: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         });
@@ -166,11 +217,31 @@ export default function NewExpensePage() {
 
       <main className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-2xl">
+           <Card className="mb-8">
+            <CardHeader>
+                <CardTitle>Carga Rápida con IA</CardTitle>
+                <CardDescription>Sube un recibo (.png, .jpg, .pdf) y deja que la IA complete los campos por ti.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center justify-center w-full">
+                    <label htmlFor="receipt-upload" className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-muted hover:bg-secondary/80 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <UploadCloud className="w-10 h-10 mb-4 text-muted-foreground" />
+                            <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Haz clic para subir</span> o arrastra y suelta</p>
+                            <p className="text-xs text-muted-foreground">PNG, JPG, PDF (MAX. 5MB)</p>
+                        </div>
+                        <Input id="receipt-upload" type="file" className="hidden" onChange={handleReceiptChange} accept="image/png,image/jpeg,application/pdf" disabled={isProcessingReceipt} />
+                    </label>
+                </div>
+                 {isProcessingReceipt && <p className="text-sm text-center mt-4 text-primary animate-pulse">Procesando, por favor espera...</p>}
+            </CardContent>
+           </Card>
+
             <form onSubmit={handleSubmit(onSubmit)}>
                 <Card>
                     <CardHeader>
                         <CardTitle>Detalles del Gasto</CardTitle>
-                        <CardDescription>Completa la información del gasto manualmente.</CardDescription>
+                        <CardDescription>Completa o ajusta la información del gasto manualmente.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
@@ -179,7 +250,7 @@ export default function NewExpensePage() {
                             {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="entityCuit">CUIT de la Entidad</Label>
+                            <Label htmlFor="entityCuit">CUIT de la Entidad (Opcional)</Label>
                             <Controller name="entityCuit" control={control} render={({ field }) => <Input id="entityCuit" {...field} />} />
                             {errors.entityCuit && <p className="text-sm text-destructive">{errors.entityCuit.message}</p>}
                         </div>
@@ -291,7 +362,7 @@ export default function NewExpensePage() {
 
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" disabled={isSubmitting}>
+                        <Button type="submit" disabled={isSubmitting || isProcessingReceipt}>
                             {isSubmitting ? 'Guardando...' : 'Guardar Gasto'}
                         </Button>
                     </CardFooter>
@@ -302,5 +373,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
-    
