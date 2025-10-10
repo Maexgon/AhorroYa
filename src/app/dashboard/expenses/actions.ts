@@ -3,7 +3,8 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getStorage, ref, uploadBytes } from "firebase/storage";
 import { processReceipt, type ProcessReceiptOutput } from "@/ai/flows/ocr-receipt-processing";
-import { firebaseConfig } from "@/firebase/config";
+
+// firebaseConfig is NOT imported here, as it's for client-side use.
 
 type ActionResult = {
     data?: ProcessReceiptOutput;
@@ -22,20 +23,26 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
     try {
         // Correctly initialize Firebase on the server for this action.
         // This ensures that if the app is already initialized, we use the existing instance.
-        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+        // Calling initializeApp() without arguments uses the service account credentials
+        // available in the server environment (e.g., Firebase App Hosting).
+        const app = getApps().length ? getApp() : initializeApp();
         const storage = getStorage(app); 
         
         const filePath = `receipts/${tenantId}/${userId}/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, filePath);
         
+        // Convert the file to a Buffer to be uploaded.
         const fileBuffer = Buffer.from(await file.arrayBuffer());
         
+        // The upload itself.
         await uploadBytes(storageRef, fileBuffer, {
             contentType: file.type,
         });
         
+        // The GCS URI needed for the AI flow.
         const gcsUri = `gs://${storageRef.bucket}/${storageRef.fullPath}`;
 
+        // Call the Genkit flow to process the receipt.
         const result = await processReceipt({
             gcsUri: gcsUri,
             tenantId: tenantId,
@@ -51,7 +58,7 @@ export async function uploadReceiptAction(formData: FormData): Promise<ActionRes
 
     } catch (error: any) {
         console.error("[Server Action Error] uploadReceiptAction:", error);
-        // Provide a more specific error message if available
+        // Provide a more specific error message if available from the Firebase error object.
         return { error: `Error en el servidor: ${error.code || error.message}` };
     }
 }
