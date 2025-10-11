@@ -20,10 +20,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { useDoc } from '@/firebase/firestore/use-doc';
-import type { Expense, Category, Subcategory, Tenant, Membership } from '@/lib/types';
+import type { Expense, Category, Subcategory, Membership } from '@/lib/types';
 import { DataTable } from './data-table';
 import { columns } from './columns';
 import { deleteExpenseAction } from './actions';
@@ -33,33 +32,51 @@ export default function ExpensesPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
+    const [userRole, setUserRole] = React.useState<string | null>(null);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-    // Fetch user's primary tenantId from the users collection
-    const userRef = useMemoFirebase(() => {
+    // 1. Fetch user's membership to get tenantId and role
+    const membershipsQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
-        return doc(firestore, 'users', user.uid);
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
     }, [firestore, user]);
-    const { data: userData } = useDoc<{ tenantIds: string[] }>(userRef);
+    const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
-    // 2. Set the active tenantId from the user data
+    // 2. Set the active tenantId and role from the user's first active membership
     React.useEffect(() => {
-        if (userData && userData.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
+        if (memberships && memberships.length > 0) {
+            const activeMembership = memberships.find(m => m.status === 'active');
+            if (activeMembership) {
+                setTenantId(activeMembership.tenantId);
+                setUserRole(activeMembership.role);
+            }
         } else {
             setTenantId(null);
+            setUserRole(null);
         }
-    }, [userData]);
+    }, [memberships]);
     
-
-    // 3. Fetch Expenses for the active tenant using the derived tenantId
+    // 3. Fetch Expenses based on user role
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) return null;
-        return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
-    }, [firestore, tenantId]);
+        if (!firestore || !tenantId || !userRole || !user) return null;
+        
+        // Owner can see all expenses for the tenant
+        if (userRole === 'owner') {
+             return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
+        }
+        
+        // Other roles (admin, member) can only see their own expenses
+        return query(
+            collection(firestore, 'expenses'), 
+            where('tenantId', '==', tenantId), 
+            where('userId', '==', user.uid),
+            where('deleted', '==', false)
+        );
+
+    }, [firestore, tenantId, userRole, user]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
     // Fetch Categories for the tenant
@@ -120,7 +137,7 @@ export default function ExpensesPage() {
         }));
     }, [expenses, categories, subcategories]);
 
-    const isLoading = isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
+    const isLoading = isLoadingMemberships || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
 
     return (
         <>
