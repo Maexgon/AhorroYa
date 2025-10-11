@@ -67,22 +67,22 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
-  // 1. Fetch user's primary tenantId from the users collection
-  const userRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-  const { data: userData } = useDoc<{ tenantIds: string[], displayName: string }>(userRef);
-  const userDisplayName = userData?.displayName || '';
+  // 1. Fetch user's membership to get tenantId and role
+    const membershipsQuery = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+    }, [firestore, user]);
+    const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
-  // 2. Set the active tenantId from the user data
-  React.useEffect(() => {
-    if (userData && userData.tenantIds && userData.tenantIds.length > 0) {
-      setTenantId(userData.tenantIds[0]);
-    } else {
-      setTenantId(null);
-    }
-  }, [userData]);
+    // 2. Set the active tenantId and role from the user's first active membership
+    React.useEffect(() => {
+        if (memberships && memberships.length > 0) {
+            const activeMembership = memberships.find(m => m.status === 'active');
+            if (activeMembership) {
+                setTenantId(activeMembership.tenantId);
+            }
+        }
+    }, [memberships]);
 
 
   // 3. Fetch tenant document using the derived tenantId
@@ -105,13 +105,14 @@ function OwnerDashboard() {
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-  const membershipsQuery = useMemoFirebase(() => {
+  const membershipsForTenantQuery = useMemoFirebase(() => {
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
-  const { data: membershipsData } = useCollection<Membership>(membershipsQuery);
+  const { data: membershipsData } = useCollection<Membership>(membershipsForTenantQuery);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories;
+
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingMemberships;
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({

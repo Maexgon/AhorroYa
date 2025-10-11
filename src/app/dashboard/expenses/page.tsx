@@ -63,12 +63,12 @@ export default function ExpensesPage() {
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId || !userRole || !user) return null;
         
-        // Owner can see all expenses for the tenant
-        if (userRole === 'owner') {
+        // Owner/Admin can see all expenses for the tenant
+        if (userRole === 'owner' || userRole === 'admin') {
              return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
         }
         
-        // Other roles (admin, member) can only see their own expenses
+        // Other roles (member) can only see their own expenses
         return query(
             collection(firestore, 'expenses'), 
             where('tenantId', '==', tenantId), 
