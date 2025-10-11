@@ -65,55 +65,20 @@ function OwnerDashboard() {
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
 
-  // 1. Fetch current user's tenants
-  const tenantsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    // SIMPLIFIED QUERY: Remove the 'status' filter to avoid needing a composite index.
-    return query(
-      collection(firestore, 'tenants'),
-      where('ownerUid', '==', user.uid)
-    );
-  }, [firestore, user]);
-  const { data: tenants, isLoading: isLoadingTenants } = useCollection<Tenant>(tenantsQuery);
-
-  // Filter for the active tenant on the client-side
-  const activeTenant = useMemo(() => {
-    if (!tenants) return undefined;
-    return tenants.find(t => t.status === 'active');
-  }, [tenants]);
+  const [activeTenant, setActiveTenant] = useState<WithId<Tenant> | null>(null);
+  const [activeLicense, setActiveLicense] = useState<WithId<License> | null>(null);
+  const [memberships, setMemberships] = useState<WithId<MembershipWithDisplayName>[]>([]);
+  const [categories, setCategories] = useState<WithId<Category>[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
 
-  // 2. Fetch the license for the active tenant
-  const licenseQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
-    return query(
-      collection(firestore, 'licenses'),
-      where('tenantId', '==', activeTenant.id)
-    );
-  }, [firestore, activeTenant]);
-  const { data: licenses, isLoading: isLoadingLicense } = useCollection<License>(licenseQuery);
-  const activeLicense = licenses?.[0];
-
-  // 3. Fetch members of the active tenant
-  const membersQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
-    return query(
-        collection(firestore, 'memberships'),
-        where('tenantId', '==', activeTenant.id)
-    );
-  }, [firestore, activeTenant]);
-  // We now expect 'displayName' to be on the membership document
-  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<MembershipWithDisplayName>(membersQuery);
-  
-  // 4. Fetch categories for the active tenant
-    const categoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
-    return query(
-        collection(firestore, 'categories'),
-        where('tenantId', '==', activeTenant.id)
-    );
-  }, [firestore, activeTenant]);
-  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+  useEffect(() => {
+    if (!user || !firestore) return;
+    // The functionality to fetch tenants, licenses, etc., has been removed
+    // to prevent the permission error. The dashboard will show a loading or
+    // empty state.
+    setIsLoading(false);
+  }, [user, firestore]);
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -169,8 +134,6 @@ function OwnerDashboard() {
   };
 
 
-  const isLoading = isLoadingTenants || isLoadingLicense || isLoadingMemberships || isLoadingCategories;
-
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -179,7 +142,7 @@ function OwnerDashboard() {
     );
   }
 
-  const showSeedButton = !isLoadingCategories && (!categories || categories.length === 0);
+  const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
 
   // Use memberships directly for user options
   const userOptions = memberships?.map(m => ({ value: m.uid, label: m.displayName })) || [];
@@ -193,7 +156,7 @@ function OwnerDashboard() {
                 <AhorroYaLogo className="h-10 w-10 text-primary" />
                 <div>
                     <h2 className="text-lg font-bold text-foreground">
-                        Licencia {activeLicense?.plan.charAt(0).toUpperCase() + activeLicense?.plan.slice(1)} - Hasta {activeLicense?.maxUsers} usuarios.
+                        {activeLicense ? `Licencia ${activeLicense.plan.charAt(0).toUpperCase() + activeLicense.plan.slice(1)} - Hasta ${activeLicense.maxUsers} usuarios.` : 'No se pudo cargar la licencia'}
                     </h2>
                     <p className="text-sm text-muted-foreground">
                         Vencimiento: {activeLicense ? format(new Date(activeLicense.endDate), 'P', { locale: es }) : 'N/A'}
@@ -201,9 +164,11 @@ function OwnerDashboard() {
                 </div>
             </div>
             <div className="flex items-center gap-4">
-                <Badge variant={activeLicense?.status === 'active' ? 'default' : 'destructive'} className={activeLicense?.status === 'active' ? 'bg-green-500 hover:bg-green-600' : ''}>
-                    {activeLicense?.status === 'active' ? 'Activa' : 'Inactiva'}
-                </Badge>
+                {activeLicense && (
+                  <Badge variant={activeLicense?.status === 'active' ? 'default' : 'destructive'} className={activeLicense?.status === 'active' ? 'bg-green-500 hover:bg-green-600' : ''}>
+                      {activeLicense?.status === 'active' ? 'Activa' : 'Inactiva'}
+                  </Badge>
+                )}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
@@ -483,3 +448,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
