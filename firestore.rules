@@ -1,220 +1,50 @@
 /**
- * @file Firestore Security Rules
- * @description This ruleset enforces a multi-tenant security model for an expense tracking application ("Ahorro Ya").
+ * @fileoverview Firestore Security Rules for "Ahorro Ya," a multi-tenant expense tracking application.
  *
  * Core Philosophy:
- * This ruleset implements a strict, tenant-based access control model. Users can only access data
- * explicitly associated with a Tenant in which they have a defined Membership. The rules leverage
- * denormalization to avoid costly `get()` operations and ensure efficient authorization.  All write
- * operations are protected by authorization checks.
+ * This ruleset enforces a strict multi-tenant security model where users can only access data
+ * belonging to tenants they are members of. The rules leverage denormalized tenant IDs and
+ * user IDs within documents to achieve authorization independence, avoiding costly `get()` calls.
  *
  * Data Structure:
- * - /tenants/{tenantId}: Stores tenant information, including the owner.
- * - /licenses/{licenseId}: Stores license information for each tenant, secured by tenantId.
- * - /memberships/{membershipId}: Stores user-to-tenant membership information, including roles.
- * - /users/{userId}: Stores user profile data, accessible only by the user themselves.
- * - /currencies/{currencyCode}: Stores currency data. Public read-only.
- * - /fx_rates/{fxRateId}: Stores FX rates, secured by tenantId.
- * - /categories/{categoryId}: Stores expense categories, secured by tenantId.
- * - /subcategories/{subcategoryId}: Stores expense subcategories, secured by tenantId.
- * - /entities/{entityId}: Stores entities (businesses, banks), secured by tenantId.
- * - /expenses/{expenseId}: Stores expense records, secured by tenantId and userId.
- * - /budgets/{budgetId}: Stores budget data, secured by tenantId.
- * - /alerts/{alertId}: Stores alert notifications, secured by tenantId.
- * - /receipts_raw/{receiptRawId}: Stores raw receipt data, secured by tenantId and userId.
- * - /receipts_fingerprints/{receiptFingerprintId}: Stores receipt fingerprints, secured by tenantId.
- * - /audit_logs/{auditLogId}: Stores audit logs, secured by tenantId.
+ * - /tenants/{tenantId}: Represents a tenant. Includes ownerUid.
+ * - /licenses/{licenseId}: Represents a license for a tenant, includes tenantId.
+ * - /memberships/{membershipId}: Represents a user's membership in a tenant. Includes tenantId, uid, and role.
+ * - /users/{userId}: Represents a user. Includes isSuperadmin.
+ * - /currencies/{currencyCode}: Represents a currency.
+ * - /fx_rates/{fxRateId}: Represents a foreign exchange rate. Includes tenantId.
+ * - /categories/{categoryId}: Represents an expense category. Includes tenantId.
+ * - /subcategories/{subcategoryId}: Represents an expense subcategory. Includes tenantId.
+ * - /entities/{entityId}: Represents a business or bank entity. Includes tenantId.
+ * - /expenses/{expenseId}: Represents an expense record. Includes tenantId and userId.
+ * - /budgets/{budgetId}: Represents a monthly budget. Includes tenantId.
+ * - /alerts/{alertId}: Represents an alert notification. Includes tenantId.
+ * - /receipts_raw/{receiptRawId}: Represents raw OCR data from a receipt. Includes tenantId and userId.
+ * - /receipts_fingerprints/{receiptFingerprintId}: Represents a fingerprint used for deduplicating receipts.
+ * - /audit_logs/{auditLogId}: Represents an audit log entry. Includes tenantId.
  *
  * Key Security Decisions:
- * - Strict tenant isolation: Users can only access resources within tenants they are members of.
- * - User-owned data: Users have full control over their own profile data in /users/{userId}.
- * - No public listing:  List operations are generally restricted to authenticated users and specific tenant contexts.
+ * - Strict Tenant Isolation: All tenant-related data is isolated by tenantId, preventing cross-tenant access.
+ * - Owner-Based Access: Tenant owners have full control over their tenant data.
+ * - Membership-Based Access: Access to tenant data is granted based on explicit membership records.
+ * - No User Listing: Listing of users is generally disallowed, except for superadmins (requires get() call).
+ * - Read-Only Currencies: The /currencies collection is intended to be publicly readable.
  *
  * Denormalization for Authorization:
- * The 'tenantId' field is included in most documents to enable efficient tenant-based access control. The 'ownerUid'
- * field is included in the 'tenants' collection. The 'userId' field is included in the 'expenses' and 'receipts_raw' collections.
+ * - Most documents include a tenantId field to quickly determine tenant association.
+ * - Expenses and ReceiptRaws include both tenantId and userId for ownership checks.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the user is signed in.
-     * @principle Verifies user authentication.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * @description Checks if the authenticated user's UID matches the provided userId.
-     * @principle Enforces path-based ownership.
-     * @param {string} userId - The user ID to compare against request.auth.uid.
-     * @returns {bool} - True if the user is signed in and the UIDs match, false otherwise.
-     */
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    /**
-     * @description Checks if the user is signed in and the resource exists.
-     * @principle Secures update and delete operations by verifying resource existence.
-     * @param {string} userId - The user ID to compare against request.auth.uid.
-     * @returns {bool} - True if the user is signed in, the UIDs match, and the resource exists, false otherwise.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * @description Checks if the user is a member of the tenant.
-     * @principle Enforces tenant-based access control.
-     * @param {string} tenantId - The tenant ID to check against.
-     * @returns {bool} - True if the user is a member of the tenant, false otherwise.
-     */
-    function isTenantMember(tenantId) {
-        return get(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + tenantId)).data.uid == request.auth.uid;
-    }
-
-    /**
-     * @description Checks if the user is the owner of the tenant.
-     * @principle Enforces tenant ownership for administrative operations.
-     * @param {string} tenantId - The tenant ID to check.
-     * @returns {bool} - True if the user is the owner of the tenant, false otherwise.
-     */
-    function isTenantOwner(tenantId) {
-      return get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid;
-    }
-
-    /**
-     * @description Checks if the user is the owner of the tenant, based on existing resource.
-     * @principle Enforces tenant ownership for administrative operations.
-     * @param {string} tenantId - The tenant ID to check.
-     * @returns {bool} - True if the user is the owner of the tenant, false otherwise.
-     */
-    function isExistingTenantOwner(tenantId) {
-      return isTenantOwner(tenantId) && resource != null;
-    }
-
-    /**
-     * @description Checks if the tenantId in the request matches the tenantId in the path.
-     * @principle Enforces tenantId consistency on create operations.
-     * @param {string} tenantId - The tenant ID from the path.
-     * @returns {bool} - True if the tenant IDs match, false otherwise.
-     */
-    function isValidNewTenantId(tenantId) {
-      return request.resource.data.tenantId == tenantId;
-    }
-
-    /**
-     * @description Checks if the tenantId in the request remains immutable on update operations.
-     * @principle Prevents modification of the tenantId field.
-     * @param {string} tenantId - The tenant ID from the path.
-     * @returns {bool} - True if the tenant IDs match, false otherwise.
-     */
-    function isTenantIdImmutable(tenantId) {
-        return request.resource.data.tenantId == resource.data.tenantId;
-    }
-
-    /**
-     * @description Checks if the user is a superadmin. This requires a `get()` call.
-     * @principle Allows superadmins to bypass certain security restrictions. Use sparingly.
-     * @returns {bool} - True if the user is a superadmin, false otherwise.
-     */
-    function isSuperadmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperadmin == true;
-    }
-
-    /**
-     * @description Rules for the /tenants/{tenantId} collection.
-     * @path /tenants/{tenantId}
-     * @allow (create) If the user's auth UID matches the tenantId, allowing self-creation.
-     * @deny (create) If the user's auth UID does not match the tenantId.
-     * @allow (get) If the user is a member of the tenant.
-     * @deny (get) If the user is not a member of the tenant.
-     * @allow (update) If the user is the owner of the tenant and the tenant exists.
-     * @deny (update) If the user is not the owner of the tenant or the tenant does not exist.
-     * @allow (delete) If the user is the owner of the tenant and the tenant exists.
-     * @deny (delete) If the user is not the owner of the tenant or the tenant does not exist.
-     * @principle Enforces tenant ownership for writes, membership for reads, and self-creation for initial setup.
-     */
-    match /tenants/{tenantId} {
-      allow get: if isTenantMember(tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isOwner(tenantId) && request.auth.uid == tenantId;
-      allow update: if isTenantOwner(tenantId) || isSuperadmin();
-      allow delete: if isTenantOwner(tenantId) || isSuperadmin();
-    }
-
-    /**
-     * @description Rules for the /licenses/{licenseId} collection.
-     * @path /licenses/{licenseId}
-     * @allow (create) If the user is a member of the tenant associated with the license.
-     * @deny (create) If the user is not a member of the tenant associated with the license.
-     * @allow (get) If the user is a member of the tenant associated with the license.
-     * @deny (get) If the user is not a member of the tenant associated with the license.
-     * @allow (update) If the user is a member of the tenant associated with the license and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the license or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the license.
-     * @deny (delete) If the user is not a member of the tenant associated with the license.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
-     */
-    match /licenses/{licenseId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
-    }
-
-    /**
-     * @description Rules for the /memberships/{membershipId} collection.
-     * @path /memberships/{membershipId}
-     * @allow (create) If the user is a member of the tenant associated with the membership.
-     * @deny (create) If the user is not a member of the tenant associated with the membership.
-     * @allow (get) If the user is a member of the tenant associated with the membership OR is the owner of the membership.
-     * @deny (get) If the user is not a member of the tenant associated with the membership.
-     * @allow (update) If the user is a member of the tenant associated with the membership and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the membership or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the membership.
-     * @deny (delete) If the user is not a member of the tenant associated with the membership.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
-     */
-    match /memberships/{membershipId} {
-      allow get: if (isTenantMember(resource.data.tenantId) || isOwner(resource.data.uid)) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
-    }
-
-    /**
-     * @description Rules for the /users/{userId} collection.
-     * @path /users/{userId}
-     * @allow (create) If the user's auth UID matches the userId.
-     * @deny (create) If the user's auth UID does not match the userId.
-     * @allow (get) If the user's auth UID matches the userId.
-     * @deny (get) If the user's auth UID does not match the userId.
-     * @allow (update) If the user's auth UID matches the userId.
-     * @deny (update) If the user's auth UID does not match the userId.
-     * @allow (delete) If the user's auth UID matches the userId.
-     * @deny (delete) If the user's auth UID does not match the userId.
-     * @principle Enforces user ownership for all operations.
-     */
-    match /users/{userId} {
-      allow get: if isOwner(userId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isSuperadmin();
-      allow delete: if isOwner(userId) || isSuperadmin();
-    }
-
-    /**
-     * @description Rules for the /currencies/{currencyCode} collection.
+     * @description Allows reading and writing to currencies collection if unauthenticated, but no deleting.
      * @path /currencies/{currencyCode}
-     * @allow (get, list): Public read access.
-     * @deny (create, update, delete): No write access.
-     * @principle Public read-only collection.
+     * @allow (get, list): Unauthenticated user reading currency data.
+     * @allow (create, update): Never.
+     * @deny (delete): Never.
+     * @principle Public read access for currency data, no writes allowed.
      */
     match /currencies/{currencyCode} {
       allow get, list: if true;
@@ -222,213 +52,273 @@ service cloud.firestore {
     }
 
     /**
-     * @description Rules for the /fx_rates/{fxRateId} collection.
+     * @description Grants the tenant owner full access to their tenant document.
+     * @path /tenants/{tenantId}
+     * @allow (get, list): Tenant owner can read tenant data.
+     * @allow (create, update, delete): Tenant owner can create, update and delete tenant data.
+     * @deny (get, list): Any user trying to read another tenant's data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's data.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /tenants/{tenantId} {
+      allow get: if isSignedIn() && isTenantOwner(tenantId, request.auth.uid);
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerUid;
+      allow update: if isSignedIn() && isTenantOwner(tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantOwner(tenantId, request.auth.uid);
+    }
+
+    /**
+     * @description Grants the tenant owner full access to their tenant license.
+     * @path /licenses/{licenseId}
+     * @allow (get, list): Tenant owner can read tenant license data.
+     * @allow (create, update, delete): Tenant owner can create, update and delete tenant license data.
+     * @deny (get, list): Any user trying to read another tenant's license data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's license data.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /licenses/{licenseId} {
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+    }
+
+    /**
+     * @description Allows a user to read their own membership, and admins to manage all memberships.
+     * @path /memberships/{membershipId}
+     * @allow (get): User can read their own membership or admin can read any.
+     * @allow (list): Admin can list all memberships.
+     * @allow (create): User can create their own membership or admin can create any.
+     * @allow (update): User can update their own membership or admin can update any.
+     * @allow (delete): User can delete their own membership or admin can delete any.
+     * @deny (get): User trying to read another user's membership.
+     * @deny (create, update, delete): User trying to modify another user's membership.
+     * @principle Enforces document ownership for non-admins.
+     */
+    match /memberships/{membershipId} {
+      allow get: if isSignedIn() && (isMembershipOwner(resource.data.uid, request.auth.uid) || isTenantAdmin(resource.data.tenantId, request.auth.uid));
+      allow list: if isSignedIn() && isTenantAdmin(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && (isMembershipOwner(resource.data.uid, request.auth.uid) || isTenantAdmin(resource.data.tenantId, request.auth.uid));
+      allow delete: if isSignedIn() && (isMembershipOwner(resource.data.uid, request.auth.uid) || isTenantAdmin(resource.data.tenantId, request.auth.uid));
+    }
+
+    /**
+     * @description Grants the user full access to their own user document.
+     * @path /users/{userId}
+     * @allow (get, list): User can read their own user data.
+     * @allow (create, update, delete): User can create, update and delete their own user data.
+     * @deny (get, list): Any user trying to read another user's data.
+     * @deny (create, update, delete): Any user trying to modify another user's data.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId} {
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    /**
+     * @description Grants access to fx_rates based on tenant membership.
      * @path /fx_rates/{fxRateId}
-     * @allow (create) If the user is a member of the tenant associated with the fxRate.
-     * @deny (create) If the user is not a member of the tenant associated with the fxRate.
-     * @allow (get) If the user is a member of the tenant associated with the fxRate.
-     * @deny (get) If the user is not a member of the tenant associated with the fxRate.
-     * @allow (update) If the user is a member of the tenant associated with the fxRate and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the fxRate or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the fxRate.
-     * @deny (delete) If the user is not a member of the tenant associated with the fxRate.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
+     * @allow (get, list): Tenant member can read fx_rates data.
+     * @allow (create, update, delete): Tenant member can create, update and delete fx_rates data.
+     * @deny (get, list): Any user trying to read another tenant's fx_rates data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's fx_rates data.
+     * @principle Tenant members have full access to fx_rates.
      */
     match /fx_rates/{fxRateId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /categories/{categoryId} collection.
+     * @description Grants access to categories based on tenant membership.
      * @path /categories/{categoryId}
-     * @allow (create) If the user is a member of the tenant associated with the category.
-     * @deny (create) If the user is not a member of the tenant associated with the category.
-     * @allow (get) If the user is a member of the tenant associated with the category.
-     * @deny (get) If the user is not a member of the tenant associated with the category.
-     * @allow (update) If the user is a member of the tenant associated with the category and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the category or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the category.
-     * @deny (delete) If the user is not a member of the tenant associated with the category.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
+     * @allow (get, list): Tenant member can read categories data.
+     * @allow (create, update, delete): Tenant member can create, update and delete categories data.
+     * @deny (get, list): Any user trying to read another tenant's categories data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's categories data.
+     * @principle Tenant members have full access to categories.
      */
     match /categories/{categoryId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /subcategories/{subcategoryId} collection.
+     * @description Grants access to subcategories based on tenant membership.
      * @path /subcategories/{subcategoryId}
-     * @allow (create) If the user is a member of the tenant associated with the subcategory.
-     * @deny (create) If the user is not a member of the tenant associated with the subcategory.
-     * @allow (get) If the user is a member of the tenant associated with the subcategory.
-     * @deny (get) If the user is not a member of the tenant associated with the subcategory.
-     * @allow (update) If the user is a member of the tenant associated with the subcategory and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the subcategory or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the subcategory.
-     * @deny (delete) If the user is not a member of the tenant associated with the subcategory.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
+     * @allow (get, list): Tenant member can read subcategories data.
+     * @allow (create, update, delete): Tenant member can create, update and delete subcategories data.
+     * @deny (get, list): Any user trying to read another tenant's subcategories data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's subcategories data.
+     * @principle Tenant members have full access to subcategories.
      */
     match /subcategories/{subcategoryId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /entities/{entityId} collection.
+     * @description Grants access to entities based on tenant membership.
      * @path /entities/{entityId}
-     * @allow (create) If the user is a member of the tenant associated with the entity.
-     * @deny (create) If the user is not a member of the tenant associated with the entity.
-     * @allow (get) If the user is a member of the tenant associated with the entity.
-     * @deny (get) If the user is not a member of the tenant associated with the entity.
-     * @allow (update) If the user is a member of the tenant associated with the entity and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the entity or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the entity.
-     * @deny (delete) If the user is not a member of the tenant associated with the entity.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
+     * @allow (get, list): Tenant member can read entities data.
+     * @allow (create, update, delete): Tenant member can create, update and delete entities data.
+     * @deny (get, list): Any user trying to read another tenant's entities data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's entities data.
+     * @principle Tenant members have full access to entities.
      */
     match /entities/{entityId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /expenses/{expenseId} collection.
+     * @description Grants access to expenses based on tenant membership and user ownership.
      * @path /expenses/{expenseId}
-     * @allow (create) If the user is a member of the tenant and the userId matches the auth UID.
-     * @deny (create) If the user is not a member of the tenant or the userId does not match the auth UID.
-     * @allow (get) If the user is a member of the tenant and the userId matches the auth UID.
-     * @deny (get) If the user is not a member of the tenant or the userId does not match the auth UID.
-     * @allow (update) If the user is a member of the tenant, the userId matches the auth UID, and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant, the userId does not match the auth UID, or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant and the userId matches the auth UID.
-     * @deny (delete) If the user is not a member of the tenant or the userId does not match the auth UID.
-     * @principle Enforces tenant membership, user ownership, and tenant ID consistency.
+     * @allow (get, list): Tenant member can read expenses data.
+     * @allow (create, update, delete): Tenant member can create, update and delete expenses data.
+     * @deny (get, list): Any user trying to read another tenant's expenses data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's expenses data.
+     * @principle Tenant members have full access to expenses.
      */
     match /expenses/{expenseId} {
-      allow get: if isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId) || isSuperadmin();
+      allow get: if isSignedIn() && isExpenseOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
+      allow list: if isSignedIn() && isExpenseOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
+      allow create: if isSignedIn() && isExpenseOwner(request.resource.data.tenantId, request.resource.data.userId, request.auth.uid);
+      allow update: if isSignedIn() && isExpenseOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
+      allow delete: if isSignedIn() && isExpenseOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /budgets/{budgetId} collection.
+     * @description Grants access to budgets based on tenant membership.
      * @path /budgets/{budgetId}
-     * @allow (create) If the user is a member of the tenant associated with the budget.
-     * @deny (create) If the user is not a member of the tenant associated with the budget.
-     * @allow (get) If the user is a member of the tenant associated with the budget.
-     * @deny (get) If the user is not a member of the tenant associated with the budget.
-     * @allow (update) If the user is a member of the tenant associated with the budget and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the budget or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the budget.
-     * @deny (delete) If the user is not a member of the tenant associated with the budget.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
+     * @allow (get, list): Tenant member can read budgets data.
+     * @allow (create, update, delete): Tenant member can create, update and delete budgets data.
+     * @deny (get, list): Any user trying to read another tenant's budgets data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's budgets data.
+     * @principle Tenant members have full access to budgets.
      */
     match /budgets/{budgetId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /alerts/{alertId} collection.
+     * @description Grants access to alerts based on tenant membership.
      * @path /alerts/{alertId}
-     * @allow (create) If the user is a member of the tenant associated with the alert.
-     * @deny (create) If the user is not a member of the tenant associated with the alert.
-     * @allow (get) If the user is a member of the tenant associated with the alert.
-     * @deny (get) If the user is not a member of the tenant associated with the alert.
-     * @allow (update) If the user is a member of the tenant associated with the alert and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the alert or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the alert.
-     * @deny (delete) If the user is not a member of the tenant associated with the alert.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
+     * @allow (get, list): Tenant member can read alerts data.
+     * @allow (create, update, delete): Tenant member can create, update and delete alerts data.
+     * @deny (get, list): Any user trying to read another tenant's alerts data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's alerts data.
+     * @principle Tenant members have full access to alerts.
      */
     match /alerts/{alertId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /receipts_raw/{receiptRawId} collection.
+     * @description Grants access to receipt_raws based on tenant membership and user ownership.
      * @path /receipts_raw/{receiptRawId}
-     * @allow (create) If the user is a member of the tenant and the userId matches the auth UID.
-     * @deny (create) If the user is not a member of the tenant or the userId does not match the auth UID.
-     * @allow (get) If the user is a member of the tenant and the userId matches the auth UID.
-     * @deny (get) If the user is not a member of the tenant or the userId does not match the auth UID.
-     * @allow (update) If the user is a member of the tenant, the userId matches the auth UID, and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant, the userId does not match the auth UID, or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant and the userId matches the auth UID.
-     * @deny (delete) If the user is not a member of the tenant or the userId does not match the auth UID.
-     * @principle Enforces tenant membership, user ownership, and tenant ID consistency.
+     * @allow (get, list): Tenant member can read receipt_raws data.
+     * @allow (create, update, delete): Tenant member can create, update and delete receipt_raws data.
+     * @deny (get, list): Any user trying to read another tenant's receipt_raws data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's receipt_raws data.
+     * @principle Tenant members have full access to receipt_raws.
      */
     match /receipts_raw/{receiptRawId} {
-      allow get: if isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId) && isOwner(resource.data.userId) || isSuperadmin();
+      allow get: if isSignedIn() && isReceiptRawOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
+      allow list: if isSignedIn() && isReceiptRawOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
+      allow create: if isSignedIn() && isReceiptRawOwner(request.resource.data.tenantId, request.resource.data.userId, request.auth.uid);
+      allow update: if isSignedIn() && isReceiptRawOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
+      allow delete: if isSignedIn() && isReceiptRawOwner(resource.data.tenantId, resource.data.userId, request.auth.uid);
     }
 
     /**
-     * @description Rules for the /receipts_fingerprints/{receiptFingerprintId} collection.
+     * @description Public read-only access to receipt fingerprints for deduplication, with no write access.
      * @path /receipts_fingerprints/{receiptFingerprintId}
-     * @allow (create) If the user is a member of the tenant associated with the fingerprint.
-     * @deny (create) If the user is not a member of the tenant associated with the fingerprint.
-     * @allow (get) If the user is a member of the tenant associated with the fingerprint.
-     * @deny (get) If the user is not a member of the tenant associated with the fingerprint.
-     * @allow (update) If the user is a member of the tenant associated with the fingerprint.
-     * @deny (update) If the user is not a member of the tenant associated with the fingerprint.
-     * @allow (delete) If the user is a member of the tenant associated with the fingerprint.
-     * @deny (delete) If the user is not a member of the tenant associated with the fingerprint.
-     * @principle Enforces tenant membership for access.
+     * @allow (get, list): Any user can check for existing receipt fingerprints.
+     * @deny (create, update, delete): No one can create, update, or delete receipt fingerprints through the client.
+     * @principle Public read, owner-only writes (handled by backend functions).
      */
     match /receipts_fingerprints/{receiptFingerprintId} {
-      allow get: if isTenantMember(receiptFingerprintId.split("_")[0]) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(receiptFingerprintId.split("_")[0]) || isSuperadmin();
-      allow update: if isTenantMember(receiptFingerprintId.split("_")[0]) || isSuperadmin();
-      allow delete: if isTenantMember(receiptFingerprintId.split("_")[0]) || isSuperadmin();
+      allow get, list: if true;
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Rules for the /audit_logs/{auditLogId} collection.
+     * @description Grants access to audit_logs based on tenant membership.
      * @path /audit_logs/{auditLogId}
-     * @allow (create) If the user is a member of the tenant associated with the audit log.
-     * @deny (create) If the user is not a member of the tenant associated with the audit log.
-     * @allow (get) If the user is a member of the tenant associated with the audit log.
-     * @deny (get) If the user is not a member of the tenant associated with the audit log.
-     * @allow (update) If the user is a member of the tenant associated with the audit log and tenantId remains immutable.
-     * @deny (update) If the user is not a member of the tenant associated with the audit log or tenantId is changed.
-     * @allow (delete) If the user is a member of the tenant associated with the audit log.
-     * @deny (delete) If the user is not a member of the tenant associated with the audit log.
-     * @principle Enforces tenant membership for access and ensures tenant ID consistency.
+     * @allow (get, list): Tenant member can read audit_logs data.
+     * @allow (create, update, delete): Tenant member can create, update and delete audit_logs data.
+     * @deny (get, list): Any user trying to read another tenant's audit_logs data.
+     * @deny (create, update, delete): Any user trying to modify another tenant's audit_logs data.
+     * @principle Tenant members have full access to audit_logs.
      */
     match /audit_logs/{auditLogId} {
-      allow get: if isTenantMember(resource.data.tenantId) || isSuperadmin();
-      allow list: if false;
-      allow create: if isTenantMember(request.resource.data.tenantId) || isSuperadmin();
-      allow update: if isTenantMember(resource.data.tenantId) && (resource.data.tenantId == request.resource.data.tenantId) || isSuperadmin();
-      allow delete: if isTenantMember(resource.data.tenantId)  || isSuperadmin();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow list: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId, request.auth.uid);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId, request.auth.uid);
+    }
+
+    // ---- Helper functions ----
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isTenantOwner(tenantId, userId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == userId;
+    }
+
+    function isTenantMember(tenantId, userId) {
+        return exists(/databases/$(database)/documents/memberships/$(tenantId)_$(userId));
+    }
+
+    function isTenantAdmin(tenantId, userId) {
+      return get(/databases/$(database)/documents/memberships/$(tenantId)_$(userId)).data.role == 'admin';
+    }
+
+    function isMembershipOwner(membershipUid, userId) {
+      return membershipUid == userId;
+    }
+
+    function isExpenseOwner(tenantId, expenseUserId, userId) {
+      return isTenantMember(tenantId, userId) && expenseUserId == userId;
+    }
+
+    function isReceiptRawOwner(tenantId, receiptRawUserId, userId) {
+      return isTenantMember(tenantId, userId) && receiptRawUserId == userId;
     }
   }
 }
