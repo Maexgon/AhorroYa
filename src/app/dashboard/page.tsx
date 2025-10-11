@@ -1,3 +1,4 @@
+
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -69,19 +70,24 @@ function OwnerDashboard() {
   // 1. Fetch user's memberships
   const userMembershipsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'memberships'), where('uid', '==', user.uid), where('status', '==', 'active'));
+    // Simplified query to use only one 'where' clause
+    return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
   }, [firestore, user]);
-  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(userMembershipsQuery);
+  const { data: allMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(userMembershipsQuery);
 
-  // 2. Set the active tenantId from memberships
+  // Filter memberships on the client-side
+  const activeMemberships = useMemo(() => {
+      return allMemberships?.filter(m => m.status === 'active') || [];
+  }, [allMemberships]);
+
+  // 2. Set the active tenantId from the filtered memberships
   useEffect(() => {
-    if (memberships && memberships.length > 0) {
-      // Assuming the user has one primary active membership for this context
-      setTenantId(memberships[0].tenantId);
+    if (activeMemberships && activeMemberships.length > 0) {
+      setTenantId(activeMemberships[0].tenantId);
     } else {
       setTenantId(null);
     }
-  }, [memberships]);
+  }, [activeMemberships]);
 
   // 3. Fetch tenant document using the derived tenantId
   const tenantRef = useMemoFirebase(() => {
@@ -170,7 +176,7 @@ function OwnerDashboard() {
   const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
 
   // Use memberships directly for user options
-  const userOptions = memberships?.map(m => ({ value: m.uid, label: m.displayName })) || [];
+  const userOptions = activeMemberships?.map(m => ({ value: m.uid, label: m.displayName })) || [];
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   const currencyOptions = [{ value: 'ARS', label: 'ARS' }, { value: 'USD', label: 'USD' }];
 

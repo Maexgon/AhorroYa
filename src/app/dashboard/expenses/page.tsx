@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -39,18 +40,24 @@ export default function ExpensesPage() {
     // 1. Fetch user's memberships to find the tenantId
     const membershipsQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
-        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid), where('status', '==', 'active'));
+        // Simplified query to only use one 'where' clause
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
     }, [firestore, user]);
-    const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
+    const { data: allMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
-    // 2. Set the active tenantId from the fetched memberships
+    // Filter memberships on the client-side
+    const activeMemberships = React.useMemo(() => {
+        return allMemberships?.filter(m => m.status === 'active') || [];
+    }, [allMemberships]);
+
+    // 2. Set the active tenantId from the filtered memberships
     React.useEffect(() => {
-        if (memberships && memberships.length > 0) {
-            setTenantId(memberships[0].tenantId);
-        } else {
+        if (activeMemberships && activeMemberships.length > 0) {
+            setTenantId(activeMemberships[0].tenantId);
+        } else if (!isLoadingMemberships) {
             setTenantId(null);
         }
-    }, [memberships]);
+    }, [activeMemberships, isLoadingMemberships]);
     
 
     // 3. Fetch Expenses for the active tenant using the derived tenantId
@@ -168,7 +175,7 @@ export default function ExpensesPage() {
             <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                        <AlertDialogTitle>¿Estás absolutely seguro?</AlertDialogTitle>
                         <AlertDialogDescription>
                             Esta acción marcará el gasto como eliminado de forma permanente. Para confirmar, escribe <strong className="text-foreground">BORRAR</strong> en el campo de abajo.
                         </AlertDialogDescription>
