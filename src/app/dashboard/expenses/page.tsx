@@ -20,8 +20,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
+import { useDoc } from '@/firebase/firestore/use-doc';
 import type { Expense, Category, Subcategory, Tenant, Membership } from '@/lib/types';
 import { DataTable } from './data-table';
 import { columns } from './columns';
@@ -37,17 +38,21 @@ export default function ExpensesPage() {
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-     // 1. Fetch user's memberships to find the tenantId
-    const activeMemberships: Membership[] = []; // Removed query
+    // Fetch user's primary tenantId from the users collection
+    const userRef = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return doc(firestore, 'users', user.uid);
+    }, [firestore, user]);
+    const { data: userData } = useDoc<{ tenantIds: string[] }>(userRef);
 
-    // 2. Set the active tenantId from the filtered memberships
+    // 2. Set the active tenantId from the user data
     React.useEffect(() => {
-        if (activeMemberships && activeMemberships.length > 0) {
-            setTenantId(activeMemberships[0].tenantId);
+        if (userData && userData.tenantIds && userData.tenantIds.length > 0) {
+            setTenantId(userData.tenantIds[0]);
         } else {
             setTenantId(null);
         }
-    }, [activeMemberships]);
+    }, [userData]);
     
 
     // 3. Fetch Expenses for the active tenant using the derived tenantId
@@ -194,5 +199,3 @@ export default function ExpensesPage() {
         </>
     );
 }
-
-    

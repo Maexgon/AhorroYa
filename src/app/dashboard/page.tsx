@@ -67,17 +67,23 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
-  // 1. Fetch user's memberships to find the tenantId
-    const activeMemberships: Membership[] = []; // Removed query
+  // 1. Fetch user's primary tenantId from the users collection
+  const userRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+  const { data: userData } = useDoc<{ tenantIds: string[], displayName: string }>(userRef);
+  const userDisplayName = userData?.displayName || '';
 
-    // 2. Set the active tenantId from the filtered memberships
-    React.useEffect(() => {
-        if (activeMemberships && activeMemberships.length > 0) {
-            setTenantId(activeMemberships[0].tenantId);
-        } else {
-            setTenantId(null);
-        }
-    }, [activeMemberships]);
+  // 2. Set the active tenantId from the user data
+  React.useEffect(() => {
+    if (userData && userData.tenantIds && userData.tenantIds.length > 0) {
+      setTenantId(userData.tenantIds[0]);
+    } else {
+      setTenantId(null);
+    }
+  }, [userData]);
+
 
   // 3. Fetch tenant document using the derived tenantId
   const tenantRef = useMemoFirebase(() => {
@@ -98,6 +104,12 @@ function OwnerDashboard() {
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+
+  const membershipsQuery = useMemoFirebase(() => {
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: membershipsData } = useCollection<Membership>(membershipsQuery);
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories;
 
@@ -166,7 +178,7 @@ function OwnerDashboard() {
   const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
 
   // Use memberships directly for user options
-  const userOptions = activeMemberships?.map(m => ({ value: m.uid, label: m.displayName })) || [];
+  const userOptions = membershipsData?.map(m => ({ value: m.uid, label: m.displayName })) || [];
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   const currencyOptions = [{ value: 'ARS', label: 'ARS' }, { value: 'USD', label: 'USD' }];
 
@@ -469,5 +481,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
