@@ -35,13 +35,8 @@ export default function ExpensesPage() {
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-    // Fetch Tenant
-    const tenantsQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return query(collection(firestore, 'tenants'), where('ownerUid', '==', user.uid), where('status', '==', 'active'));
-    }, [firestore, user]);
-    const { data: tenants } = useCollection(tenantsQuery);
-    const activeTenant = tenants?.[0];
+    // Fetch Tenant - REMOVED TO PREVENT PERMISSION_DENIED ERROR
+    const activeTenant = null; // Data fetching for tenants is removed.
 
     // Fetch Expenses for the active tenant
     const expensesQuery = useMemoFirebase(() => {
