@@ -6,7 +6,7 @@ import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { collection, query, where, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType } from '@/lib/types';
@@ -24,8 +24,8 @@ import { Bar, BarChart, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { defaultCategories } from '@/lib/default-categories';
-import { doc } from 'firebase/firestore';
 import Link from 'next/link';
+import { useDoc } from '@/firebase/firestore/use-doc';
 
 
 // Membership now includes displayName
@@ -64,44 +64,46 @@ function OwnerDashboard() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
 
-  const [activeTenant, setActiveTenant] = useState<WithId<Tenant> | null>(null);
-
-  const tenantsQuery = useMemoFirebase(() => {
+  // 1. Fetch user's memberships
+  const userMembershipsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'tenants'), where('ownerUid', '==', user.uid));
+    return query(collection(firestore, 'memberships'), where('uid', '==', user.uid), where('status', '==', 'active'));
   }, [firestore, user]);
-  const { data: tenants, isLoading: isLoadingTenants } = useCollection<Tenant>(tenantsQuery);
+  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(userMembershipsQuery);
 
+  // 2. Set the active tenantId from memberships
   useEffect(() => {
-    if (tenants && tenants.length > 0) {
-      const active = tenants.find(t => t.status === 'active');
-      setActiveTenant(active || tenants[0]);
+    if (memberships && memberships.length > 0) {
+      // Assuming the user has one primary active membership for this context
+      setTenantId(memberships[0].tenantId);
     } else {
-      setActiveTenant(null);
+      setTenantId(null);
     }
-  }, [tenants]);
+  }, [memberships]);
+
+  // 3. Fetch tenant document using the derived tenantId
+  const tenantRef = useMemoFirebase(() => {
+    if (!firestore || !tenantId) return null;
+    return doc(firestore, 'tenants', tenantId);
+  }, [firestore, tenantId]);
+  const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
   const licenseQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
-    return query(collection(firestore, 'licenses'), where('tenantId', '==', activeTenant.id));
-  }, [firestore, activeTenant]);
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
   const activeLicense = licenses?.[0];
 
-  const membershipsQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
-    return query(collection(firestore, 'memberships'), where('tenantId', '==', activeTenant.id));
-  }, [firestore, activeTenant]);
-  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<MembershipWithDisplayName>(membershipsQuery);
-
   const categoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
-    return query(collection(firestore, 'categories'), where('tenantId', '==', activeTenant.id));
-  }, [firestore, activeTenant]);
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-  const isLoading = isLoadingTenants || isLoadingLicenses || isLoadingMemberships || isLoadingCategories;
+  const isLoading = isLoadingMemberships || isLoadingTenant || isLoadingLicenses || isLoadingCategories;
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -471,3 +473,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
