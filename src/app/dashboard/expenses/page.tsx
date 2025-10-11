@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import type { Expense, Category, Subcategory } from '@/lib/types';
+import type { Expense, Category, Subcategory, Tenant } from '@/lib/types';
 import { DataTable } from './data-table';
 import { columns } from './columns';
 import { deleteExpenseAction } from './actions';
@@ -35,8 +35,16 @@ export default function ExpensesPage() {
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-    // Fetch Tenant - REMOVED TO PREVENT PERMISSION_DENIED ERROR
-    const activeTenant = null; // Data fetching for tenants is removed.
+    const tenantsQuery = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return query(collection(firestore, 'tenants'), where('ownerUid', '==', user.uid));
+    }, [firestore, user]);
+    const { data: tenants, isLoading: isLoadingTenants } = useCollection<Tenant>(tenantsQuery);
+    
+    const activeTenant = React.useMemo(() => {
+        if (!tenants) return null;
+        return tenants.find(t => t.status === 'active') || tenants[0];
+    }, [tenants]);
 
     // Fetch Expenses for the active tenant
     const expensesQuery = useMemoFirebase(() => {
@@ -103,7 +111,7 @@ export default function ExpensesPage() {
         }));
     }, [expenses, categories, subcategories]);
 
-    const isLoading = isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
+    const isLoading = isLoadingTenants || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
 
     return (
         <>

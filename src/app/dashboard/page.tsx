@@ -6,10 +6,10 @@ import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { collection, query, where, writeBatch } from 'firebase/firestore';
+import { collection, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -66,19 +66,42 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
 
   const [activeTenant, setActiveTenant] = useState<WithId<Tenant> | null>(null);
-  const [activeLicense, setActiveLicense] = useState<WithId<License> | null>(null);
-  const [memberships, setMemberships] = useState<WithId<MembershipWithDisplayName>[]>([]);
-  const [categories, setCategories] = useState<WithId<Category>[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
+  const tenantsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, 'tenants'), where('ownerUid', '==', user.uid));
+  }, [firestore, user]);
+  const { data: tenants, isLoading: isLoadingTenants } = useCollection<Tenant>(tenantsQuery);
 
   useEffect(() => {
-    if (!user || !firestore) return;
-    // The functionality to fetch tenants, licenses, etc., has been removed
-    // to prevent the permission error. The dashboard will show a loading or
-    // empty state.
-    setIsLoading(false);
-  }, [user, firestore]);
+    if (tenants && tenants.length > 0) {
+      const active = tenants.find(t => t.status === 'active');
+      setActiveTenant(active || tenants[0]);
+    } else {
+      setActiveTenant(null);
+    }
+  }, [tenants]);
+
+  const licenseQuery = useMemoFirebase(() => {
+    if (!firestore || !activeTenant) return null;
+    return query(collection(firestore, 'licenses'), where('tenantId', '==', activeTenant.id));
+  }, [firestore, activeTenant]);
+  const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
+  const activeLicense = licenses?.[0];
+
+  const membershipsQuery = useMemoFirebase(() => {
+    if (!firestore || !activeTenant) return null;
+    return query(collection(firestore, 'memberships'), where('tenantId', '==', activeTenant.id));
+  }, [firestore, activeTenant]);
+  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<MembershipWithDisplayName>(membershipsQuery);
+
+  const categoriesQuery = useMemoFirebase(() => {
+    if (!firestore || !activeTenant) return null;
+    return query(collection(firestore, 'categories'), where('tenantId', '==', activeTenant.id));
+  }, [firestore, activeTenant]);
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+
+  const isLoading = isLoadingTenants || isLoadingLicenses || isLoadingMemberships || isLoadingCategories;
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -448,5 +471,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
