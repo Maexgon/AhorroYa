@@ -37,27 +37,17 @@ export default function ExpensesPage() {
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-    // 1. Fetch user's memberships to find the tenantId
-    const membershipsQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        // Simplified query to only use one 'where' clause
-        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
-    }, [firestore, user]);
-    const { data: allMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
-
-    // Filter memberships on the client-side
-    const activeMemberships = React.useMemo(() => {
-        return allMemberships?.filter(m => m.status === 'active') || [];
-    }, [allMemberships]);
+     // 1. Fetch user's memberships to find the tenantId
+    const activeMemberships: Membership[] = []; // Removed query
 
     // 2. Set the active tenantId from the filtered memberships
     React.useEffect(() => {
         if (activeMemberships && activeMemberships.length > 0) {
             setTenantId(activeMemberships[0].tenantId);
-        } else if (!isLoadingMemberships) {
+        } else {
             setTenantId(null);
         }
-    }, [activeMemberships, isLoadingMemberships]);
+    }, [activeMemberships]);
     
 
     // 3. Fetch Expenses for the active tenant using the derived tenantId
@@ -125,7 +115,7 @@ export default function ExpensesPage() {
         }));
     }, [expenses, categories, subcategories]);
 
-    const isLoading = isLoadingMemberships || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
+    const isLoading = isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
 
     return (
         <>

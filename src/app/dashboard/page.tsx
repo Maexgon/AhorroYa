@@ -67,27 +67,17 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
-  // 1. Fetch user's memberships
-  const userMembershipsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    // Simplified query to use only one 'where' clause
-    return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
-  }, [firestore, user]);
-  const { data: allMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(userMembershipsQuery);
+  // 1. Fetch user's memberships to find the tenantId
+    const activeMemberships: Membership[] = []; // Removed query
 
-  // Filter memberships on the client-side
-  const activeMemberships = useMemo(() => {
-      return allMemberships?.filter(m => m.status === 'active') || [];
-  }, [allMemberships]);
-
-  // 2. Set the active tenantId from the filtered memberships
-  useEffect(() => {
-    if (activeMemberships && activeMemberships.length > 0) {
-      setTenantId(activeMemberships[0].tenantId);
-    } else {
-      setTenantId(null);
-    }
-  }, [activeMemberships]);
+    // 2. Set the active tenantId from the filtered memberships
+    React.useEffect(() => {
+        if (activeMemberships && activeMemberships.length > 0) {
+            setTenantId(activeMemberships[0].tenantId);
+        } else {
+            setTenantId(null);
+        }
+    }, [activeMemberships]);
 
   // 3. Fetch tenant document using the derived tenantId
   const tenantRef = useMemoFirebase(() => {
@@ -109,7 +99,7 @@ function OwnerDashboard() {
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-  const isLoading = isLoadingMemberships || isLoadingTenant || isLoadingLicenses || isLoadingCategories;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories;
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({
