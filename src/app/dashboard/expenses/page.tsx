@@ -20,12 +20,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Expense, Category, Subcategory, Membership, User as UserType } from '@/lib/types';
 import { DataTable } from './data-table';
 import { columns } from './columns';
-import { deleteExpenseAction } from './actions';
 import { useDoc } from '@/firebase/firestore/use-doc';
 
 export default function ExpensesPage() {
@@ -33,7 +32,6 @@ export default function ExpensesPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
-    const [userRole, setUserRole] = React.useState<string | null>(null);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
@@ -52,31 +50,11 @@ export default function ExpensesPage() {
             setTenantId(userData.tenantIds[0]);
         }
     }, [userData]);
-
-
-    // 2. Fetch the membership document, which depends on tenantId being set
-    const membershipDocRef = useMemoFirebase(() => {
-        if (!firestore || !user || !tenantId) return null;
-        const membershipId = `${tenantId}_${user.uid}`;
-        return doc(firestore, 'memberships', membershipId);
-    }, [firestore, user, tenantId]);
-    const { data: membership, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
-
-
-    // 3. Set the userRole from the membership document
-    React.useEffect(() => {
-        if (membership) {
-            setUserRole(membership.role);
-        }
-    }, [membership]);
     
-    // 4. Fetch Expenses, which depends on tenantId and the user
+    // 2. Fetch Expenses, which depends on tenantId and the user
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId || !user) return null;
         
-        // The security rules require filtering by both tenantId and userId for list operations.
-        // There is no exception for 'owner' or 'admin' roles in the rules provided.
-        // Therefore, we must always filter by the current user's UID.
         return query(
             collection(firestore, 'expenses'), 
             where('tenantId', '==', tenantId), 
@@ -113,17 +91,22 @@ export default function ExpensesPage() {
     }
 
     const handleDeleteExpense = async () => {
-        if (!expenseToDelete) return;
+        if (!expenseToDelete || !firestore) return;
 
-        const result = await deleteExpenseAction(expenseToDelete);
+        try {
+            const expenseRef = doc(firestore, 'expenses', expenseToDelete);
+            await updateDoc(expenseRef, {
+                deleted: true,
+                updatedAt: new Date().toISOString()
+            });
 
-        if (result.success) {
             toast({ title: 'Gasto eliminado', description: 'El gasto ha sido marcado como eliminado.' });
             if (expenses && setExpenses) {
                 setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
             }
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } catch (error) {
+            console.error("Error deleting expense:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el gasto. Verifica tus permisos.' });
         }
 
         resetDeleteDialog();
@@ -143,7 +126,7 @@ export default function ExpensesPage() {
         }));
     }, [expenses, categories, subcategories]);
 
-    const isLoading = isAuthLoading || isUserDocLoading || isLoadingMembership || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
+    const isLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
 
     return (
         <>
@@ -222,5 +205,3 @@ export default function ExpensesPage() {
         </>
     );
 }
-
-    
