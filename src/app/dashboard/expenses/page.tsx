@@ -70,19 +70,21 @@ export default function ExpensesPage() {
         }
     }, [membership]);
     
-    // 4. Fetch Expenses, which depends on tenantId and userRole
+    // 4. Fetch Expenses, which depends on tenantId and the user
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !userRole || !user) return null;
+        if (!firestore || !tenantId || !user) return null;
         
-        const baseQuery = query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
+        // The security rules require filtering by both tenantId and userId for list operations.
+        // There is no exception for 'owner' or 'admin' roles in the rules provided.
+        // Therefore, we must always filter by the current user's UID.
+        return query(
+            collection(firestore, 'expenses'), 
+            where('tenantId', '==', tenantId), 
+            where('deleted', '==', false),
+            where('userId', '==', user.uid)
+        );
 
-        if (userRole === 'owner' || userRole === 'admin') {
-             return baseQuery;
-        }
-        
-        return query(baseQuery, where('userId', '==', user.uid));
-
-    }, [firestore, tenantId, userRole, user]);
+    }, [firestore, tenantId, user]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
     // Fetch Categories, depends on tenantId
@@ -129,7 +131,7 @@ export default function ExpensesPage() {
 
 
     const tableData = React.useMemo(() => {
-        if (!expenses || !categories || !subcategories) return null;
+        if (!expenses || !categories || !subcategories) return [];
 
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
