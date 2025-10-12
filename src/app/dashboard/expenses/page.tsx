@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -66,14 +67,8 @@ export default function ExpensesPage() {
     React.useEffect(() => {
         if (membership) {
             setUserRole(membership.role);
-        } else if (!isLoadingMembership && tenantId && user?.uid && userData?.tenantIds?.includes(tenantId)) {
-             // Heuristic: If userDoc says they are part of the tenant, they are at least a member.
-             // This might not be fully accurate if the membership document is somehow deleted, but it's a safe fallback.
-             // The owner check is more robust.
-             const isOwner = userData.uid === user.uid; // Simple owner check based on uid.
-             setUserRole(isOwner ? 'owner' : 'member');
         }
-    }, [membership, isLoadingMembership, tenantId, userData, user]);
+    }, [membership]);
     
     // 4. Fetch Expenses, which depends on tenantId and userRole
     const expensesQuery = useMemoFirebase(() => {
@@ -225,3 +220,5 @@ export default function ExpensesPage() {
         </>
     );
 }
+
+    
