@@ -78,7 +78,8 @@ function OwnerDashboard() {
     // 2. Fetch the membership document directly
     const membershipDocRef = useMemoFirebase(() => {
         if (!firestore || !user || !firstTenantId) return null;
-        const membershipId = `${firstTenantId}_${user.uid}`;
+        // The ID is now uid_tenantId as per the new rules
+        const membershipId = `${user.uid}_${firstTenantId}`;
         return doc(firestore, 'memberships', membershipId);
     }, [firestore, user, firstTenantId]);
     const { data: membership, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
@@ -489,3 +490,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    

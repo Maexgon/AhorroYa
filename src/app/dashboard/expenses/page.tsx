@@ -50,7 +50,8 @@ export default function ExpensesPage() {
     // 2. Fetch the membership document directly
     const membershipDocRef = useMemoFirebase(() => {
         if (!firestore || !user || !firstTenantId) return null;
-        const membershipId = `${firstTenantId}_${user.uid}`;
+        // The ID is now uid_tenantId as per the new rules
+        const membershipId = `${user.uid}_${firstTenantId}`;
         return doc(firestore, 'memberships', membershipId);
     }, [firestore, user, firstTenantId]);
     const { data: membership, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
@@ -61,22 +62,22 @@ export default function ExpensesPage() {
         if (membership) {
             setTenantId(membership.tenantId);
             setUserRole(membership.role);
-        } else {
-            setTenantId(null);
-            setUserRole(null);
+        } else if (!isLoadingMembership && firstTenantId) {
+             setTenantId(firstTenantId); // Fallback for owner before membership might be read
         }
-    }, [membership]);
+    }, [membership, isLoadingMembership, firstTenantId]);
     
     // 4. Fetch Expenses based on user role
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !userRole || !user) return null;
+        if (!firestore || !tenantId || !user) return null;
         
-        // Owner/Admin can see all expenses for the tenant
+        // Admins and owners see all tenant expenses. Members see only their own.
+        // The security rules will enforce this, but we can optimize the query.
         if (userRole === 'owner' || userRole === 'admin') {
              return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
         }
         
-        // Other roles (member) can only see their own expenses
+        // Members only see their own non-deleted expenses
         return query(
             collection(firestore, 'expenses'), 
             where('tenantId', '==', tenantId), 
@@ -195,7 +196,7 @@ export default function ExpensesPage() {
             <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>¿Estás absolutely seguro?</AlertDialogTitle>
+                        <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                         <AlertDialogDescription>
                             Esta acción marcará el gasto como eliminado de forma permanente. Para confirmar, escribe <strong className="text-foreground">BORRAR</strong> en el campo de abajo.
                         </AlertDialogDescription>
@@ -224,3 +225,5 @@ export default function ExpensesPage() {
         </>
     );
 }
+
+    

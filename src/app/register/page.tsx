@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -83,7 +84,7 @@ export default function RegisterPage() {
 
       const userRef = doc(firestore, "users", user.uid);
       const tenantRef = doc(firestore, "tenants", crypto.randomUUID());
-      const membershipRef = doc(firestore, "memberships", `${tenantRef.id}_${user.uid}`);
+      const membershipRef = doc(firestore, "memberships", `${user.uid}_${tenantRef.id}`);
       
       const userData = {
         uid: user.uid,
@@ -102,6 +103,7 @@ export default function RegisterPage() {
       }
 
       const tenantData = {
+        id: tenantRef.id,
         type: accountType.toUpperCase(),
         name: tenantNameMapping[accountType as keyof typeof tenantNameMapping] || `Espacio de ${firstName}`,
         baseCurrency: "ARS",
@@ -341,3 +343,6 @@ export default function RegisterPage() {
 
     
 
+
+
+    
