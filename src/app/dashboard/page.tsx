@@ -102,13 +102,6 @@ function OwnerDashboard() {
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-  const membershipsForTenantQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
-  const { data: membershipsData } = useCollection<Membership>(membershipsForTenantQuery);
-
-
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading;
 
 
@@ -175,8 +168,7 @@ function OwnerDashboard() {
 
   const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
 
-  // Use memberships directly for user options
-  const userOptions = membershipsData?.map(m => ({ value: m.uid, label: m.displayName })) || [];
+  const userOptions: { value: string; label: string; }[] = []; // Removed dependency on membershipsData
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   const currencyOptions = [{ value: 'ARS', label: 'ARS' }, { value: 'USD', label: 'USD' }];
 
@@ -479,5 +471,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
