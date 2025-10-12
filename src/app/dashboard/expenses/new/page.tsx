@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
+import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -23,7 +24,7 @@ import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
-import type { Category, Subcategory } from '@/lib/types';
+import type { Category, Subcategory, User as UserType } from '@/lib/types';
 
 
 const expenseFormSchema = z.object({
@@ -50,6 +51,7 @@ export default function NewExpensePage() {
   const [receiptPreview, setReceiptPreview] = React.useState<string | null>(null);
   const [receiptBase64, setReceiptBase64] = React.useState<string | null>(null);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
+  const [tenantId, setTenantId] = React.useState<string | null>(null);
 
 
   const { control, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<ExpenseFormValues>({
@@ -69,23 +71,31 @@ export default function NewExpensePage() {
 
   const selectedCategoryId = watch('categoryId');
 
-  const tenantsQuery = useMemoFirebase(() => {
+  // 1. Fetch user's data to get the first tenantId
+  const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'tenants'), where('ownerUid', '==', user.uid), where('status', '==', 'active'));
+    return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
-  const { data: tenants } = useCollection(tenantsQuery);
-  const activeTenant = tenants?.[0];
+  const { data: userData } = useDoc<UserType>(userDocRef);
+
+  // Set tenantId only after we have the user document
+  React.useEffect(() => {
+    if (userData?.tenantIds && userData.tenantIds.length > 0) {
+      setTenantId(userData.tenantIds[0]);
+    }
+  }, [userData]);
+
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant?.id) return null;
-    return query(collection(firestore, 'categories'), where('tenantId', '==', activeTenant.id));
-  }, [firestore, activeTenant?.id]);
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
   const { data: categories } = useCollection<Category>(categoriesQuery);
 
   const subcategoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant?.id) return null;
-    return query(collection(firestore, 'subcategories'), where('tenantId', '==', activeTenant.id));
-  }, [firestore, activeTenant?.id]);
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'subcategories'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
   const { data: allSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -106,7 +116,7 @@ export default function NewExpensePage() {
 
   const handleReceiptChange = async (files: FileList | null) => {
     const file = files?.[0];
-    if (!file || !user || !activeTenant || !categoriesForAI) return;
+    if (!file || !user || !tenantId || !categoriesForAI) return;
 
     if (file.size > 1024 * 1024) {
       toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 1MB.' });
@@ -126,7 +136,7 @@ export default function NewExpensePage() {
 
         const fileType = file.type.startsWith('image/') ? 'image' : 'pdf';
         
-        const result = await processReceiptAction(base64String, activeTenant.id, user.uid, fileType, categoriesForAI);
+        const result = await processReceiptAction(base64String, tenantId, user.uid, fileType, categoriesForAI);
         
         setIsProcessingReceipt(false);
 
@@ -187,7 +197,7 @@ export default function NewExpensePage() {
   };
   
   const onSubmit = async (data: ExpenseFormValues) => {
-    if (!activeTenant || !user || !firestore) {
+    if (!tenantId || !user || !firestore) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
         return;
     }
@@ -200,14 +210,14 @@ export default function NewExpensePage() {
         // 1. Handle Entity
         if (data.entityCuit) {
             const entitiesRef = collection(firestore, 'entities');
-            const q = query(entitiesRef, where('tenantId', '==', activeTenant.id), where('cuit', '==', data.entityCuit));
+            const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', data.entityCuit));
             const entitySnapshot = await getDocs(q);
 
             if (entitySnapshot.empty) {
                 const newEntityRef = doc(collection(firestore, 'entities'));
                 batch.set(newEntityRef, {
                     id: newEntityRef.id,
-                    tenantId: activeTenant.id,
+                    tenantId: tenantId,
                     cuit: data.entityCuit,
                     razonSocial: data.entityName,
                     tipo: 'comercio',
@@ -224,7 +234,7 @@ export default function NewExpensePage() {
              const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
              batch.set(newReceiptRef, {
                 id: newReceiptRef.id,
-                tenantId: activeTenant.id,
+                tenantId: tenantId,
                 userId: user.uid,
                 expenseId: newExpenseRef.id,
                 base64Content: receiptBase64,
@@ -237,7 +247,7 @@ export default function NewExpensePage() {
         // 3. Handle Expense
         batch.set(newExpenseRef, {
             id: newExpenseRef.id,
-            tenantId: activeTenant.id,
+            tenantId: tenantId,
             userId: user.uid,
             date: data.date.toISOString(),
             amount: data.amount,
@@ -466,6 +476,8 @@ export default function NewExpensePage() {
 
     
 
+
+    
 
     
 
