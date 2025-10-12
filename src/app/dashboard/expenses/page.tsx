@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -67,9 +66,12 @@ export default function ExpensesPage() {
     React.useEffect(() => {
         if (membership) {
             setUserRole(membership.role);
-        } else if (!isLoadingMembership && tenantId && userData?.ownerUid === user?.uid) {
-             // Fallback for owner before membership might be read
-             setUserRole('owner');
+        } else if (!isLoadingMembership && tenantId && user?.uid && userData?.tenantIds?.includes(tenantId)) {
+             // Heuristic: If userDoc says they are part of the tenant, they are at least a member.
+             // This might not be fully accurate if the membership document is somehow deleted, but it's a safe fallback.
+             // The owner check is more robust.
+             const isOwner = userData.uid === user.uid; // Simple owner check based on uid.
+             setUserRole(isOwner ? 'owner' : 'member');
         }
     }, [membership, isLoadingMembership, tenantId, userData, user]);
     
@@ -132,7 +134,7 @@ export default function ExpensesPage() {
 
 
     const tableData = React.useMemo(() => {
-        if (!expenses || !categories || !subcategories) return [];
+        if (!expenses || !categories || !subcategories) return null;
 
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
@@ -177,13 +179,13 @@ export default function ExpensesPage() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                        {isLoading ? (
+                        {isLoading || !tableData || !categories ? (
                             <div className="text-center p-8">Cargando gastos...</div>
                         ) : (
                             <DataTable 
                                     columns={columns} 
                                     data={tableData}
-                                    categories={categories || []}
+                                    categories={categories}
                                     onDelete={handleOpenDeleteDialog}
                                 />
                         )}
