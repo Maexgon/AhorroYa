@@ -77,15 +77,15 @@ export default function NewExpensePage() {
   const activeTenant = tenants?.[0];
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
+    if (!firestore || !activeTenant?.id) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', activeTenant.id));
-  }, [firestore, activeTenant]);
+  }, [firestore, activeTenant?.id]);
   const { data: categories } = useCollection<Category>(categoriesQuery);
 
   const subcategoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !activeTenant) return null;
+    if (!firestore || !activeTenant?.id) return null;
     return query(collection(firestore, 'subcategories'), where('tenantId', '==', activeTenant.id));
-  }, [firestore, activeTenant]);
+  }, [firestore, activeTenant?.id]);
   const { data: allSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -463,5 +463,8 @@ export default function NewExpensePage() {
       </main>
     </div>
   );
+
+    
+
 
     
