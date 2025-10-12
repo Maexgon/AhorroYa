@@ -101,7 +101,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if isSignedIn() && isTenantOwner(tenantId);
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(tenantId);
     }
 
     /**
@@ -118,7 +118,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isTenantOwner(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantOwner(resource.data.tenantId);
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -135,7 +135,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isTenantOwner(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantOwner(resource.data.tenantId);
-      allow delete: if isTenantOwner(resource.data.tenantId) || isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -151,8 +151,8 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if false;
       allow create: if isOwner(userId) && request.resource.data.uid == request.auth.uid;
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId) || isSuperAdmin();
+      allow update: if isOwner(userId) && request.resource.data.uid == request.auth.uid;
+      allow delete: if isOwner(userId) && request.resource.data.uid == request.auth.uid;
     }
 
     /**
@@ -179,8 +179,8 @@ service cloud.firestore {
     match /fx_rates/{fxRateId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
-      allow delete: if isSuperAdmin();
+      allow update: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -196,7 +196,7 @@ service cloud.firestore {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -212,7 +212,7 @@ service cloud.firestore {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
-       allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -225,11 +225,10 @@ service cloud.firestore {
      * @principle Enforces tenant membership for writes and authenticated access for reads.
      */
     match /entities/{entityId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -246,7 +245,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid;
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -263,7 +262,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -280,7 +279,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -297,7 +296,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid;
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
 
     /**
@@ -308,7 +307,8 @@ service cloud.firestore {
      * @principle Provides public read access to receipt fingerprint data.
      */
     match /receipts_fingerprints/{receiptFingerprintId} {
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       allow create: if false;
       allow update: if false;
       allow delete: if false;
@@ -321,14 +321,13 @@ service cloud.firestore {
      * @deny (create) User attempts to create an audit log for a tenant they are not a member of.
      * @allow (get, list) Any authenticated user can read audit logs.
      * @deny (update) User attempts to update an audit log for a tenant they are not a member of.
-     * @principle Enforces tenant membership for writes and authenticated access for reads.
      */
     match /audit_logs/{auditLogId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
       allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
-      allow delete: if isSuperAdmin();
+      allow delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
     }
   }
 }
