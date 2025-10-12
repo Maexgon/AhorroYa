@@ -67,26 +67,23 @@ export default function ExpensesPage() {
     React.useEffect(() => {
         if (membership) {
             setUserRole(membership.role);
-        } else if (!isLoadingMembership && tenantId) {
-             // Fallback for owner before membership might be read, assuming the first tenant is owned
+        } else if (!isLoadingMembership && tenantId && userData?.ownerUid === user?.uid) {
+             // Fallback for owner before membership might be read
              setUserRole('owner');
         }
-    }, [membership, isLoadingMembership, tenantId]);
+    }, [membership, isLoadingMembership, tenantId, userData, user]);
     
     // 4. Fetch Expenses, which depends on tenantId and userRole
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId || !userRole || !user) return null;
         
+        const baseQuery = query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
+
         if (userRole === 'owner' || userRole === 'admin') {
-             return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
+             return baseQuery;
         }
         
-        return query(
-            collection(firestore, 'expenses'), 
-            where('tenantId', '==', tenantId), 
-            where('userId', '==', user.uid),
-            where('deleted', '==', false)
-        );
+        return query(baseQuery, where('userId', '==', user.uid));
 
     }, [firestore, tenantId, userRole, user]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
