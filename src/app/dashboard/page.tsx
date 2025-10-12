@@ -75,27 +75,15 @@ function OwnerDashboard() {
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
     const firstTenantId = userData?.tenantIds?.[0];
 
-    // 2. Fetch the membership document directly using the correct ID format: {tenantId}_{uid}
-    const membershipDocRef = useMemoFirebase(() => {
-        if (!firestore || !user || !firstTenantId) return null;
-        const membershipId = `${firstTenantId}_${user.uid}`;
-        return doc(firestore, 'memberships', membershipId);
-    }, [firestore, user, firstTenantId]);
-    const { data: membership, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
-
-
-    // 3. Set the active tenantId from the user's membership
+    // Set the active tenantId from the user's document
     useEffect(() => {
-        if (membership) {
-            setTenantId(membership.tenantId);
-        } else if (!isLoadingMembership && firstTenantId) {
-            // Fallback for owner: tenantId might be available from user doc before membership is confirmed
+        if (firstTenantId) {
             setTenantId(firstTenantId);
         }
-    }, [membership, isLoadingMembership, firstTenantId]);
+    }, [firstTenantId]);
 
 
-  // 4. Fetch tenant document using the derived tenantId
+  // Fetch tenant document using the derived tenantId
   const tenantRef = useMemoFirebase(() => {
     if (!firestore || !tenantId) return null;
     return doc(firestore, 'tenants', tenantId);
@@ -122,7 +110,7 @@ function OwnerDashboard() {
   const { data: membershipsData } = useCollection<Membership>(membershipsForTenantQuery);
 
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingMembership;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading;
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -493,3 +481,6 @@ export default function DashboardPageContainer() {
   );
 }
 
+
+
+    
