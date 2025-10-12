@@ -39,7 +39,7 @@ export default function ExpensesPage() {
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-    // 1. Fetch user's data to get tenantId
+    // 1. Fetch user's data to get tenantIds
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
@@ -50,7 +50,6 @@ export default function ExpensesPage() {
     // 2. Fetch the membership document directly
     const membershipDocRef = useMemoFirebase(() => {
         if (!firestore || !user || !firstTenantId) return null;
-        // The ID is now uid_tenantId as per the new rules
         const membershipId = `${user.uid}_${firstTenantId}`;
         return doc(firestore, 'memberships', membershipId);
     }, [firestore, user, firstTenantId]);
@@ -225,5 +224,3 @@ export default function ExpensesPage() {
         </>
     );
 }
-
-    

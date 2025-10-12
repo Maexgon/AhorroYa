@@ -67,7 +67,7 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
-  // 1. Fetch user's data to get tenantId
+  // 1. Fetch user's data to get tenantIds
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
@@ -78,7 +78,6 @@ function OwnerDashboard() {
     // 2. Fetch the membership document directly
     const membershipDocRef = useMemoFirebase(() => {
         if (!firestore || !user || !firstTenantId) return null;
-        // The ID is now uid_tenantId as per the new rules
         const membershipId = `${user.uid}_${firstTenantId}`;
         return doc(firestore, 'memberships', membershipId);
     }, [firestore, user, firstTenantId]);
@@ -89,8 +88,11 @@ function OwnerDashboard() {
     useEffect(() => {
         if (membership) {
             setTenantId(membership.tenantId);
+        } else if (!isLoadingMembership && firstTenantId) {
+            // Fallback for owner: tenantId might be available from user doc before membership is confirmed
+            setTenantId(firstTenantId);
         }
-    }, [membership]);
+    }, [membership, isLoadingMembership, firstTenantId]);
 
 
   // 4. Fetch tenant document using the derived tenantId
@@ -490,5 +492,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
