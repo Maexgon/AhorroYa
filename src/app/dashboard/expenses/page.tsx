@@ -29,7 +29,7 @@ import { deleteExpenseAction } from './actions';
 import { useDoc } from '@/firebase/firestore/use-doc';
 
 export default function ExpensesPage() {
-    const { user } = useUser();
+    const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
     const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
@@ -39,44 +39,48 @@ export default function ExpensesPage() {
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-    // 1. Fetch user's data to get tenantIds
+    // 1. Fetch user's data to get the first tenantId
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-    const firstTenantId = userData?.tenantIds?.[0];
+    
+    // Set tenantId only after we have the user document
+    React.useEffect(() => {
+        if (userData?.tenantIds && userData.tenantIds.length > 0) {
+            setTenantId(userData.tenantIds[0]);
+        }
+    }, [userData]);
 
-    // 2. Fetch the membership document directly using the correct ID format: {tenantId}_{uid}
+
+    // 2. Fetch the membership document, which depends on tenantId being set
     const membershipDocRef = useMemoFirebase(() => {
-        if (!firestore || !user || !firstTenantId) return null;
-        const membershipId = `${firstTenantId}_${user.uid}`;
+        if (!firestore || !user || !tenantId) return null;
+        const membershipId = `${tenantId}_${user.uid}`;
         return doc(firestore, 'memberships', membershipId);
-    }, [firestore, user, firstTenantId]);
+    }, [firestore, user, tenantId]);
     const { data: membership, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
 
 
-    // 3. Set the active tenantId and role from the user's membership
+    // 3. Set the userRole from the membership document
     React.useEffect(() => {
         if (membership) {
-            setTenantId(membership.tenantId);
             setUserRole(membership.role);
-        } else if (!isLoadingMembership && firstTenantId) {
-             setTenantId(firstTenantId); // Fallback for owner before membership might be read
+        } else if (!isLoadingMembership && tenantId) {
+             // Fallback for owner before membership might be read, assuming the first tenant is owned
+             setUserRole('owner');
         }
-    }, [membership, isLoadingMembership, firstTenantId]);
+    }, [membership, isLoadingMembership, tenantId]);
     
-    // 4. Fetch Expenses based on user role
+    // 4. Fetch Expenses, which depends on tenantId and userRole
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !user) return null;
+        if (!firestore || !tenantId || !userRole || !user) return null;
         
-        // Admins and owners see all tenant expenses. Members see only their own.
-        // The security rules will enforce this, but we can optimize the query.
         if (userRole === 'owner' || userRole === 'admin') {
              return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
         }
         
-        // Members only see their own non-deleted expenses
         return query(
             collection(firestore, 'expenses'), 
             where('tenantId', '==', tenantId), 
@@ -87,14 +91,14 @@ export default function ExpensesPage() {
     }, [firestore, tenantId, userRole, user]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
-    // Fetch Categories for the tenant
+    // Fetch Categories, depends on tenantId
     const categoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-    // Fetch Subcategories for the tenant
+    // Fetch Subcategories, depends on tenantId
     const subcategoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'subcategories'), where('tenantId', '==', tenantId));
@@ -119,7 +123,6 @@ export default function ExpensesPage() {
 
         if (result.success) {
             toast({ title: 'Gasto eliminado', description: 'El gasto ha sido marcado como eliminado.' });
-            // Optimistically update the UI
             if (expenses && setExpenses) {
                 setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
             }
@@ -131,7 +134,6 @@ export default function ExpensesPage() {
     };
 
 
-    // Combine data for the table
     const tableData = React.useMemo(() => {
         if (!expenses || !categories || !subcategories) return [];
 
@@ -145,7 +147,7 @@ export default function ExpensesPage() {
         }));
     }, [expenses, categories, subcategories]);
 
-    const isLoading = isUserDocLoading || isLoadingMembership || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
+    const isLoading = isAuthLoading || isUserDocLoading || isLoadingMembership || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
 
     return (
         <>
