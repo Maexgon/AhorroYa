@@ -75,10 +75,10 @@ function OwnerDashboard() {
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
     const firstTenantId = userData?.tenantIds?.[0];
 
-    // 2. Fetch the membership document directly
+    // 2. Fetch the membership document directly using the correct ID format: {tenantId}_{uid}
     const membershipDocRef = useMemoFirebase(() => {
         if (!firestore || !user || !firstTenantId) return null;
-        const membershipId = `${user.uid}_${firstTenantId}`;
+        const membershipId = `${firstTenantId}_${user.uid}`;
         return doc(firestore, 'memberships', membershipId);
     }, [firestore, user, firstTenantId]);
     const { data: membership, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);

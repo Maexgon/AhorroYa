@@ -84,7 +84,7 @@ export default function RegisterPage() {
 
       const userRef = doc(firestore, "users", user.uid);
       const tenantRef = doc(firestore, "tenants", crypto.randomUUID());
-      const membershipRef = doc(firestore, "memberships", `${user.uid}_${tenantRef.id}`);
+      const membershipRef = doc(firestore, "memberships", `${tenantRef.id}_${user.uid}`);
       
       const userData = {
         uid: user.uid,
