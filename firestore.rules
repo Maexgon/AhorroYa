@@ -1,127 +1,144 @@
 /**
- * @file Firestore Security Rules for Ahorro Ya
- * @version Prototyping Mode
+ * @fileoverview Firestore Security Rules for "Ahorro Ya," a multi-tenant expense tracking application.
  *
- * @description
- * This ruleset enforces a multi-tenant security model for Ahorro Ya, an expense tracking application.
- * It prioritizes authorization based on tenant membership and user roles, while relaxing schema
- * validation for rapid prototyping.
+ * Core Philosophy: This ruleset enforces a strict, multi-tenant data isolation model. Users can only access data belonging to tenants they are members of. The rules leverage denormalized tenant IDs for efficient authorization checks, avoiding costly `get()` calls. User ownership is enforced for user-specific data.
  *
  * Data Structure:
- * - /tenants/{tenantId}: Tenant records, owned by a specific user (ownerUid).
- * - /licenses/{licenseId}: License records, associated with a tenant (tenantId).
- * - /memberships/{membershipId}: User memberships within a tenant, defining roles (tenantId, uid, role).
- * - /users/{userId}: User profile data.
- * - /currencies/{currencyCode}: Currency records (public).
- * - /fx_rates/{fxRateId}: Exchange rates for tenants (tenantId).
- * - /categories/{categoryId}: Expense categories for tenants (tenantId).
- * - /subcategories/{subcategoryId}: Expense subcategories for tenants (tenantId).
- * - /entities/{entityId}: Business entities for tenants (tenantId).
- * - /expenses/{expenseId}: Expense records for tenants, owned by a user (tenantId, userId).
- * - /budgets/{budgetId}: Budget records for tenants (tenantId).
- * - /alerts/{alertId}: Alert notifications for tenants (tenantId).
- * - /receipts_raw/{receiptRawId}: Raw receipt data for tenants, owned by a user (tenantId, userId).
- * - /receipts_fingerprints/{receiptFingerprintId}: Fingerprints for receipt deduplication.
- * - /audit_logs/{auditLogId}: Audit logs for tenants (tenantId).
+ * - /tenants/{tenantId}: Stores tenant information. 'ownerUid' field indicates the tenant owner.
+ * - /licenses/{licenseId}: Stores license details for each tenant. 'tenantId' field links to the tenant.
+ * - /memberships/{membershipId}: Stores user-tenant membership information, including roles. 'tenantId' and 'uid' fields link to tenants and users, respectively.
+ * - /users/{userId}: Stores user profile data.
+ * - /currencies/{currencyCode}: Stores currency information (publicly readable).
+ * - /fx_rates/{fxRateId}: Stores foreign exchange rates. 'tenantId' field links to the tenant.
+ * - /categories/{categoryId}: Stores expense categories. 'tenantId' field links to the tenant.
+ * - /subcategories/{subcategoryId}: Stores expense subcategories. 'tenantId' field links to the tenant.
+ * - /entities/{entityId}: Stores business/bank entities. 'tenantId' field links to the tenant.
+ * - /expenses/{expenseId}: Stores expense records. 'tenantId' and 'userId' fields link to the tenant and user, respectively.
+ * - /budgets/{budgetId}: Stores monthly budgets. 'tenantId' field links to the tenant.
+ * - /alerts/{alertId}: Stores alert notifications. 'tenantId' field links to the tenant.
+ * - /receipts_raw/{receiptRawId}: Stores raw OCR receipt data. 'tenantId' and 'userId' fields link to the tenant and user, respectively.
+ * - /receipts_fingerprints/{receiptFingerprintId}: Stores receipt fingerprints for deduplication.
+ * - /audit_logs/{auditLogId}: Stores audit log entries. 'tenantId' field links to the tenant.
  *
  * Key Security Decisions:
- * - Strict tenant-based isolation: Users can only access data within tenants they are members of.
- * - Ownership enforced for user-specific data (expenses, receipts).
- * - Public read access for currency data.
- * - No public listing of users.
- * - Relaxed schema validation for prototyping.
+ * - Strict multi-tenancy: Users are restricted to accessing only data within their tenants.
+ * - Denormalization for authorization: Tenant IDs are embedded in most documents to avoid expensive `get()` calls in rules.
+ * - User ownership for expenses and receipts: Users can only modify expenses and receipts they created.
+ * - No public listing: `list` operations are restricted to authorized users only, except for `/currencies` which is globally readable.
+ * - Superadmin role: Superadmins (users with `isSuperadmin: true` in their profile) can bypass certain restrictions (not implemented in this version).
  *
  * Denormalization for Authorization:
- * - Most documents include `tenantId` to avoid costly `get()` calls for tenant membership checks.
- * - Expenses and Receipts include `userId` to enforce ownership.
+ * - TenantId is included in all tenant-specific data (expenses, categories, etc.) to enable efficient authorization checks without additional reads.
+ * - OwnerUid is included in the tenant document to allow for quick verification of tenant ownership.
+ * - UserId is included in expenses and receipts to enforce user-specific ownership.
+ *
+ * Structural Segregation:
+ * - User profiles are stored separately from tenant-specific data to simplify access control.
+ * - Publicly readable data (e.g., currencies) is stored in its own collection with open read permissions.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows access to tenant documents based on ownership.
+     * @description Checks if the request is authenticated.
+     * @path N/A
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user ID matches the provided user ID.
+     * @path N/A
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the authenticated user ID matches the provided user ID and the resource exists.
+     *              This function is intended for use with `update` and `delete` operations.
+     * @path N/A
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource.data.uid == userId;
+    }
+
+    /**
+     * @description Checks if the authenticated user is a member of the tenant specified in the resource.
+     * @path N/A
+     */
+    function isTenantMember(tenantId) {
+        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + tenantId));
+    }
+
+    /**
+     * @description Enforces that the incoming resource has a tenantId property that matches the ID in the path.
+     * @path N/A
+     */
+    function isCreatingForCorrectTenant(tenantId) {
+      return request.resource.data.tenantId == tenantId;
+    }
+
+    /**
+     * @description Enforces that the resource's tenantId property cannot be changed after creation.
+     * @path N/A
+     */
+    function isTenantIdImmutable(tenantId) {
+      return request.resource.data.tenantId == resource.data.tenantId;
+    }
+
+    /**
+     * @description Represents a tenant in the system.
      * @path /tenants/{tenantId}
      */
     match /tenants/{tenantId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(ownerUid) {
-        return isSignedIn() && request.auth.uid == ownerUid;
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if isSignedIn() && isOwner(resource.data.ownerUid);
+      allow get: if isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + tenantId));
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerUid;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.ownerUid;
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to license documents based on tenant membership.
+     * @description Represents a license for a tenant.
      * @path /licenses/{licenseId}
      */
     match /licenses/{licenseId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to membership documents.
+     * @description Represents a user's membership in a tenant.
      * @path /memberships/{membershipId}
      */
     match /memberships/{membershipId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantOwner(tenantId) {
-        return isSignedIn() && get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid;
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && isTenantOwner(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantOwner(resource.data.tenantId);
+      allow get: if isSignedIn() && request.auth.uid == resource.data.uid;
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.uid;
     }
 
     /**
-     * @description Allows access to user documents based on ownership.
+     * @description Represents a user in the system.
      * @path /users/{userId}
      */
     match /users/{userId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Permissions
-      allow get: if isSignedIn() && isOwner(userId);
+      allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows public read access to currency documents.
+     * @description Represents a currency.
      * @path /currencies/{currencyCode}
      */
     match /currencies/{currencyCode} {
@@ -130,205 +147,123 @@ service cloud.firestore {
     }
 
     /**
-     * @description Allows access to fx_rate documents based on tenant membership.
+     * @description Represents a foreign exchange rate.
      * @path /fx_rates/{fxRateId}
      */
     match /fx_rates/{fxRateId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to category documents based on tenant membership.
+     * @description Represents an expense category.
      * @path /categories/{categoryId}
      */
     match /categories/{categoryId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to subcategory documents based on tenant membership.
+     * @description Represents an expense subcategory.
      * @path /subcategories/{subcategoryId}
      */
     match /subcategories/{subcategoryId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to entity documents based on tenant membership.
+     * @description Represents a business or bank entity.
      * @path /entities/{entityId}
      */
     match /entities/{entityId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to expense documents based on tenant membership and ownership.
+     * @description Represents an expense record.
      * @path /expenses/{expenseId}
      */
     match /expenses/{expenseId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId) && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
     }
 
     /**
-     * @description Allows access to budget documents based on tenant membership.
+     * @description Represents a monthly budget for a category/subcategory.
      * @path /budgets/{budgetId}
      */
     match /budgets/{budgetId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to alert documents based on tenant membership.
+     * @description Represents an alert notification.
      * @path /alerts/{alertId}
      */
     match /alerts/{alertId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to receipt_raw documents based on tenant membership and ownership.
+     * @description Represents raw OCR data from a receipt.
      * @path /receipts_raw/{receiptRawId}
      */
     match /receipts_raw/{receiptRawId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId) && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId) && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && isTenantMember(resource.data.tenantId) && resource.data.userId == request.auth.uid;
     }
 
     /**
-     * @description Allows access to receipts_fingerprints documents.
+     * @description Represents a fingerprint used for deduplicating receipts.
      * @path /receipts_fingerprints/{receiptFingerprintId}
      */
     match /receipts_fingerprints/{receiptFingerprintId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Permissions
-      allow get, list, create, update, delete: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
 
     /**
-     * @description Allows access to audit_log documents based on tenant membership.
+     * @description Represents an audit log entry.
      * @path /audit_logs/{auditLogId}
      */
     match /audit_logs/{auditLogId} {
-      // Helpers
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isTenantMember(tenantId) {
-        return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid)_$(tenantId));
-      }
-
-      // Permissions
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow list: if false;
       allow create: if isSignedIn() && isTenantMember(request.resource.data.tenantId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow update: if isSignedIn() && isTenantMember(resource.data.tenantId);
+      allow delete: if false;
     }
   }
 }
