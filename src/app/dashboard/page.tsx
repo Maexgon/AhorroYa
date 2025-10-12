@@ -73,14 +73,13 @@ function OwnerDashboard() {
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-    const firstTenantId = userData?.tenantIds?.[0];
-
+    
     // Set the active tenantId from the user's document
     useEffect(() => {
-        if (firstTenantId) {
-            setTenantId(firstTenantId);
+        if (userData?.tenantIds && userData.tenantIds.length > 0) {
+            setTenantId(userData.tenantIds[0]);
         }
-    }, [firstTenantId]);
+    }, [userData]);
 
 
   // Fetch tenant document using the derived tenantId
@@ -480,5 +479,7 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
 
     
