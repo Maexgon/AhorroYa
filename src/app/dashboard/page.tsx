@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category, User as UserType, Expense, FxRate, Budget } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType, Expense, FxRate, Budget, Currency } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -89,8 +89,14 @@ function OwnerDashboard() {
   }, [firestore, tenantId]);
   const { data: fxRates, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
 
+  const currenciesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'currencies'));
+  }, [firestore]);
+  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates;
+
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates || isLoadingCurrencies;
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -146,8 +152,12 @@ function OwnerDashboard() {
   };
 
   const currencyConverter = useMemo(() => {
+    if (selectedCurrency === 'ARS') {
+      return (amount: number) => amount;
+    }
     const rate = fxRates?.find(r => r.code === selectedCurrency)?.rateToARS;
-    if (selectedCurrency === 'ARS' || !rate) {
+    if (!rate) {
+      // If no rate, return original amount, maybe log a warning
       return (amount: number) => amount;
     }
     return (amount: number) => amount / rate;
@@ -256,7 +266,7 @@ function OwnerDashboard() {
 
   const userOptions: { value: string; label: string; }[] = []; 
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
-  const currencyOptions = [{ code: 'ARS' }, ...(fxRates || [])];
+  const currencyOptions = currencies || [];
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -347,7 +357,7 @@ function OwnerDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
-                            <SelectItem key={c.code} value={c.code}>{c.code}</SelectItem>
+                            <SelectItem key={c.code} value={c.code}>{c.name} ({c.code})</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
