@@ -32,13 +32,17 @@ const budgetFormSchema = z.object({
 type BudgetFormValues = z.infer<typeof budgetFormSchema>;
 
 export default function NewBudgetPage() {
+  console.log("NewBudgetPage: Component rendering");
   const router = useRouter();
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
+  console.log("NewBudgetPage: useUser hook state", { user: !!user, isUserLoading });
   const firestore = useFirestore();
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(null);
+  console.log("NewBudgetPage: Current tenantId state:", tenantId);
+
 
   const { control, handleSubmit, formState: { errors } } = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
@@ -52,24 +56,40 @@ export default function NewBudgetPage() {
   });
 
   const userDocRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user) {
+        console.log("NewBudgetPage: userDocRef not created (no firestore or user)");
+        return null;
+    }
+    console.log("NewBudgetPage: Creating userDocRef for user:", user.uid);
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
 
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+  console.log("NewBudgetPage: useDoc<UserType> hook state", { userData: !!userData, isUserDocLoading });
+
 
   React.useEffect(() => {
+    console.log("NewBudgetPage: useEffect for setting tenantId triggered. userData:", userData);
     if (userData?.tenantIds && userData.tenantIds.length > 0) {
+      console.log("NewBudgetPage: Setting tenantId from userData:", userData.tenantIds[0]);
       setTenantId(userData.tenantIds[0]);
+    } else {
+        console.log("NewBudgetPage: Not setting tenantId, userData is not ready or has no tenantIds");
     }
   }, [userData]);
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
+    if (!firestore || !tenantId) {
+        console.log("NewBudgetPage: categoriesQuery not created (no firestore or tenantId)");
+        return null;
+    }
+    console.log("NewBudgetPage: CREATING categories query for tenantId:", tenantId);
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
   }, [firestore, tenantId]);
 
   const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useCollection<Category>(categoriesQuery);
+  console.log("NewBudgetPage: useCollection<Category> hook state", { hasCategories: !!categories, isLoadingCategories, categoriesError });
+
 
   const onSubmit = async (data: BudgetFormValues) => {
     if (!tenantId || !user || !firestore) {
@@ -117,6 +137,8 @@ export default function NewBudgetPage() {
   const years = Array.from({length: 5}, (_, i) => currentYear + i);
 
   const isLoading = isUserDocLoading || isLoadingCategories || isUserLoading;
+  console.log("NewBudgetPage: Final isLoading check:", isLoading);
+
 
   if (isLoading) {
     return (
