@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -40,7 +39,6 @@ export default function NewBudgetPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(null);
 
-
   const { control, handleSubmit, formState: { errors } } = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
     defaultValues: {
@@ -59,17 +57,18 @@ export default function NewBudgetPage() {
 
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-
   React.useEffect(() => {
     if (userData?.tenantIds && userData.tenantIds.length > 0) {
       setTenantId(userData.tenantIds[0]);
     }
   }, [userData]);
+  
+  const ready = !!firestore && !!user && !isUserLoading && !!tenantId;
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
+    if (!ready) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-  }, [firestore, tenantId]);
+  }, [ready, firestore, tenantId]);
 
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
@@ -119,7 +118,7 @@ export default function NewBudgetPage() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 5}, (_, i) => currentYear + i);
 
-  const isLoading = isUserLoading || isUserDocLoading || (user && !tenantId) || isLoadingCategories;
+  const isLoading = isUserLoading || isUserDocLoading || (user && !tenantId) || (ready && isLoadingCategories);
 
   if (isLoading) {
     return (
