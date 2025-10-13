@@ -224,13 +224,13 @@ function OwnerDashboard() {
             </Card>
         )}
 
-        <div className="space-x-2">
-            <Button asChild className='w-full md:w-auto'>
+        <div className="flex flex-wrap gap-2">
+            <Button asChild>
                 <Link href="/dashboard/budget">
                     <Plus className="mr-2 h-4 w-4" /> Ver Presupuesto
                 </Link>
             </Button>
-            <Button asChild className='w-full md:w-auto'>
+            <Button asChild>
                 <Link href="/dashboard/expenses">
                     <Plus className="mr-2 h-4 w-4" /> Ver Gastos
                 </Link>
