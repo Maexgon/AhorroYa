@@ -23,72 +23,45 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
 export default function BudgetPage() {
-    console.log('BudgetPage: Component rendering');
     const { user, isUserLoading: isAuthLoading } = useUser();
-    console.log('BudgetPage: useUser hook state', { user: !!user, isAuthLoading });
     const firestore = useFirestore();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
-    console.log('BudgetPage: Current tenantId state:', tenantId);
 
     // Step 1: Get User document to derive tenantId
     const userDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) {
-            console.log('BudgetPage: userDocRef not created (no firestore or user)');
-            return null;
-        };
-        console.log('BudgetPage: Creating userDocRef for user:', user.uid);
+        if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
 
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-    console.log('BudgetPage: useDoc<UserType> hook state', { userData: !!userData, isUserDocLoading });
 
     React.useEffect(() => {
-        console.log('BudgetPage: useEffect for setting tenantId triggered. userData:', userData);
         if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            console.log('BudgetPage: Setting tenantId from userData:', userData.tenantIds[0]);
             setTenantId(userData.tenantIds[0]);
-        } else {
-            console.log('BudgetPage: Not setting tenantId, userData is not ready or has no tenantIds');
         }
     }, [userData]);
 
 
     // Step 2: Create queries ONLY when tenantId is available
     const budgetsQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) {
-            console.log('BudgetPage: budgetsQuery not created (no firestore or tenantId)');
-            return null;
-        }
-        console.log('BudgetPage: CREATING budgets query for tenantId:', tenantId);
+        if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
-    const { data: budgets, isLoading: isLoadingBudgets, error: budgetsError } = useCollection<Budget>(budgetsQuery);
-    console.log('BudgetPage: useCollection<Budget> hook state', { hasBudgets: !!budgets, isLoadingBudgets, budgetsError });
+    const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
 
     const categoriesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) {
-            console.log('BudgetPage: categoriesQuery not created (no firestore or tenantId)');
-            return null;
-        }
-        console.log('BudgetPage: CREATING categories query for tenantId:', tenantId);
+        if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
     }, [firestore, tenantId]);
-    const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useCollection<Category>(categoriesQuery);
-    console.log('BudgetPage: useCollection<Category> hook state', { hasCategories: !!categories, isLoadingCategories, categoriesError });
+    const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) {
-            console.log('BudgetPage: expensesQuery not created (no firestore or tenantId)');
-            return null;
-        }
-        console.log('BudgetPage: CREATING expenses query for tenantId:', tenantId);
+        if (!firestore || !tenantId) return null;
         // This query needs to be filtered by tenantId to be secure
         return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
-    const { data: expenses, isLoading: isLoadingExpenses, error: expensesError } = useCollection<Expense>(expensesQuery);
-    console.log('BudgetPage: useCollection<Expense> hook state', { hasExpenses: !!expenses, isLoadingExpenses, expensesError });
+    const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
 
     // Step 3: Memoize the derived data for the table
@@ -120,7 +93,6 @@ export default function BudgetPage() {
     
     // Unified loading state that respects the data dependency chain
     const isLoading = isAuthLoading || isUserDocLoading || (user && !tenantId) || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
-    console.log('BudgetPage: Final isLoading check:', isLoading);
 
     if (isLoading) {
         return (
@@ -212,5 +184,3 @@ export default function BudgetPage() {
         </div>
     );
 }
-
-    
