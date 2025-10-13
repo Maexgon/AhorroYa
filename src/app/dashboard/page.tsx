@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category, User as UserType } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType, Expense, FxRate, Budget } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -27,37 +27,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
-
-
-// Membership now includes displayName
-interface MembershipWithDisplayName extends Membership {
-    displayName: string;
-}
-
-const barData = [
-  { name: "Comida", total: 48900 },
-  { name: "Transporte", total: 18750 },
-  { name: "Vivienda", total: 125000 },
-  { name: "Ocio", total: 32500 },
-  { name: "Compras", total: 21000 },
-];
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
-
-const recentExpenses = [
-  { icon: Utensils, entity: "Don Julio", category: "Restaurantes", amount: 25500 },
-  { icon: ShoppingCart, entity: "Supermercado Coto", category: "Supermercado", amount: 18345 },
-  { icon: Bus, entity: "SUBE", category: "Transporte", amount: 1500 },
-  { icon: Film, entity: "Cine Hoyts", category: "Ocio", amount: 9800 },
-  { icon: Home, entity: "Alquiler Depto", category: "Vivienda", amount: 125000 },
-];
-
-const budgets = [
-    { name: "Comida", spent: 48900, total: 60000, color: "bg-green-500" },
-    { name: "Transporte", spent: 18750, total: 20000, color: "bg-blue-500" },
-    { name: "Ocio", spent: 32500, total: 30000, color: "bg-red-500" },
-    { name: "Vivienda", spent: 125000, total: 125000, color: "bg-yellow-500" },
-];
 
 
 function OwnerDashboard() {
@@ -67,14 +39,12 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
-  // 1. Fetch user's data to get tenantIds
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
     
-    // Set the active tenantId from the user's document
     useEffect(() => {
         if (userData?.tenantIds && userData.tenantIds.length > 0) {
             setTenantId(userData.tenantIds[0]);
@@ -82,7 +52,6 @@ function OwnerDashboard() {
     }, [userData]);
 
 
-  // Fetch tenant document using the derived tenantId
   const tenantRef = useMemoFirebase(() => {
     if (!firestore || !tenantId) return null;
     return doc(firestore, 'tenants', tenantId);
@@ -102,7 +71,26 @@ function OwnerDashboard() {
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading;
+  const expensesQuery = useMemoFirebase(() => {
+    if (!firestore || !tenantId || !user) return null;
+    return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
+  }, [firestore, tenantId, user]);
+  const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
+
+  const budgetsQuery = useMemoFirebase(() => {
+      if (!firestore || !tenantId) return null;
+      return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
+
+  const fxRatesQuery = useMemoFirebase(() => {
+      if (!firestore || !tenantId) return null;
+      return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: fxRates, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
+
+
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates;
 
 
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -112,6 +100,7 @@ function OwnerDashboard() {
   
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedCurrency, setSelectedCurrency] = useState('ARS');
 
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -148,7 +137,6 @@ function OwnerDashboard() {
 
         await batch.commit();
         toast({ title: '¡Éxito!', description: 'Las categorías por defecto han sido creadas. La página se refrescará.' });
-        // The useCollection hook will automatically pick up the new categories.
     } catch (error) {
         console.error("Error seeding categories:", error);
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron crear las categorías.' });
@@ -156,6 +144,104 @@ function OwnerDashboard() {
         setIsSeeding(false);
     }
   };
+
+  const currencyConverter = useMemo(() => {
+    const rate = fxRates?.find(r => r.code === selectedCurrency)?.rateToARS;
+    if (selectedCurrency === 'ARS' || !rate) {
+      return (amount: number) => amount;
+    }
+    return (amount: number) => amount / rate;
+  }, [selectedCurrency, fxRates]);
+
+  const formatCurrency = useMemo(() => {
+    return (amount: number) => {
+      return new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency: selectedCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    }
+  }, [selectedCurrency]);
+
+  const filteredExpenses = useMemo(() => {
+    if (!expenses) return [];
+    return expenses.filter(expense => {
+        const expenseDate = new Date(expense.date);
+        const fromDate = date?.from ? new Date(date.from.setHours(0, 0, 0, 0)) : null;
+        const toDate = date?.to ? new Date(date.to.setHours(23, 59, 59, 999)) : null;
+
+        if (fromDate && expenseDate < fromDate) return false;
+        if (toDate && expenseDate > toDate) return false;
+        if (selectedCategories.length > 0 && !selectedCategories.includes(expense.categoryId)) return false;
+        // User filter placeholder
+        return true;
+    });
+  }, [expenses, date, selectedCategories]);
+
+
+  const barData = useMemo(() => {
+      if (!filteredExpenses || !categories) return [];
+      const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
+          const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+          if (!acc[categoryName]) {
+              acc[categoryName] = 0;
+          }
+          acc[categoryName] += expense.amountARS;
+          return acc;
+      }, {} as Record<string, number>);
+
+      return Object.entries(expenseByCategory)
+          .map(([name, total]) => ({ name, total: currencyConverter(total) }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
+
+  }, [filteredExpenses, categories, currencyConverter]);
+
+  const recentExpenses = useMemo(() => {
+      const expenseIcons: { [key: string]: React.ElementType } = {
+          default: Sparkles,
+          'Comestibles': Utensils,
+          'Ropa y Accesorios': ShoppingCart,
+          'Mobilidad': Bus,
+          'Vida y Entretenimiento': Film,
+          'Vivienda': Home,
+      };
+
+      return filteredExpenses
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 5)
+          .map(expense => {
+              const categoryName = categories?.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+              return {
+                  icon: expenseIcons[categoryName] || expenseIcons.default,
+                  entity: expense.entityName || 'N/A',
+                  category: categoryName,
+                  amount: currencyConverter(expense.amountARS),
+              }
+          });
+  }, [filteredExpenses, categories, currencyConverter]);
+
+    const budgets = useMemo(() => {
+        if (!allBudgets || !expenses || !categories) return [];
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
+
+        return allBudgets
+            .filter(b => b.month === currentMonth && b.year === currentYear)
+            .map(budget => {
+                const spent = expenses
+                    .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() + 1 === budget.month && new Date(e.date).getFullYear() === budget.year)
+                    .reduce((acc, e) => acc + e.amountARS, 0);
+
+                return {
+                    name: categories.find(c => c.id === budget.categoryId)?.name || 'N/A',
+                    spent: currencyConverter(spent),
+                    total: currencyConverter(budget.amountARS),
+                };
+            }).slice(0, 4);
+    }, [allBudgets, expenses, categories, currencyConverter]);
+
 
 
   if (isLoading) {
@@ -168,9 +254,9 @@ function OwnerDashboard() {
 
   const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
 
-  const userOptions: { value: string; label: string; }[] = []; // Removed dependency on membershipsData
+  const userOptions: { value: string; label: string; }[] = []; 
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
-  const currencyOptions = [{ value: 'ARS', label: 'ARS' }, { value: 'USD', label: 'USD' }];
+  const currencyOptions = [{ code: 'ARS' }, ...(fxRates || [])];
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -255,18 +341,16 @@ function OwnerDashboard() {
                     placeholder="Categorías"
                     className="w-full"
                 />
-                 <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-left font-normal">
-                            <span>ARS</span>
-                            <ChevronDown className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                        {/* Placeholder for currency select */}
-                        <div className="p-2">ARS</div>
-                    </PopoverContent>
-                </Popover>
+                <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Moneda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {currencyOptions.map(c => (
+                            <SelectItem key={c.code} value={c.code}>{c.code}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
 
                 <Popover>
                     <PopoverTrigger asChild>
@@ -308,7 +392,7 @@ function OwnerDashboard() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Análisis de Gastos</CardTitle>
-                 <CardDescription>Resumen por categoría del último mes.</CardDescription>
+                 <CardDescription>Resumen por categoría del período seleccionado en {selectedCurrency}.</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
@@ -326,21 +410,21 @@ function OwnerDashboard() {
             <Card className="lg:col-span-3">
               <CardHeader>
                 <CardTitle>Presupuestos</CardTitle>
-                <CardDescription>Tu progreso de gastos del mes.</CardDescription>
+                <CardDescription>Tu progreso de gastos del mes en {selectedCurrency}.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
                  {budgets.map(budget => {
-                    const percentage = (budget.spent / budget.total) * 100;
+                    const percentage = budget.total > 0 ? (budget.spent / budget.total) * 100 : 0;
                     return (
                         <div key={budget.name}>
                             <div className="flex justify-between text-sm mb-1 font-medium">
                                 <span>{budget.name}</span>
                                 <span className="text-muted-foreground">
-                                    ${budget.spent.toLocaleString('es-AR')} / ${budget.total.toLocaleString('es-AR')}
+                                    {formatCurrency(budget.spent)} / {formatCurrency(budget.total)}
                                 </span>
                             </div>
                             <Progress value={percentage > 100 ? 100 : percentage} className="h-2" />
-                             {percentage > 100 && <p className="text-xs text-destructive mt-1">Excedido por ${(budget.spent - budget.total).toLocaleString('es-AR')}</p>}
+                             {percentage > 100 && <p className="text-xs text-destructive mt-1">Excedido por {formatCurrency(budget.spent - budget.total)}</p>}
                         </div>
                     )
                 })}
@@ -377,7 +461,7 @@ function OwnerDashboard() {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">{expense.category}</TableCell>
                       <TableCell className="text-right font-mono">
-                        ${expense.amount.toLocaleString('es-AR')}
+                        {formatCurrency(expense.amount)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -399,7 +483,7 @@ function OwnerDashboard() {
                         Notamos que tus gastos en <span className="text-foreground font-medium">"Ocio"</span> superaron el presupuesto.
                     </p>
                     <p className="mt-2 font-medium text-foreground">
-                        Considera reasignar <span className="text-primary">$2,500</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
+                        Considera reasignar <span className="text-primary">{formatCurrency(2500)}</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
                     </p>
                 </div>
             </CardContent>
