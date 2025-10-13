@@ -6,11 +6,10 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, doc, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, doc, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import type { Budget, Category, Expense, Subcategory, User as UserType } from '@/lib/types';
+import type { Budget, Category, Expense, User as UserType } from '@/lib/types';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import {
   Table,
@@ -26,7 +25,6 @@ import { Progress } from '@/components/ui/progress';
 export default function BudgetPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
-    const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
 
     // 1. Fetch user's data to get the first tenantId
@@ -48,19 +46,19 @@ export default function BudgetPage() {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
-    const { data: budgets, isLoading: isLoadingBudgets, error: budgetsError } = useCollection<Budget>(budgetsQuery);
+    const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
     }, [firestore, tenantId]);
-    const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useCollection<Category>(categoriesQuery);
+    const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
-    const { data: expenses, isLoading: isLoadingExpenses, error: expensesError } = useCollection<Expense>(expensesQuery);
+    const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
     const budgetData = React.useMemo(() => {
         if (!budgets || !categories || !expenses) return [];
@@ -87,8 +85,8 @@ export default function BudgetPage() {
         });
 
     }, [budgets, categories, expenses]);
-
-    const isLoading = isAuthLoading || isUserDocLoading || (!tenantId && !isUserDocLoading) || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
+    
+    const isLoading = isAuthLoading || isUserDocLoading || (user && !tenantId && !isUserDocLoading) || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
 
     if (isLoading) {
         return (
