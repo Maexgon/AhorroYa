@@ -63,12 +63,16 @@ export default function NewBudgetPage() {
     }
   }, [userData]);
   
-  const ready = !!firestore && !!user && !isUserLoading && !!tenantId;
+  const ready = !!firestore && !!user && !isUserLoading && !isUserDocLoading && !!tenantId;
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!ready) return null;
+    if (!ready) {
+      console.log('Categories listener (new page): SKIPPED (not ready)');
+      return null;
+    }
+    console.log('Categories listener (new page): ATTACHED with tenantId=', tenantId);
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-  }, [firestore, tenantId, ready]);
+  }, [firestore, ready, tenantId]);
 
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
@@ -118,9 +122,7 @@ export default function NewBudgetPage() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 5}, (_, i) => currentYear + i);
 
-  const isLoading = isUserLoading || isUserDocLoading || (user && !tenantId) || (ready && isLoadingCategories);
-
-  if (isLoading) {
+  if (!ready || isLoadingCategories) {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />

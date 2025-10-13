@@ -59,21 +59,25 @@ export function useCollection<T = any>(
   type StateDataType = ResultItemType[] | null;
 
   const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true); // Start as loading
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
     if (!memoizedTargetRefOrQuery) {
+      console.log('[useCollection] skipped listener (q=null)');
+      // If the query is null, we are not truly "loading" data, but we are also not "done".
+      // Setting isLoading to false might cause a flash of "no data" UI.
+      // Setting it to true shows a consistent loading state until `ready` is true.
+      setIsLoading(true); 
       setData(null);
-      setIsLoading(false);
       setError(null);
       return;
     }
-
+    
+    // Only set loading to true when we are actually about to fetch data.
     setIsLoading(true);
     setError(null);
 
-    // Directly use memoizedTargetRefOrQuery as it's assumed to be the final query
     const unsubscribe = onSnapshot(
       memoizedTargetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
@@ -107,9 +111,11 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
+  }, [memoizedTargetRefOrQuery]);
+
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
+    throw new Error('A query/reference passed to useCollection was not properly memoized with useMemoFirebase. This will cause infinite render loops.');
   }
+  
   return { data, isLoading, error, setData };
 }

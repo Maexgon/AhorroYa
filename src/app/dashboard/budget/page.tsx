@@ -42,21 +42,33 @@ export default function BudgetPage() {
     const ready = !!firestore && !!user && !isAuthLoading && !!tenantId;
 
     const budgetsQuery = useMemoFirebase(() => {
-        if (!ready) return null;
+        if (!ready) {
+            console.log('Budgets listener: SKIPPED (not ready)');
+            return null;
+        }
+        console.log('Budgets listener: ATTACHED with tenantId=', tenantId);
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-    }, [firestore, tenantId, ready]);
+    }, [firestore, ready, tenantId]);
     const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
-        if (!ready) return null;
+        if (!ready) {
+            console.log('Categories listener: SKIPPED (not ready)');
+            return null;
+        }
+        console.log('Categories listener: ATTACHED with tenantId=', tenantId);
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-    }, [firestore, tenantId, ready]);
+    }, [firestore, ready, tenantId]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
-        if (!ready) return null;
+        if (!ready) {
+            console.log('Expenses listener: SKIPPED (not ready)');
+            return null;
+        }
+        console.log('Expenses listener: ATTACHED with tenantId=', tenantId);
         return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId));
-    }, [firestore, tenantId, ready]);
+    }, [firestore, ready, tenantId]);
     const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
 
@@ -85,9 +97,7 @@ export default function BudgetPage() {
         });
     }, [budgets, categories, expenses]);
     
-    const isLoading = isAuthLoading || isUserDocLoading || (user && !tenantId) || (ready && (isLoadingBudgets || isLoadingCategories || isLoadingExpenses));
-
-    if (isLoading) {
+    if (!ready || isLoadingBudgets || isLoadingCategories || isLoadingExpenses) {
         return (
             <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
