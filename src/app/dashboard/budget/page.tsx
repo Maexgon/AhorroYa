@@ -31,6 +31,7 @@ export default function BudgetPage() {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
+
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
     React.useEffect(() => {
@@ -81,7 +82,7 @@ export default function BudgetPage() {
         });
     }, [budgets, categories, expenses]);
     
-    const isLoading = isAuthLoading || isUserDocLoading || (user && !tenantId) || (tenantId && (isLoadingBudgets || isLoadingCategories || isLoadingExpenses));
+    const isLoading = isAuthLoading || isUserDocLoading || (user && !tenantId) || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
 
     if (isLoading) {
         return (
