@@ -224,11 +224,18 @@ function OwnerDashboard() {
             </Card>
         )}
 
-        <Button asChild className='w-full md:w-auto'>
-            <Link href="/dashboard/expenses">
-                <Plus className="mr-2 h-4 w-4" /> Ver Gastos
-            </Link>
-        </Button>
+        <div className="space-x-2">
+            <Button asChild className='w-full md:w-auto'>
+                <Link href="/dashboard/budget">
+                    <Plus className="mr-2 h-4 w-4" /> Ver Presupuesto
+                </Link>
+            </Button>
+            <Button asChild className='w-full md:w-auto'>
+                <Link href="/dashboard/expenses">
+                    <Plus className="mr-2 h-4 w-4" /> Ver Gastos
+                </Link>
+            </Button>
+        </div>
 
 
         <div className="bg-card shadow rounded-lg p-4">
@@ -471,3 +478,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
