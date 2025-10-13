@@ -68,7 +68,7 @@ export default function NewBudgetPage() {
   const categoriesQuery = useMemoFirebase(() => {
     if (!ready) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-  }, [ready, firestore, tenantId]);
+  }, [firestore, tenantId, ready]);
 
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 

@@ -44,20 +44,19 @@ export default function BudgetPage() {
     const budgetsQuery = useMemoFirebase(() => {
         if (!ready) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-    }, [ready, firestore, tenantId]);
+    }, [firestore, tenantId, ready]);
     const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
-
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!ready) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-    }, [ready, firestore, tenantId]);
+    }, [firestore, tenantId, ready]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
         if (!ready) return null;
         return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId));
-    }, [ready, firestore, tenantId]);
+    }, [firestore, tenantId, ready]);
     const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
 
