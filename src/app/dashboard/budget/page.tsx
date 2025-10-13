@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -25,21 +24,18 @@ import { Progress } from '@/components/ui/progress';
 export default function BudgetPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
-    const [tenantId, setTenantId] = React.useState<string | null>(null);
 
+    // Step 1: Get User document to derive tenantId
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
-
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-    React.useEffect(() => {
-        if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
-        }
-    }, [userData]);
+    // Derive tenantId only when userData is available
+    const tenantId = userData?.tenantIds?.[0];
 
+    // Step 2: Create queries ONLY when tenantId is available
     const budgetsQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
@@ -54,12 +50,16 @@ export default function BudgetPage() {
     
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
+        // This query needs to be filtered by tenantId to be secure
         return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
     const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
+    // Step 3: Memoize the derived data for the table
     const budgetData = React.useMemo(() => {
+        // Ensure all required data is loaded before processing
         if (!budgets || !categories || !expenses) return [];
+        
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         
         return budgets.map(budget => {
@@ -82,6 +82,7 @@ export default function BudgetPage() {
         });
     }, [budgets, categories, expenses]);
     
+    // Unified loading state that respects the data dependency chain
     const isLoading = isAuthLoading || isUserDocLoading || (user && !tenantId) || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
 
     if (isLoading) {
