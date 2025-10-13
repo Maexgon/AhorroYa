@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -210,9 +210,11 @@ export default function NewExpensePage() {
     setIsSubmitting(true);
     toast({ title: "Procesando...", description: "Guardando el gasto." });
 
-    try {
-        const batch = writeBatch(firestore);
+    const batch = writeBatch(firestore);
+    const newExpenseRef = doc(collection(firestore, 'expenses'));
+    let writes: {path: string, data: any}[] = [];
 
+    try {
         // 1. Handle Entity
         if (data.entityCuit) {
             const entitiesRef = collection(firestore, 'entities');
@@ -221,7 +223,7 @@ export default function NewExpensePage() {
 
             if (entitySnapshot.empty) {
                 const newEntityRef = doc(collection(firestore, 'entities'));
-                batch.set(newEntityRef, {
+                const entityData = {
                     id: newEntityRef.id,
                     tenantId: tenantId,
                     cuit: data.entityCuit,
@@ -229,16 +231,16 @@ export default function NewExpensePage() {
                     tipo: 'comercio',
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
-                });
+                };
+                batch.set(newEntityRef, entityData);
+                writes.push({path: newEntityRef.path, data: entityData});
             }
         }
-        
-        const newExpenseRef = doc(collection(firestore, 'expenses'));
         
         // 2. Handle Receipt if it exists
         if (receiptBase64 && receiptFile) {
              const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
-             batch.set(newReceiptRef, {
+             const receiptData = {
                 id: newReceiptRef.id,
                 tenantId: tenantId,
                 userId: user.uid,
@@ -247,7 +249,9 @@ export default function NewExpensePage() {
                 fileType: receiptFile.type.startsWith('image/') ? 'image' : 'pdf',
                 status: 'processed',
                 createdAt: new Date().toISOString(),
-            });
+            };
+             batch.set(newReceiptRef, receiptData);
+             writes.push({path: newReceiptRef.path, data: receiptData});
         }
         
         let amountARS = data.amount;
@@ -264,7 +268,7 @@ export default function NewExpensePage() {
 
 
         // 3. Handle Expense
-        batch.set(newExpenseRef, {
+        const expenseData = {
             id: newExpenseRef.id,
             tenantId: tenantId,
             userId: user.uid,
@@ -284,7 +288,9 @@ export default function NewExpensePage() {
             deleted: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-        });
+        };
+        batch.set(newExpenseRef, expenseData);
+        writes.push({path: newExpenseRef.path, data: expenseData});
         
         await batch.commit();
 
@@ -292,8 +298,11 @@ export default function NewExpensePage() {
         router.push('/dashboard/expenses');
 
     } catch (error) {
-        console.error("Error saving expense:", error);
-        toast({ variant: 'destructive', title: 'Error al Guardar', description: 'No se pudo guardar el gasto.' });
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: 'batch-write',
+            operation: 'write',
+            requestResourceData: writes,
+        }));
     } finally {
         setIsSubmitting(false);
     }
@@ -495,3 +504,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    

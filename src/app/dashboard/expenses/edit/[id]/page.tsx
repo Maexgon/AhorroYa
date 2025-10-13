@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useFirestore, useMemoFirebase } from '@/firebase';
+import { useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -121,39 +121,42 @@ export default function EditExpensePage() {
     setIsSubmitting(true);
     toast({ title: "Procesando...", description: "Actualizando el gasto." });
 
-    try {
-        const expenseToUpdateRef = doc(firestore, 'expenses', expenseId);
-
-        let amountARS = data.amount;
-        if (data.currency !== 'ARS' && fxRates) {
-            const rate = fxRates.find(r => r.code === data.currency);
-            if (rate) {
-                amountARS = data.amount * rate.rateToARS;
-            } else {
-                toast({ variant: 'destructive', title: 'Error de Conversión', description: `No se encontró tipo de cambio para ${data.currency}.` });
-                setIsSubmitting(false);
-                return;
-            }
+    const expenseToUpdateRef = doc(firestore, 'expenses', expenseId);
+    let amountARS = data.amount;
+    if (data.currency !== 'ARS' && fxRates) {
+        const rate = fxRates.find(r => r.code === data.currency);
+        if (rate) {
+            amountARS = data.amount * rate.rateToARS;
+        } else {
+            toast({ variant: 'destructive', title: 'Error de Conversión', description: `No se encontró tipo de cambio para ${data.currency}.` });
+            setIsSubmitting(false);
+            return;
         }
-        
-
-        await updateDoc(expenseToUpdateRef, {
-            ...data,
-            date: data.date.toISOString(),
-            amountARS: amountARS,
-            subcategoryId: data.subcategoryId || null,
-            updatedAt: new Date().toISOString(),
-        });
-        
-        toast({ title: "¡Éxito!", description: "El gasto ha sido actualizado correctamente." });
-        router.push('/dashboard/expenses');
-
-    } catch (error) {
-        console.error("Error updating expense:", error);
-        toast({ variant: 'destructive', title: 'Error al Actualizar', description: 'No se pudo actualizar el gasto.' });
-    } finally {
-        setIsSubmitting(false);
     }
+    
+    const updatedData = {
+        ...data,
+        date: data.date.toISOString(),
+        amountARS: amountARS,
+        subcategoryId: data.subcategoryId || null,
+        updatedAt: new Date().toISOString(),
+    };
+
+    updateDoc(expenseToUpdateRef, updatedData)
+        .then(() => {
+            toast({ title: "¡Éxito!", description: "El gasto ha sido actualizado correctamente." });
+            router.push('/dashboard/expenses');
+        })
+        .catch((error) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: expenseToUpdateRef.path,
+                operation: 'update',
+                requestResourceData: updatedData,
+            }));
+        })
+        .finally(() => {
+            setIsSubmitting(false);
+        });
   };
 
   if (isLoadingExpense) {
@@ -329,3 +332,5 @@ export default function EditExpensePage() {
     </div>
   );
 }
+
+    

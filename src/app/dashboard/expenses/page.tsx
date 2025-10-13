@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Expense, Category, Subcategory, Membership, User as UserType } from '@/lib/types';
@@ -93,23 +93,28 @@ export default function ExpensesPage() {
     const handleDeleteExpense = async () => {
         if (!expenseToDelete || !firestore) return;
 
-        try {
-            const expenseRef = doc(firestore, 'expenses', expenseToDelete);
-            await updateDoc(expenseRef, {
-                deleted: true,
-                updatedAt: new Date().toISOString()
+        const expenseRef = doc(firestore, 'expenses', expenseToDelete);
+        const updatedData = {
+            deleted: true,
+            updatedAt: new Date().toISOString()
+        };
+
+        updateDoc(expenseRef, updatedData)
+            .then(() => {
+                toast({ title: 'Gasto eliminado', description: 'El gasto ha sido marcado como eliminado.' });
+                if (expenses && setExpenses) {
+                    setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
+                }
+                resetDeleteDialog();
+            })
+            .catch((error) => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({
+                    path: expenseRef.path,
+                    operation: 'update',
+                    requestResourceData: updatedData,
+                }));
+                resetDeleteDialog();
             });
-
-            toast({ title: 'Gasto eliminado', description: 'El gasto ha sido marcado como eliminado.' });
-            if (expenses && setExpenses) {
-                setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
-            }
-        } catch (error) {
-            console.error("Error deleting expense:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el gasto. Verifica tus permisos.' });
-        }
-
-        resetDeleteDialog();
     };
 
 
@@ -205,3 +210,5 @@ export default function ExpensesPage() {
         </>
     );
 }
+
+    

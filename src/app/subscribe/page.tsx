@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -50,11 +51,8 @@ export default function SubscribePage() {
 
         setIsLoading(plan.planId);
         const firestore = getFirestore();
-        let tenantId;
-        let operation: 'list' | 'write' = 'list'; // Start by assuming the read operation
-        let path: string = 'tenants';
-        let requestResourceData: any = undefined;
-
+        let requestResourceData: any[] = [];
+        
         try {
             // 1. Find the user's tenant
             const tenantsRef = collection(firestore, "tenants");
@@ -73,16 +71,11 @@ export default function SubscribePage() {
             }
 
             const tenantDoc = querySnapshot.docs[0];
-            tenantId = tenantDoc.id;
+            const tenantId = tenantDoc.id;
 
-            // Switch context for the write operation
-            operation = 'write';
-            const licenseRef = doc(firestore, "licenses", crypto.randomUUID());
-            const tenantRef = doc(firestore, "tenants", tenantId);
-            path = `batch-write(licenses/${licenseRef.id}, tenants/${tenantRef.id})`;
-
-            // 2. Create license and update tenant status in a batch
             const batch = writeBatch(firestore);
+            const licenseRef = doc(collection(firestore, "licenses"));
+            const tenantRef = doc(firestore, "tenants", tenantId);
             
             const startDate = new Date();
             const endDate = new Date();
@@ -95,21 +88,21 @@ export default function SubscribePage() {
             };
 
             const licenseData = {
+                id: licenseRef.id,
                 tenantId: tenantId,
                 plan: plan.planId,
                 status: 'active',
                 startDate: startDate.toISOString(),
                 endDate: endDate.toISOString(),
                 maxUsers: maxUsersMapping[plan.planId as keyof typeof maxUsersMapping],
-                paymentId: `sim_${crypto.randomUUID()}`, // Simulated payment ID
-                ownerUid: user.uid, // Add ownerUid to the license data
+                paymentId: `sim_${crypto.randomUUID()}`,
             };
             batch.set(licenseRef, licenseData);
+            requestResourceData.push({ path: licenseRef.path, data: licenseData });
             
             const tenantUpdateData = { status: "active" };
             batch.update(tenantRef, tenantUpdateData);
-            
-            requestResourceData = { license: licenseData, tenant: tenantUpdateData };
+            requestResourceData.push({ path: tenantRef.path, data: tenantUpdateData });
 
             await batch.commit();
 
@@ -120,10 +113,9 @@ export default function SubscribePage() {
             router.push('/dashboard');
 
         } catch (error: any) {
-            // All Firebase permission errors will be caught here
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: path,
-                operation: operation,
+             errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: 'batch-write',
+                operation: 'write',
                 requestResourceData: requestResourceData
             }));
         } finally {
@@ -183,3 +175,5 @@ export default function SubscribePage() {
         </div>
     );
 }
+
+    

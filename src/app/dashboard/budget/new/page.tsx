@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -10,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, addDoc, getDocs, orderBy, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -81,8 +82,14 @@ export default function NewBudgetPage() {
     setIsSubmitting(true);
     toast({ title: "Procesando...", description: "Guardando el presupuesto." });
 
+    const budgetsRef = collection(firestore, 'budgets');
+    const newBudgetData = {
+        ...data,
+        tenantId: tenantId,
+        rolloverFromPrevARS: 0, // Default value for now
+    };
+
     try {
-        const budgetsRef = collection(firestore, 'budgets');
         const q = query(budgetsRef, 
             where('tenantId', '==', tenantId),
             where('year', '==', data.year),
@@ -97,18 +104,17 @@ export default function NewBudgetPage() {
             return;
         }
         
-        await addDoc(budgetsRef, {
-            ...data,
-            tenantId: tenantId,
-            rolloverFromPrevARS: 0, // Default value for now
-        });
+        await addDoc(budgetsRef, newBudgetData);
 
         toast({ title: "¡Éxito!", description: "El presupuesto ha sido guardado correctamente." });
         router.push('/dashboard/budget');
 
     } catch (error) {
-        console.error("Error saving budget:", error);
-        toast({ variant: 'destructive', title: 'Error al Guardar', description: 'No se pudo guardar el presupuesto.' });
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: budgetsRef.path,
+            operation: 'create',
+            requestResourceData: newBudgetData,
+        }));
     } finally {
         setIsSubmitting(false);
     }
@@ -238,3 +244,5 @@ export default function NewBudgetPage() {
     </div>
   );
 }
+
+    
