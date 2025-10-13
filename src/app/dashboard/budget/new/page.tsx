@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, addDoc, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, addDoc, getDocs, orderBy, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -234,5 +234,3 @@ export default function NewBudgetPage() {
     </div>
   );
 }
-
-    
