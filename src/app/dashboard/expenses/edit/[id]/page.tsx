@@ -22,7 +22,7 @@ import { CalendarIcon, ArrowLeft, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import type { Category, Subcategory, Expense } from '@/lib/types';
+import type { Category, Subcategory, Expense, FxRate } from '@/lib/types';
 
 
 const expenseFormSchema = z.object({
@@ -56,7 +56,7 @@ export default function EditExpensePage() {
   }, [firestore, expenseId]);
   const { data: expenseData, isLoading: isLoadingExpense } = useDoc<Expense>(expenseRef);
 
-  const { control, handleSubmit, watch, formState: { errors }, reset } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, formState: { errors }, reset, setValue } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       entityName: '',
@@ -100,6 +100,13 @@ export default function EditExpensePage() {
     return query(collection(firestore, 'subcategories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: allSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
+  
+  const fxRatesQuery = useMemoFirebase(() => {
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: fxRates } = useCollection<FxRate>(fxRatesQuery);
+
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
     if (!allSubcategories || !selectedCategoryId) return [];
@@ -107,7 +114,7 @@ export default function EditExpensePage() {
   }, [allSubcategories, selectedCategoryId]);
 
   const onSubmit = async (data: ExpenseFormValues) => {
-     if (!firestore || !expenseId) {
+     if (!firestore || !expenseId || !tenantId) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el gasto para actualizar.' });
         return;
     }
@@ -117,9 +124,23 @@ export default function EditExpensePage() {
     try {
         const expenseToUpdateRef = doc(firestore, 'expenses', expenseId);
 
+        let amountARS = data.amount;
+        if (data.currency !== 'ARS' && fxRates) {
+            const rate = fxRates.find(r => r.code === data.currency);
+            if (rate) {
+                amountARS = data.amount * rate.rateToARS;
+            } else {
+                toast({ variant: 'destructive', title: 'Error de Conversión', description: `No se encontró tipo de cambio para ${data.currency}.` });
+                setIsSubmitting(false);
+                return;
+            }
+        }
+        
+
         await updateDoc(expenseToUpdateRef, {
             ...data,
             date: data.date.toISOString(),
+            amountARS: amountARS,
             subcategoryId: data.subcategoryId || null,
             updatedAt: new Date().toISOString(),
         });
@@ -209,30 +230,33 @@ export default function EditExpensePage() {
                             {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
                         </div>
                        
-                        <div className="space-y-2">
-                            <Label htmlFor="amount">Monto</Label>
-                            <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
-                            {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                        <div className='grid grid-cols-3 gap-4'>
+                            <div className="space-y-2 col-span-2">
+                                <Label htmlFor="amount">Monto</Label>
+                                <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
+                                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="currency">Moneda</Label>
+                                <Controller
+                                    name="currency"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ARS">ARS</SelectItem>
+                                                {fxRates?.map(rate => (
+                                                    <SelectItem key={rate.code} value={rate.code}>{rate.code}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                {errors.currency && <p className="text-sm text-destructive">{errors.currency.message}</p>}
+                            </div>
                         </div>
                         
-                        <div className="space-y-2">
-                            <Label htmlFor="currency">Moneda</Label>
-                            <Controller
-                                name="currency"
-                                control={control}
-                                render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="ARS">ARS - Peso Argentino</SelectItem>
-                                            <SelectItem value="USD">USD - Dólar Estadounidense</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                            {errors.currency && <p className="text-sm text-destructive">{errors.currency.message}</p>}
-                        </div>
-
                         <div className="space-y-2">
                             <Label htmlFor="paymentMethod">Método de Pago</Label>
                             <Controller
@@ -260,7 +284,7 @@ export default function EditExpensePage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
+                                    <Select onValueChange={(value) => { field.onChange(value); setValue('subcategoryId', ''); }} value={field.value}>
                                         <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
                                         <SelectContent>
                                             {categories?.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}

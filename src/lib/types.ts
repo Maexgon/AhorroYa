@@ -68,6 +68,7 @@ export type Entity = {
   razonSocial: string; // Business name of the entity.
   tipo: string; // Type of entity (comercio, banco, servicio, otro).
   direccion?: string; // Address of the entity (optional).
+  telefono?: string; // Phone number of the entity (optional).
   pendingCuit?: boolean; // Indicates if the CUIT is pending verification.
   createdAt: string; // Timestamp of when the entity was created.
   updatedAt: string; // Timestamp of when the entity was last updated.
@@ -119,7 +120,7 @@ export type ReceiptRaw = {
   tenantId: string; // Reference to Tenant. (Relationship: Tenant 1:N ReceiptRaw)
   userId: string; // Reference to User. (Relationship: User 1:N ReceiptRaw)
   expenseId?: string; // Reference to Expense. (Relationship: Expense 1:N ReceiptRaw)
-  ocrPayload: string; // Raw OCR payload as a JSON string.
+  ocrPayload: string; // Raw OCR payload as a JSON string from the AI service.
   parsedFields: string; // Normalized parsed fields from the OCR payload as a JSON string.
   fingerprint: string; // Fingerprint of the receipt data for deduplication.
   createdAt: string; // Timestamp of when the raw receipt data was created.

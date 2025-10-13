@@ -24,7 +24,7 @@ import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
-import type { Category, Subcategory, User as UserType } from '@/lib/types';
+import type { Category, Subcategory, User as UserType, FxRate } from '@/lib/types';
 
 
 const expenseFormSchema = z.object({
@@ -97,6 +97,12 @@ export default function NewExpensePage() {
     return query(collection(firestore, 'subcategories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: allSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
+  
+  const fxRatesQuery = useMemoFirebase(() => {
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: fxRates } = useCollection<FxRate>(fxRatesQuery);
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
     if (!allSubcategories || !selectedCategoryId) return [];
@@ -243,6 +249,19 @@ export default function NewExpensePage() {
                 createdAt: new Date().toISOString(),
             });
         }
+        
+        let amountARS = data.amount;
+        if (data.currency !== 'ARS' && fxRates) {
+            const rate = fxRates.find(r => r.code === data.currency);
+            if (rate) {
+                amountARS = data.amount * rate.rateToARS;
+            } else {
+                toast({ variant: 'destructive', title: 'Error de Conversión', description: `No se encontró tipo de cambio para ${data.currency}. No se puede guardar el gasto.` });
+                setIsSubmitting(false);
+                return;
+            }
+        }
+
 
         // 3. Handle Expense
         batch.set(newExpenseRef, {
@@ -252,7 +271,7 @@ export default function NewExpensePage() {
             date: data.date.toISOString(),
             amount: data.amount,
             currency: data.currency,
-            amountARS: data.currency === 'ARS' ? data.amount : data.amount, // TODO: Add currency conversion
+            amountARS: amountARS,
             categoryId: data.categoryId,
             subcategoryId: data.subcategoryId || null,
             entityCuit: data.entityCuit || '',
@@ -378,28 +397,30 @@ export default function NewExpensePage() {
                             {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
                         </div>
                        
-                        <div className="space-y-2">
-                            <Label htmlFor="amount">Monto</Label>
-                            <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
-                            {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                        </div>
-                        
-                        <div className="space-y-2">
-                            <Label htmlFor="currency">Moneda</Label>
-                            <Controller
-                                name="currency"
-                                control={control}
-                                render={({ field }) => (
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="ARS">ARS - Peso Argentino</SelectItem>
-                                            <SelectItem value="USD">USD - Dólar Estadounidense</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                            {errors.currency && <p className="text-sm text-destructive">{errors.currency.message}</p>}
+                        <div className='grid grid-cols-3 gap-4'>
+                            <div className="space-y-2 col-span-2">
+                                <Label htmlFor="amount">Monto</Label>
+                                <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
+                                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                            </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="currency">Moneda</Label>
+                                <Controller
+                                    name="currency"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ARS">ARS</SelectItem>
+                                                {fxRates?.map(rate => (
+                                                    <SelectItem key={rate.code} value={rate.code}>{rate.code}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                            </div>
                         </div>
 
                         <div className="space-y-2">
@@ -473,12 +494,4 @@ export default function NewExpensePage() {
       </main>
     </div>
   );
-
-    
-
-
-    
-
-    
-
-    
+}
