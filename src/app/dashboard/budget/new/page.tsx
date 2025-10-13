@@ -54,7 +54,7 @@ export default function NewBudgetPage() {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
-  const { data: userData } = useDoc<UserType>(userDocRef);
+  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
   React.useEffect(() => {
     if (userData?.tenantIds && userData.tenantIds.length > 0) {
@@ -113,12 +113,13 @@ export default function NewBudgetPage() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 5}, (_, i) => currentYear + i);
 
+  const isLoading = isUserDocLoading || isLoadingCategories;
 
-  if (isLoadingCategories) {
+  if (isLoading) {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="mt-4 text-muted-foreground">Cargando categorías...</p>
+            <p className="mt-4 text-muted-foreground">Cargando...</p>
         </div>
     )
   }
@@ -234,3 +235,4 @@ export default function NewBudgetPage() {
     </div>
   );
 }
+
