@@ -66,11 +66,7 @@ export default function NewBudgetPage() {
   const ready = !!firestore && !!user && !isUserLoading && !isUserDocLoading && !!tenantId;
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!ready) {
-      console.log('Categories listener (new page): SKIPPED (not ready)');
-      return null;
-    }
-    console.log('Categories listener (new page): ATTACHED with tenantId=', tenantId);
+    if (!ready) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
   }, [firestore, ready, tenantId]);
 

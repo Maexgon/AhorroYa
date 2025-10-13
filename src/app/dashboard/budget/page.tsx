@@ -42,33 +42,25 @@ export default function BudgetPage() {
     const ready = !!firestore && !!user && !isAuthLoading && !!tenantId;
 
     const budgetsQuery = useMemoFirebase(() => {
-        if (!ready) {
-            console.log('Budgets listener: SKIPPED (not ready)');
-            return null;
-        }
-        console.log('Budgets listener: ATTACHED with tenantId=', tenantId);
+        if (!ready) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-    }, [firestore, ready, tenantId]);
+    }, [firestore, tenantId, ready]);
     const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
-        if (!ready) {
-            console.log('Categories listener: SKIPPED (not ready)');
-            return null;
-        }
-        console.log('Categories listener: ATTACHED with tenantId=', tenantId);
+        if (!ready) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-    }, [firestore, ready, tenantId]);
+    }, [firestore, tenantId, ready]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
-        if (!ready) {
-            console.log('Expenses listener: SKIPPED (not ready)');
-            return null;
-        }
-        console.log('Expenses listener: ATTACHED with tenantId=', tenantId);
-        return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId));
-    }, [firestore, ready, tenantId]);
+        if (!ready) return null;
+        return query(
+            collection(firestore, 'expenses'), 
+            where('tenantId', '==', tenantId),
+            where('userId', '==', user!.uid)
+        );
+    }, [firestore, tenantId, ready, user]);
     const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
 
