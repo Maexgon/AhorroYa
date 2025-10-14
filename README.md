@@ -4,4 +4,4 @@ This is a NextJS starter in Firebase Studio.
 
 To get started, take a look at src/app/page.tsx.
 
-<!-- Restore point: App is functional after fixing all Firestore permission errors in budget pages. -->
+<!-- Restore point: Pre-dashboard fix after identifying rule and query inconsistencies. -->
