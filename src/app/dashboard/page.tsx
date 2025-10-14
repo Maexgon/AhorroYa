@@ -473,8 +473,8 @@ function OwnerDashboard() {
                             }}
                         />
                         <Legend />
-                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--primary))" radius={[4, 0, 0, 4]} />
-                        <Bar dataKey="Presupuestado" stackId="b" fill="hsl(var(--secondary))" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="Gastado" fill="hsl(var(--primary))" radius={4} />
+                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-2))" radius={4} />
                     </BarChart>
                 </ResponsiveContainer>
               </CardContent>
