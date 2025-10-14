@@ -46,17 +46,22 @@ function OwnerDashboard() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCurrency, setSelectedCurrency] = useState('ARS');
   
+  console.log(`[DEBUG] Dashboard Rendering. User: ${user?.uid} TenantID: ${tenantId}`);
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) {
+      console.log('[DEBUG] Skipping userDocRef: no firestore or user');
       return null;
     }
+    console.log(`[DEBUG] Creating userDocRef for user: ${user.uid}`);
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
+
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
   useEffect(() => {
     if (userData?.tenantIds && userData.tenantIds.length > 0) {
+      console.log(`[DEBUG] Setting tenantId from userData: ${userData.tenantIds[0]}`);
       setTenantId(userData.tenantIds[0]);
     }
   }, [userData]);
@@ -65,58 +70,72 @@ function OwnerDashboard() {
 
   const tenantRef = useMemoFirebase(() => {
     if (!ready) {
+      console.log('[DEBUG] Skipping tenantRef: not ready');
       return null;
     }
+    console.log(`[DEBUG] Creating tenantRef for tenant: ${tenantId}`);
     return doc(firestore, 'tenants', tenantId!);
-  }, [firestore, ready, tenantId]);
+  }, [ready, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
   const licenseQuery = useMemoFirebase(() => {
     if (!ready) {
+      console.log('[DEBUG] Skipping licenseQuery: not ready');
       return null;
     }
+    console.log(`[DEBUG] Creating licenseQuery for tenant: ${tenantId}`);
     return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
-  }, [firestore, ready, tenantId]);
+  }, [ready, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
   const categoriesQuery = useMemoFirebase(() => {
     if (!ready) {
+      console.log('[DEBUG] Skipping categoriesQuery: not ready');
       return null;
     }
+    console.log(`[DEBUG] Creating categoriesQuery for tenant: ${tenantId}`);
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
-  }, [firestore, ready, tenantId]);
+  }, [ready, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!ready) {
+      console.log('[DEBUG] Skipping expensesQuery: not ready');
       return null;
     }
+    console.log(`[DEBUG] Creating expensesQuery for tenant: ${tenantId}`);
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
-  }, [firestore, ready, tenantId]);
+  }, [ready, tenantId]);
   const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
     if (!ready) {
+      console.log('[DEBUG] Skipping budgetsQuery: not ready');
       return null;
     }
+    console.log(`[DEBUG] Creating budgetsQuery for tenant: ${tenantId}`);
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-  }, [firestore, ready, tenantId]);
+  }, [ready, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
   const fxRatesQuery = useMemoFirebase(() => {
     if (!ready) {
+      console.log('[DEBUG] Skipping fxRatesQuery: not ready');
       return null;
     }
+    console.log(`[DEBUG] Creating fxRatesQuery for tenant: ${tenantId}`);
     return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
-  }, [firestore, ready, tenantId]);
+  }, [ready, tenantId]);
   const { data: fxRates, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
 
   const currenciesQuery = useMemoFirebase(() => {
     if (!ready) {
+      console.log('[DEBUG] Skipping currenciesQuery: not ready');
       return null;
     }
+    console.log(`[DEBUG] Creating currenciesQuery for tenant: ${tenantId}`);
     return query(collection(firestore, 'currencies'));
-  }, [firestore, ready]);
+  }, [ready, tenantId]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
 
