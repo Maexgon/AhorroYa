@@ -32,7 +32,7 @@ const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3
 
 
 function OwnerDashboard() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
@@ -94,14 +94,17 @@ function OwnerDashboard() {
   }, [firestore, tenantId]);
   const { data: fxRates, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
 
+  const ready = !!firestore && !!user && !isUserLoading;
+
   const currenciesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    // We wait for the user to be ready before fetching currencies
+    if (!ready) return null;
     return query(collection(firestore, 'currencies'));
-  }, [firestore]);
+  }, [firestore, ready]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates || isLoadingCurrencies;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates || isLoadingCurrencies || isUserLoading;
   const activeLicense = licenses?.[0];
 
   const handleSeedCategories = async () => {
@@ -253,18 +256,13 @@ function OwnerDashboard() {
   
   const currencyOptions = useMemo(() => {
     if (!currencies) return [];
-    // Use a Map to filter out duplicates based on the currency code.
     const uniqueCurrencies = new Map<string, WithId<Currency>>();
-    
-    // Manually add ARS as a default, with a unique ID to avoid key conflicts.
     uniqueCurrencies.set('ARS', { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' });
-    
     currencies.forEach(c => {
         if (!uniqueCurrencies.has(c.code)) {
             uniqueCurrencies.set(c.code, c);
         }
     });
-    
     return Array.from(uniqueCurrencies.values());
   }, [currencies]);
 
@@ -583,3 +581,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
