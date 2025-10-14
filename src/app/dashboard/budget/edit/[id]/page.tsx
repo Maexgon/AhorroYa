@@ -52,7 +52,7 @@ export default function EditBudgetPage() {
   }, [firestore, budgetId]);
   const { data: budgetData, isLoading: isLoadingBudget } = useDoc<Budget>(budgetRef);
 
-  const { control, handleSubmit, formState: { errors }, reset } = useForm<BudgetFormValues>({
+  const { control, handleSubmit, formState: { errors }, reset, setValue } = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
   });
 
@@ -214,10 +214,10 @@ export default function EditBudgetPage() {
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.name}
-                                                            onSelect={() => {
-                                                                field.onChange(cat.id);
-                                                                setOpenCategoryCombobox(false);
+                                                            value={cat.id}
+                                                            onSelect={(currentValue) => {
+                                                                setValue("categoryId", currentValue === field.value ? "" : currentValue)
+                                                                setOpenCategoryCombobox(false)
                                                             }}
                                                         >
                                                             <Check

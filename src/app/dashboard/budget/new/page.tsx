@@ -229,10 +229,10 @@ export default function NewBudgetPage() {
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.name}
-                                                            onSelect={() => {
-                                                                field.onChange(cat.id);
-                                                                setOpenCategoryCombobox(false);
+                                                            value={cat.id}
+                                                            onSelect={(currentValue) => {
+                                                                setValue("categoryId", currentValue === field.value ? "" : currentValue)
+                                                                setOpenCategoryCombobox(false)
                                                             }}
                                                         >
                                                             <Check
