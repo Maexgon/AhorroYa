@@ -45,7 +45,7 @@ export default function NewBudgetPage() {
   const [openCategoryCombobox, setOpenCategoryCombobox] = React.useState(false);
 
 
-  const { control, handleSubmit, formState: { errors }, setValue, watch } = useForm<BudgetFormValues>({
+  const { control, handleSubmit, formState: { errors } } = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
     defaultValues: {
       year: new Date().getFullYear(),
@@ -231,7 +231,7 @@ export default function NewBudgetPage() {
                                                             key={cat.id}
                                                             value={cat.id}
                                                             onSelect={(currentValue) => {
-                                                                setValue("categoryId", currentValue === field.value ? "" : currentValue)
+                                                                field.onChange(currentValue === field.value ? "" : currentValue)
                                                                 setOpenCategoryCombobox(false)
                                                             }}
                                                         >

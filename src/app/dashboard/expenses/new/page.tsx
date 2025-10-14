@@ -486,7 +486,7 @@ export default function NewExpensePage() {
                                                             key={cat.id}
                                                             value={cat.id}
                                                             onSelect={(currentValue) => {
-                                                                setValue("categoryId", currentValue === field.value ? "" : currentValue);
+                                                                field.onChange(currentValue === field.value ? "" : currentValue);
                                                                 setValue('subcategoryId', '');
                                                                 setOpenCategoryCombobox(false);
                                                             }}
@@ -543,3 +543,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    
