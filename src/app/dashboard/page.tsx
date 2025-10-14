@@ -254,7 +254,7 @@ function OwnerDashboard() {
 
   const budgetChartData = useMemo(() => {
     if (!allBudgets || !expenses || !categories) return [];
-    const currentMonth = date?.from?.getMonth() ?? new Date().getMonth() + 1;
+    const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
 
     return allBudgets
@@ -272,7 +272,6 @@ function OwnerDashboard() {
         }).slice(0, 5);
   }, [allBudgets, expenses, categories, currencyConverter, date]);
   
-  const userOptions: { value: string; label: string; }[] = []; 
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   
   const currencyOptions = useMemo(() => {
@@ -366,14 +365,7 @@ function OwnerDashboard() {
 
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                 <MultiSelect
-                    options={userOptions}
-                    selected={selectedUsers}
-                    onChange={setSelectedUsers}
-                    placeholder="Miembros"
-                    className="w-full"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <MultiSelect
                     options={categoryOptions}
                     selected={selectedCategories}
@@ -473,8 +465,8 @@ function OwnerDashboard() {
                             }}
                         />
                         <Legend />
-                        <Bar dataKey="Gastado" fill="hsl(var(--primary))" radius={4} />
-                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-2))" radius={4} />
+                        <Bar dataKey="Gastado" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
               </CardContent>
