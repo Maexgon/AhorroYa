@@ -18,13 +18,15 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud, X } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud, X, Check, ChevronsUpDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, FxRate } from '@/lib/types';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 
 const expenseFormSchema = z.object({
@@ -52,6 +54,7 @@ export default function NewExpensePage() {
   const [receiptBase64, setReceiptBase64] = React.useState<string | null>(null);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(null);
+  const [openCategoryCombobox, setOpenCategoryCombobox] = React.useState(false);
 
 
   const { control, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<ExpenseFormValues>({
@@ -459,12 +462,48 @@ export default function NewExpensePage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={(value) => { field.onChange(value); setValue('subcategoryId', ''); }} value={field.value}>
-                                        <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
-                                        <SelectContent>
-                                            {categories?.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                                    <Popover open={openCategoryCombobox} onOpenChange={setOpenCategoryCombobox}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openCategoryCombobox}
+                                                className="w-full justify-between"
+                                            >
+                                                {field.value
+                                                    ? categories?.find((cat) => cat.id === field.value)?.name
+                                                    : "Selecciona una categoría"}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                            <Command>
+                                                <CommandInput placeholder="Buscar categoría..." />
+                                                <CommandEmpty>No se encontraron categorías.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {categories?.map((cat) => (
+                                                        <CommandItem
+                                                            key={cat.id}
+                                                            value={cat.name}
+                                                            onSelect={() => {
+                                                                field.onChange(cat.id);
+                                                                setValue('subcategoryId', '');
+                                                                setOpenCategoryCombobox(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    field.value === cat.id ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {cat.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 )}
                             />
                             {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
@@ -504,5 +543,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
-    
