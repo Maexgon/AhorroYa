@@ -232,10 +232,10 @@ export default function NewBudgetPage() {
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.name}
-                                                            onSelect={() => {
-                                                                field.onChange(cat.id === field.value ? "" : cat.id)
-                                                                setOpenCategoryCombobox(false)
+                                                            value={cat.id}
+                                                            onSelect={(currentValue) => {
+                                                                field.onChange(currentValue === field.value ? "" : currentValue);
+                                                                setOpenCategoryCombobox(false);
                                                             }}
                                                         >
                                                             <Check
