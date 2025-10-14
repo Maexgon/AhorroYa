@@ -39,18 +39,17 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
-    const userDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return doc(firestore, 'users', user.uid);
-    }, [firestore, user]);
-    const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-    
-    useEffect(() => {
-        if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
-        }
-    }, [userData]);
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
+  useEffect(() => {
+    if (userData?.tenantIds && userData.tenantIds.length > 0) {
+      setTenantId(userData.tenantIds[0]);
+    }
+  }, [userData]);
 
   const tenantRef = useMemoFirebase(() => {
     if (!firestore || !tenantId) return null;
@@ -63,7 +62,6 @@ function OwnerDashboard() {
     return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
-  const activeLicense = licenses?.[0];
 
   const categoriesQuery = useMemoFirebase(() => {
     if (!firestore || !tenantId) return null;
@@ -78,14 +76,14 @@ function OwnerDashboard() {
   const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
-      if (!firestore || !tenantId) return null;
-      return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
   const fxRatesQuery = useMemoFirebase(() => {
-      if (!firestore || !tenantId) return null;
-      return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: fxRates, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
 
@@ -95,18 +93,16 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
-
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates || isLoadingCurrencies;
-
-
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
-  
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCurrency, setSelectedCurrency] = useState('ARS');
+
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates || isLoadingCurrencies;
+  const activeLicense = licenses?.[0];
 
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -157,7 +153,6 @@ function OwnerDashboard() {
     }
     const rate = fxRates?.find(r => r.code === selectedCurrency)?.rateToARS;
     if (!rate) {
-      // If no rate, return original amount, maybe log a warning
       return (amount: number) => amount;
     }
     return (amount: number) => amount / rate;
@@ -189,81 +184,67 @@ function OwnerDashboard() {
     });
   }, [expenses, date, selectedCategories]);
 
-
   const barData = useMemo(() => {
-      if (!filteredExpenses || !categories) return [];
-      const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
-          const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-          if (!acc[categoryName]) {
-              acc[categoryName] = 0;
-          }
-          acc[categoryName] += expense.amountARS;
-          return acc;
-      }, {} as Record<string, number>);
+    if (!filteredExpenses || !categories) return [];
+    const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
+        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+        if (!acc[categoryName]) {
+            acc[categoryName] = 0;
+        }
+        acc[categoryName] += expense.amountARS;
+        return acc;
+    }, {} as Record<string, number>);
 
-      return Object.entries(expenseByCategory)
-          .map(([name, total]) => ({ name, total: currencyConverter(total) }))
-          .sort((a, b) => b.total - a.total)
-          .slice(0, 5);
-
+    return Object.entries(expenseByCategory)
+        .map(([name, total]) => ({ name, total: currencyConverter(total) }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
   }, [filteredExpenses, categories, currencyConverter]);
 
   const recentExpenses = useMemo(() => {
-      const expenseIcons: { [key: string]: React.ElementType } = {
-          default: Sparkles,
-          'Comestibles': Utensils,
-          'Ropa y Accesorios': ShoppingCart,
-          'Mobilidad': Bus,
-          'Vida y Entretenimiento': Film,
-          'Vivienda': Home,
-      };
+    const expenseIcons: { [key: string]: React.ElementType } = {
+        default: Sparkles,
+        'Comestibles': Utensils,
+        'Ropa y Accesorios': ShoppingCart,
+        'Mobilidad': Bus,
+        'Vida y Entretenimiento': Film,
+        'Vivienda': Home,
+    };
 
-      return filteredExpenses
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 5)
-          .map(expense => {
-              const categoryName = categories?.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-              return {
-                  icon: expenseIcons[categoryName] || expenseIcons.default,
-                  entity: expense.entityName || 'N/A',
-                  category: categoryName,
-                  amount: currencyConverter(expense.amountARS),
-              }
-          });
+    return filteredExpenses
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 5)
+        .map(expense => {
+            const categoryName = categories?.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+            return {
+                icon: expenseIcons[categoryName] || expenseIcons.default,
+                entity: expense.entityName || 'N/A',
+                category: categoryName,
+                amount: currencyConverter(expense.amountARS),
+            }
+        });
   }, [filteredExpenses, categories, currencyConverter]);
 
-    const budgets = useMemo(() => {
-        if (!allBudgets || !expenses || !categories) return [];
-        const currentMonth = new Date().getMonth() + 1;
-        const currentYear = new Date().getFullYear();
+  const budgets = useMemo(() => {
+    if (!allBudgets || !expenses || !categories) return [];
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
 
-        return allBudgets
-            .filter(b => b.month === currentMonth && b.year === currentYear)
-            .map(budget => {
-                const spent = expenses
-                    .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() + 1 === budget.month && new Date(e.date).getFullYear() === budget.year)
-                    .reduce((acc, e) => acc + e.amountARS, 0);
+    return allBudgets
+        .filter(b => b.month === currentMonth && b.year === currentYear)
+        .map(budget => {
+            const spent = expenses
+                .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() + 1 === budget.month && new Date(e.date).getFullYear() === budget.year)
+                .reduce((acc, e) => acc + e.amountARS, 0);
 
-                return {
-                    name: categories.find(c => c.id === budget.categoryId)?.name || 'N/A',
-                    spent: currencyConverter(spent),
-                    total: currencyConverter(budget.amountARS),
-                };
-            }).slice(0, 4);
-    }, [allBudgets, expenses, categories, currencyConverter]);
-
-
-
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <AhorroYaLogo className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
-
+            return {
+                name: categories.find(c => c.id === budget.categoryId)?.name || 'N/A',
+                spent: currencyConverter(spent),
+                total: currencyConverter(budget.amountARS),
+            };
+        }).slice(0, 4);
+  }, [allBudgets, expenses, categories, currencyConverter]);
+  
   const userOptions: { value: string; label: string; }[] = []; 
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   
@@ -279,6 +260,15 @@ function OwnerDashboard() {
     return Array.from(uniqueCurrencies.values());
   }, [currencies]);
 
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <AhorroYaLogo className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
