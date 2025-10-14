@@ -20,7 +20,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MultiSelect } from '@/components/shared/multi-select';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { defaultCategories } from '@/lib/default-categories';
@@ -121,7 +121,7 @@ function OwnerDashboard() {
         return null;
       }
       return query(collection(firestore, 'currencies'));
-  }, [firestore, ready]);
+  }, [firestore, ready, tenantId]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
 
@@ -252,25 +252,25 @@ function OwnerDashboard() {
         });
   }, [filteredExpenses, categories, currencyConverter]);
 
-  const budgets = useMemo(() => {
+  const budgetChartData = useMemo(() => {
     if (!allBudgets || !expenses || !categories) return [];
-    const currentMonth = new Date().getMonth() + 1;
-    const currentYear = new Date().getFullYear();
+    const currentMonth = date?.from?.getMonth() ?? new Date().getMonth() + 1;
+    const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
 
     return allBudgets
-        .filter(b => b.month === currentMonth && b.year === currentYear)
+        .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
         .map(budget => {
             const spent = expenses
-                .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() + 1 === budget.month && new Date(e.date).getFullYear() === budget.year)
+                .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                 .reduce((acc, e) => acc + e.amountARS, 0);
-
+            
             return {
-                name: categories.find(c => c.id === budget.categoryId)?.name || 'N/A',
-                spent: currencyConverter(spent),
-                total: currencyConverter(budget.amountARS),
+                name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A',
+                Presupuestado: currencyConverter(budget.amountARS),
+                Gastado: currencyConverter(spent),
             };
-        }).slice(0, 4);
-  }, [allBudgets, expenses, categories, currencyConverter]);
+        }).slice(0, 5);
+  }, [allBudgets, expenses, categories, currencyConverter, date]);
   
   const userOptions: { value: string; label: string; }[] = []; 
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
@@ -452,22 +452,31 @@ function OwnerDashboard() {
                 <CardTitle>Presupuestos</CardTitle>
                 <CardDescription>Tu progreso de gastos del mes en {selectedCurrency}.</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4">
-                 {budgets.map(budget => {
-                    const percentage = budget.total > 0 ? (budget.spent / budget.total) * 100 : 0;
-                    return (
-                        <div key={budget.name}>
-                            <div className="flex justify-between text-sm mb-1 font-medium">
-                                <span>{budget.name}</span>
-                                <span className="text-muted-foreground">
-                                    {formatCurrency(budget.spent)} / {formatCurrency(budget.total)}
-                                </span>
-                            </div>
-                            <Progress value={percentage > 100 ? 100 : percentage} className="h-2" />
-                             {percentage > 100 && <p className="text-xs text-destructive mt-1">Excedido por {formatCurrency(budget.spent - budget.total)}</p>}
-                        </div>
-                    )
-                })}
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={budgetChartData} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
+                        <XAxis type="number" hide />
+                        <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false}/>
+                        <Tooltip
+                            cursor={{ fill: 'hsl(var(--secondary))' }}
+                            content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                return (
+                                    <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                        <p className="font-bold">{payload[0].payload.name}</p>
+                                        <p>Gastado: {formatCurrency(payload[0].value as number)}</p>
+                                        <p>Presupuestado: {formatCurrency(payload[1].value as number)}</p>
+                                    </div>
+                                );
+                                }
+                                return null;
+                            }}
+                        />
+                        <Legend />
+                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--primary))" radius={[4, 0, 0, 4]} />
+                        <Bar dataKey="Presupuestado" stackId="b" fill="hsl(var(--secondary))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
         </div>
