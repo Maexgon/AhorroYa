@@ -161,6 +161,9 @@ function OwnerDashboard() {
 
   const formatCurrency = useMemo(() => {
     return (amount: number) => {
+      if (!selectedCurrency) {
+        return ''; // Guard clause to prevent error
+      }
       return new Intl.NumberFormat('es-AR', {
         style: 'currency',
         currency: selectedCurrency,
@@ -250,16 +253,20 @@ function OwnerDashboard() {
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   
   const currencyOptions = useMemo(() => {
-    if (!currencies) return [];
-    // Use a Map to filter out duplicates based on the currency code.
     const uniqueCurrencies = new Map<string, Currency>();
-    currencies.forEach(c => {
-        if (!uniqueCurrencies.has(c.code)) {
-            uniqueCurrencies.set(c.code, c);
-        }
-    });
+    // Ensure ARS is always present
+    uniqueCurrencies.set('ARS', { code: 'ARS', name: 'Peso Argentino' });
+    
+    if (currencies) {
+        currencies.forEach(c => {
+            if (!uniqueCurrencies.has(c.code)) {
+                uniqueCurrencies.set(c.code, c);
+            }
+        });
+    }
     return Array.from(uniqueCurrencies.values());
   }, [currencies]);
+
 
   if (isLoading) {
     return (
