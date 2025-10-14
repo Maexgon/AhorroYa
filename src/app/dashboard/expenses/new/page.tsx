@@ -478,7 +478,6 @@ export default function NewExpensePage() {
                                         </PopoverTrigger>
                                         <PopoverContent 
                                             className="w-[--radix-popover-trigger-width] p-0"
-                                            onInteractOutside={(e) => e.preventDefault()}
                                         >
                                             <Command>
                                                 <CommandInput placeholder="Buscar categoría..." />
@@ -487,10 +486,13 @@ export default function NewExpensePage() {
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.id}
+                                                            value={cat.name}
                                                             onSelect={(currentValue) => {
-                                                                field.onChange(currentValue === field.value ? "" : currentValue);
-                                                                setValue('subcategoryId', '');
+                                                                const selectedCategory = categories.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
+                                                                if (selectedCategory) {
+                                                                    field.onChange(selectedCategory.id === field.value ? "" : selectedCategory.id);
+                                                                    setValue('subcategoryId', '');
+                                                                }
                                                                 setOpenCategoryCombobox(false);
                                                             }}
                                                         >
@@ -546,3 +548,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    

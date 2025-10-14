@@ -208,7 +208,6 @@ export default function EditBudgetPage() {
                                         </PopoverTrigger>
                                         <PopoverContent 
                                             className="w-[--radix-popover-trigger-width] p-0"
-                                            onInteractOutside={(e) => e.preventDefault()}
                                         >
                                             <Command>
                                                 <CommandInput placeholder="Buscar categoría..." />
@@ -217,9 +216,12 @@ export default function EditBudgetPage() {
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.id}
+                                                            value={cat.name}
                                                             onSelect={(currentValue) => {
-                                                                field.onChange(currentValue === field.value ? "" : currentValue);
+                                                                const selectedCategory = categories.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
+                                                                if (selectedCategory) {
+                                                                    field.onChange(selectedCategory.id === field.value ? "" : selectedCategory.id);
+                                                                }
                                                                 setOpenCategoryCombobox(false);
                                                             }}
                                                         >
@@ -277,3 +279,5 @@ export default function EditBudgetPage() {
     </div>
   );
 }
+
+    
