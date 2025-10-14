@@ -39,6 +39,14 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
+  const [date, setDate] = React.useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date(),
+  });
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedCurrency, setSelectedCurrency] = useState('ARS');
+
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
@@ -93,13 +101,6 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
-  const [date, setDate] = React.useState<DateRange | undefined>({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    to: new Date(),
-  });
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [selectedCurrency, setSelectedCurrency] = useState('ARS');
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates || isLoadingCurrencies;
   const activeLicense = licenses?.[0];
