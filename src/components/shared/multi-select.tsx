@@ -82,13 +82,27 @@ function MultiSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0">
-        <Command className={className}>
+        <Command 
+            className={className}
+            // This filter function allows searching by both label and value
+            filter={(value, search) => {
+                const option = options.find(o => o.value.toLowerCase() === value.toLowerCase());
+                if (option) {
+                    // Search in label
+                    if (option.label.toLowerCase().includes(search.toLowerCase())) return 1;
+                }
+                // Default search in value
+                if (value.toLowerCase().includes(search.toLowerCase())) return 1;
+                return 0;
+            }}
+        >
           <CommandInput placeholder="Buscar..." />
           <CommandEmpty>No se encontraron opciones.</CommandEmpty>
           <CommandGroup className="max-h-64 overflow-auto">
             {options.map((option) => (
               <CommandItem
                 key={option.value}
+                value={option.value}
                 onSelect={() => {
                   onChange(
                     selected.includes(option.value)

@@ -487,9 +487,9 @@ export default function NewExpensePage() {
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.id}
-                                                            onSelect={(currentValue) => {
-                                                                field.onChange(currentValue === field.value ? "" : currentValue);
+                                                            value={cat.name}
+                                                            onSelect={() => {
+                                                                field.onChange(cat.id === field.value ? "" : cat.id);
                                                                 setValue('subcategoryId', '');
                                                                 setOpenCategoryCombobox(false);
                                                             }}
