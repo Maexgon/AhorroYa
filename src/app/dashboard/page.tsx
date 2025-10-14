@@ -72,9 +72,9 @@ function OwnerDashboard() {
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId || !user) return null;
+    if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
-  }, [firestore, tenantId, user]);
+  }, [firestore, tenantId]);
   const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
@@ -266,7 +266,19 @@ function OwnerDashboard() {
 
   const userOptions: { value: string; label: string; }[] = []; 
   const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
-  const currencyOptions = currencies || [];
+  
+  const currencyOptions = useMemo(() => {
+    if (!currencies) return [];
+    // Use a Map to filter out duplicates based on the currency code.
+    const uniqueCurrencies = new Map<string, Currency>();
+    currencies.forEach(c => {
+        if (!uniqueCurrencies.has(c.code)) {
+            uniqueCurrencies.set(c.code, c);
+        }
+    });
+    return Array.from(uniqueCurrencies.values());
+  }, [currencies]);
+
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -572,5 +584,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
