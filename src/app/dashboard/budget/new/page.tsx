@@ -16,9 +16,12 @@ import { collection, query, where, addDoc, getDocs, orderBy, doc } from 'firebas
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { ArrowLeft, Loader2, Check, ChevronsUpDown } from 'lucide-react';
 import Link from 'next/link';
 import type { Category, User as UserType } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 
 const budgetFormSchema = z.object({
@@ -39,8 +42,10 @@ export default function NewBudgetPage() {
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(null);
+  const [openCategoryCombobox, setOpenCategoryCombobox] = React.useState(false);
 
-  const { control, handleSubmit, formState: { errors } } = useForm<BudgetFormValues>({
+
+  const { control, handleSubmit, formState: { errors }, setValue, watch } = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
     defaultValues: {
       year: new Date().getFullYear(),
@@ -202,12 +207,47 @@ export default function NewBudgetPage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
-                                        <SelectContent>
-                                            {categories?.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                                    <Popover open={openCategoryCombobox} onOpenChange={setOpenCategoryCombobox}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openCategoryCombobox}
+                                                className="w-full justify-between"
+                                            >
+                                                {field.value
+                                                    ? categories?.find((cat) => cat.id === field.value)?.name
+                                                    : "Selecciona una categoría"}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                            <Command>
+                                                <CommandInput placeholder="Buscar categoría..." />
+                                                <CommandEmpty>No se encontraron categorías.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {categories?.map((cat) => (
+                                                        <CommandItem
+                                                            key={cat.id}
+                                                            value={cat.name}
+                                                            onSelect={() => {
+                                                                field.onChange(cat.id);
+                                                                setOpenCategoryCombobox(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    field.value === cat.id ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {cat.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 )}
                             />
                             {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
@@ -249,3 +289,5 @@ export default function NewBudgetPage() {
     </div>
   );
 }
+
+    
