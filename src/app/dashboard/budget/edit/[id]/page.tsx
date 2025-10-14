@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,13 +12,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, addDoc, getDocs, orderBy, doc } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { CalendarIcon, ArrowLeft, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import type { Category, User as UserType } from '@/lib/types';
+import type { Category, Subcategory, Budget, FxRate, User as UserType } from '@/lib/types';
 
 
 const budgetFormSchema = z.object({
@@ -31,109 +35,94 @@ const budgetFormSchema = z.object({
 
 type BudgetFormValues = z.infer<typeof budgetFormSchema>;
 
-export default function NewBudgetPage() {
+export default function EditBudgetPage() {
   const router = useRouter();
+  const params = useParams();
   const { toast } = useToast();
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const firestore = useFirestore();
+  const budgetId = params.id as string;
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [tenantId, setTenantId] = React.useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { errors } } = useForm<BudgetFormValues>({
+  const budgetRef = useMemoFirebase(() => {
+    if (!firestore || !budgetId) return null;
+    return doc(firestore, 'budgets', budgetId);
+  }, [firestore, budgetId]);
+  const { data: budgetData, isLoading: isLoadingBudget } = useDoc<Budget>(budgetRef);
+
+  const { control, handleSubmit, formState: { errors }, reset } = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
-    defaultValues: {
-      year: new Date().getFullYear(),
-      month: new Date().getMonth() + 1,
-      categoryId: '',
-      amountARS: 0,
-      currency: 'ARS',
-    }
   });
 
-  const userDocRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-
-  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-
   React.useEffect(() => {
-    if (userData?.tenantIds && userData.tenantIds.length > 0) {
-      setTenantId(userData.tenantIds[0]);
+    if (budgetData) {
+      reset({
+        ...budgetData,
+        currency: 'ARS',
+      });
     }
-  }, [userData]);
-  
-  const ready = !!firestore && !!user && !isUserLoading && !isUserDocLoading && !!tenantId;
+  }, [budgetData, reset]);
+
+  const tenantId = budgetData?.tenantId;
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!ready) return null;
-    return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-  }, [firestore, ready, tenantId]);
-
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-
   const onSubmit = async (data: BudgetFormValues) => {
-    if (!tenantId || !user || !firestore) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
-        return;
-    }
-    setIsSubmitting(true);
-    toast({ title: "Procesando...", description: "Guardando el presupuesto." });
+    if (!firestore || !budgetId) return;
 
-    const budgetsRef = collection(firestore, 'budgets');
-    const newBudgetData = {
-        ...data,
-        tenantId: tenantId,
-        rolloverFromPrevARS: 0, // Default value for now
+    setIsSubmitting(true);
+    toast({ title: "Procesando...", description: "Actualizando el presupuesto." });
+    
+    const budgetToUpdateRef = doc(firestore, 'budgets', budgetId);
+    
+    const updatedData = {
+      ...data,
+      // Ensure we don't accidentally overwrite tenantId or other crucial fields
+      tenantId: budgetData?.tenantId,
     };
 
-    try {
-        const q = query(budgetsRef, 
-            where('tenantId', '==', tenantId),
-            where('year', '==', data.year),
-            where('month', '==', data.month),
-            where('categoryId', '==', data.categoryId)
-        );
-
-        const existingBudget = await getDocs(q);
-        if (!existingBudget.empty) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Ya existe un presupuesto para esta categoría en el mes y año seleccionados.' });
-            setIsSubmitting(false);
-            return;
-        }
-        
-        addDoc(budgetsRef, newBudgetData)
-            .then(() => {
-                toast({ title: "¡Éxito!", description: "El presupuesto ha sido guardado correctamente." });
-                router.push('/dashboard/budget');
-            })
-            .catch((error) => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({
-                    path: budgetsRef.path,
-                    operation: 'create',
-                    requestResourceData: newBudgetData,
-                }));
-            });
-
-    } catch (error) {
-        console.error("Unexpected error checking for existing budget:", error);
-        toast({ variant: 'destructive', title: 'Error Inesperado', description: 'No se pudo verificar el presupuesto existente.' });
-    } finally {
+    updateDoc(budgetToUpdateRef, updatedData)
+      .then(() => {
+        toast({ title: "¡Éxito!", description: "El presupuesto ha sido actualizado." });
+        router.push('/dashboard/budget');
+      })
+      .catch((error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: budgetToUpdateRef.path,
+            operation: 'update',
+            requestResourceData: updatedData,
+        }));
+      })
+      .finally(() => {
         setIsSubmitting(false);
-    }
+      });
   };
-  
+
   const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 5}, (_, i) => currentYear + i);
 
-  if (!ready || isLoadingCategories) {
+  if (isLoadingBudget || isLoadingCategories) {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="mt-4 text-muted-foreground">Cargando...</p>
+            <p className="mt-4 text-muted-foreground">Cargando presupuesto...</p>
+        </div>
+    );
+  }
+  
+   if (!budgetData) {
+    return (
+        <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
+            <p className="text-destructive">No se pudo encontrar el presupuesto.</p>
+             <Button variant="outline" asChild className="mt-4">
+                <Link href="/dashboard/budget">Volver a Presupuestos</Link>
+            </Button>
         </div>
     )
   }
@@ -147,7 +136,7 @@ export default function NewBudgetPage() {
                         <ArrowLeft />
                     </Link>
                 </Button>
-                <h1 className="ml-4 font-headline text-xl font-bold">Nuevo Presupuesto</h1>
+                <h1 className="ml-4 font-headline text-xl font-bold">Editar Presupuesto</h1>
             </div>
       </header>
 
@@ -156,8 +145,8 @@ export default function NewBudgetPage() {
             <form onSubmit={handleSubmit(onSubmit)}>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Crear Presupuesto Mensual</CardTitle>
-                        <CardDescription>Define un límite de gasto para una categoría en un mes específico.</CardDescription>
+                        <CardTitle>Editar Presupuesto Mensual</CardTitle>
+                        <CardDescription>Ajusta el límite de gasto para esta categoría.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         
@@ -239,7 +228,7 @@ export default function NewBudgetPage() {
                     </CardContent>
                     <CardFooter>
                         <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : 'Guardar Presupuesto'}
+                            {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
                         </Button>
                     </CardFooter>
                 </Card>
@@ -249,3 +238,4 @@ export default function NewBudgetPage() {
     </div>
   );
 }
+

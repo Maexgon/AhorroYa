@@ -1,12 +1,13 @@
+
 'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, doc, orderBy } from 'firebase/firestore';
+import { Plus, ArrowLeft, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { collection, query, where, doc, orderBy, deleteDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Budget, Category, Expense, User as UserType } from '@/lib/types';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -18,13 +19,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
 
 export default function BudgetPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
+    const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = React.useState(false);
+    const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
+    const [budgetToDelete, setBudgetToDelete] = React.useState<string | null>(null);
 
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
@@ -45,7 +61,7 @@ export default function BudgetPage() {
         if (!ready) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId, ready]);
-    const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
+    const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!ready) return null;
@@ -88,6 +104,38 @@ export default function BudgetPage() {
             };
         });
     }, [budgets, categories, expenses]);
+
+    const handleOpenDeleteDialog = (id: string) => {
+        setBudgetToDelete(id);
+        setIsAlertDialogOpen(true);
+    };
+
+    const handleDeleteBudget = async () => {
+        if (!budgetToDelete || !firestore) return;
+        setIsDeleting(true);
+
+        const budgetRef = doc(firestore, 'budgets', budgetToDelete);
+        
+        deleteDoc(budgetRef)
+            .then(() => {
+                toast({ title: 'Presupuesto eliminado', description: 'El presupuesto ha sido eliminado correctamente.' });
+                // Optimistic update
+                if(budgets && setBudgets) {
+                    setBudgets(budgets.filter(b => b.id !== budgetToDelete));
+                }
+            })
+            .catch((error) => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({
+                    path: budgetRef.path,
+                    operation: 'delete',
+                }));
+            })
+            .finally(() => {
+                setIsDeleting(false);
+                setIsAlertDialogOpen(false);
+                setBudgetToDelete(null);
+            });
+    };
     
     if (!ready || isLoadingBudgets || isLoadingCategories || isLoadingExpenses) {
         return (
@@ -99,6 +147,7 @@ export default function BudgetPage() {
     }
 
     return (
+    <>
         <div className="flex min-h-screen flex-col bg-secondary/50">
             <header className="sticky top-0 z-40 w-full border-b bg-background">
                 <div className="container flex h-16 items-center">
@@ -138,12 +187,13 @@ export default function BudgetPage() {
                                     <TableHead className="text-right">Gastado</TableHead>
                                     <TableHead className="text-right">Restante</TableHead>
                                     <TableHead className='w-[200px]'>Progreso</TableHead>
+                                    <TableHead className="w-[100px] text-center">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {budgetData.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">
+                                        <TableCell colSpan={7} className="h-24 text-center">
                                             No has creado ningún presupuesto todavía.
                                         </TableCell>
                                     </TableRow>
@@ -167,6 +217,18 @@ export default function BudgetPage() {
                                                     <span className='text-xs font-mono'>{Math.round(item.percentage)}%</span>
                                                 </div>
                                             </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Button variant="ghost" size="icon" asChild>
+                                                        <Link href={`/dashboard/budget/edit/${item.id}`}>
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleOpenDeleteDialog(item.id)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     ))
                                 )}
@@ -177,5 +239,27 @@ export default function BudgetPage() {
                 </Card>
             </main>
         </div>
+         <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción eliminará permanentemente el presupuesto. No podrás deshacer esta acción.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setIsAlertDialogOpen(false)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={handleDeleteBudget}
+                            disabled={isDeleting}
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            {isDeleting ? 'Eliminando...' : 'Eliminar'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
+
