@@ -1,4 +1,3 @@
-
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -46,7 +45,7 @@ function OwnerDashboard() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCurrency, setSelectedCurrency] = useState('ARS');
-
+  
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
@@ -255,9 +254,10 @@ function OwnerDashboard() {
   const currencyOptions = useMemo(() => {
     if (!currencies) return [];
     // Use a Map to filter out duplicates based on the currency code.
-    const uniqueCurrencies = new Map<string, Currency>();
-    // Ensure ARS is always present as a default.
-    uniqueCurrencies.set('ARS', { code: 'ARS', name: 'Peso Argentino' });
+    const uniqueCurrencies = new Map<string, WithId<Currency>>();
+    
+    // Manually add ARS as a default, with a unique ID to avoid key conflicts.
+    uniqueCurrencies.set('ARS', { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' });
     
     currencies.forEach(c => {
         if (!uniqueCurrencies.has(c.code)) {
@@ -368,7 +368,7 @@ function OwnerDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
-                            <SelectItem key={c.code} value={c.code}>{c.name} ({c.code})</SelectItem>
+                            <SelectItem key={c.id} value={c.code}>{c.name} ({c.code})</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
