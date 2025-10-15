@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category, User as UserType, Expense, FxRate, Budget, Currency } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -108,22 +108,14 @@ function OwnerDashboard() {
   }, [firestore, ready, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
-  const fxRatesQuery = useMemoFirebase(() => {
-    if (!ready) {
-      return null;
-    }
-    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
-  }, [firestore, ready, tenantId]);
-  const { data: fxRatesData, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
+  const currencyOptions: Currency[] = useMemo(() => {
+    return [
+        { code: 'ARS', name: 'Peso Argentino' },
+        { code: 'USD', name: 'Dólar Estadounidense' }
+    ];
+  }, []);
 
-  // SIMULATED FX RATES FOR DEMO
-  const fxRates: FxRate[] = useMemo(() => [
-    { tenantId: tenantId || '', code: 'USD', date: new Date().toISOString(), rateToARS: 1000 },
-    ...(fxRatesData || [])
-  ], [tenantId, fxRatesData]);
-
-
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingFxRates;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading;
   const activeLicense = licenses?.[0];
 
   const handleSeedCategories = async () => {
@@ -168,19 +160,17 @@ function OwnerDashboard() {
         setIsSeeding(false);
     }
   };
-
-  const currencyConverter = useMemo(() => {
+  
+    const currencyConverter = useMemo(() => {
     if (selectedCurrency === 'ARS') {
       return (amount: number) => amount;
     }
-    const rate = fxRates?.find(r => r.code === selectedCurrency)?.rateToARS;
-    if (!rate || rate === 0) {
-      // Fallback to ARS if rate not found or is zero
-      return (amount: number) => amount;
-    }
+    // Hardcoded rate for demo purposes
+    const exchangeRate = 1000;
+    
     // All expenses are in ARS, so to get USD we divide by the rate
-    return (amount: number) => amount / rate;
-  }, [selectedCurrency, fxRates]);
+    return (amount: number) => amount / exchangeRate;
+  }, [selectedCurrency]);
 
 
   const formatCurrency = useMemo(() => {
@@ -270,13 +260,6 @@ function OwnerDashboard() {
         }).slice(0, 5);
   }, [allBudgets, expenses, categories, currencyConverter, date]);
   
-  const currencyOptions = useMemo(() => {
-    return [
-        { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' },
-        { id: 'usd-default', code: 'USD', name: 'Dólar Estadounidense' }
-    ];
-  }, []);
-
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -375,7 +358,7 @@ function OwnerDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
-                             <SelectItem key={c.id} value={c.code}>
+                             <SelectItem key={c.code} value={c.code}>
                                 {c.name} ({c.code})
                              </SelectItem>
                         ))}
@@ -608,3 +591,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
