@@ -306,6 +306,7 @@ export default function EditExpensePage() {
                                         </PopoverTrigger>
                                         <PopoverContent 
                                             className="w-[--radix-popover-trigger-width] p-0"
+                                            onPointerDownOutside={(e) => e.preventDefault()}
                                         >
                                             <Command
                                                 filter={(value, search) => {
@@ -379,3 +380,4 @@ export default function EditExpensePage() {
     </div>
   );
 }
+
