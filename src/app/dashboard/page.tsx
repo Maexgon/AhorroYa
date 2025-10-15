@@ -112,7 +112,6 @@ function OwnerDashboard() {
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
 
   useEffect(() => {
-    // Set default currency to ARS when currencies are loaded and no currency is selected yet.
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
       if (arsCurrency) {
@@ -170,19 +169,19 @@ function OwnerDashboard() {
   
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
-        if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
-            return amount;
-        }
+      if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
+        return amount;
+      }
 
-        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        const toCurrency = currencies.find(c => c.code === toCurrencyCode);
+      const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+      const toCurrency = currencies.find(c => c.code === toCurrencyCode);
 
-        if (!fromCurrency?.exchangeRate || !toCurrency?.exchangeRate) {
-            return amount;
-        }
+      if (!fromCurrency?.exchangeRate || !toCurrency?.exchangeRate) {
+        return amount;
+      }
 
-        const amountInUSD = amount / fromCurrency.exchangeRate;
-        return amountInUSD * toCurrency.exchangeRate;
+      const amountInUSD = amount / fromCurrency.exchangeRate;
+      return amountInUSD * toCurrency.exchangeRate;
     };
   }, [currencies]);
 
