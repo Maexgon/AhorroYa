@@ -113,12 +113,12 @@ function OwnerDashboard() {
 
   useEffect(() => {
     if (currencies && !selectedCurrency) {
-      const ars = currencies.find(c => c.code === 'ARS');
-      if (ars) {
-        setSelectedCurrency(ars.id);
+      const arsCurrency = currencies.find(c => c.code === 'ARS');
+      if (arsCurrency) {
+        setSelectedCurrency(arsCurrency.id);
       }
     }
-  }, [currencies, selectedCurrency]);
+  }, [currencies]);
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
   const activeLicense = licenses?.[0];
