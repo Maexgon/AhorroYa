@@ -106,15 +106,12 @@ function OwnerDashboard() {
     }
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, ready, tenantId]);
-  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
+  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(allBudgetsQuery);
 
-  const fxRatesQuery = useMemoFirebase(() => {
-    if (!ready) {
-      return null;
-    }
-    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
-  }, [firestore, ready, tenantId]);
-  const { data: fxRates, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
+  // SIMULATED FX RATES FOR DEMO
+  const fxRates: FxRate[] = [
+    { tenantId: tenantId || '', code: 'USD', date: new Date().toISOString(), rateToARS: 1000 }
+  ];
 
   const currenciesQuery = useMemoFirebase(() => {
       if (!ready) {
@@ -125,7 +122,7 @@ function OwnerDashboard() {
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingFxRates || isLoadingCurrencies || isUserLoading;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || isUserLoading;
   const activeLicense = licenses?.[0];
 
   const handleSeedCategories = async () => {
@@ -177,6 +174,7 @@ function OwnerDashboard() {
     }
     const rate = fxRates?.find(r => r.code === selectedCurrency)?.rateToARS;
     if (!rate) {
+      // Fallback to ARS if rate not found
       return (amount: number) => amount;
     }
     return (amount: number) => amount / rate;
@@ -184,9 +182,6 @@ function OwnerDashboard() {
 
   const formatCurrency = useMemo(() => {
     return (amount: number) => {
-      if (!selectedCurrency) {
-        return '';
-      }
       return new Intl.NumberFormat('es-AR', {
         style: 'currency',
         currency: selectedCurrency,
@@ -273,15 +268,21 @@ function OwnerDashboard() {
   }, [allBudgets, expenses, categories, currencyConverter, date]);
   
   const currencyOptions = useMemo(() => {
-    if (!currencies) return [];
-    const uniqueCurrencies = new Map<string, WithId<Currency>>();
-    uniqueCurrencies.set('ARS', { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' });
-    currencies.forEach(c => {
-        if (!uniqueCurrencies.has(c.code)) {
-            uniqueCurrencies.set(c.code, c);
-        }
-    });
-    return Array.from(uniqueCurrencies.values());
+    const options = [
+        { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' }
+    ];
+    if (currencies) {
+        currencies.forEach(c => {
+            if (c.code !== 'ARS') {
+                options.push({ id: c.id, code: c.code, name: c.name });
+            }
+        });
+    }
+    // Add USD if not present
+    if (!options.some(o => o.code === 'USD')) {
+        options.push({ id: 'usd-default', code: 'USD', name: 'Dolar Estadounidense' });
+    }
+    return options;
   }, [currencies]);
 
 
@@ -364,7 +365,7 @@ function OwnerDashboard() {
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                 <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value === 'all' ? 'all' : value)}>
                     <SelectTrigger className="w-full">
                         <SelectValue placeholder="Categoría" />
                     </SelectTrigger>
@@ -377,9 +378,7 @@ function OwnerDashboard() {
                 </Select>
                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                         <SelectValue placeholder="Moneda">
-                            {currencyOptions.find(c => c.code === selectedCurrency)?.name || selectedCurrency}
-                        </SelectValue>
+                         <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
