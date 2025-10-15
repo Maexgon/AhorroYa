@@ -235,7 +235,7 @@ export default function NewBudgetPage() {
                                                             onSelect={(currentValue) => {
                                                                 const selectedCategory = categories.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
                                                                 if (selectedCategory) {
-                                                                    field.onChange(selectedCategory.id === field.value ? "" : selectedCategory.id);
+                                                                    field.onChange(selectedCategory.id);
                                                                 }
                                                                 setOpenCategoryCombobox(false);
                                                             }}
