@@ -207,7 +207,10 @@ export default function NewBudgetPage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Popover open={openCategoryCombobox} onOpenChange={setOpenCategoryCombobox}>
+                                    <Popover open={openCategoryCombobox} onOpenChange={(isOpen) => {
+                                        console.log('[DEBUG] Popover onOpenChange, isOpen:', isOpen);
+                                        setOpenCategoryCombobox(isOpen);
+                                    }}>
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
@@ -231,9 +234,13 @@ export default function NewBudgetPage() {
                                                             key={cat.id}
                                                             value={cat.name}
                                                             onSelect={(currentValue) => {
+                                                                console.log('[DEBUG] CommandItem onSelect triggered. currentValue:', currentValue);
                                                                 const category = categories?.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
                                                                 if (category) {
+                                                                    console.log('[DEBUG] Category found, updating form. ID:', category.id);
                                                                     field.onChange(category.id);
+                                                                } else {
+                                                                    console.log('[DEBUG] Category NOT found for value:', currentValue);
                                                                 }
                                                                 setOpenCategoryCombobox(false);
                                                             }}
