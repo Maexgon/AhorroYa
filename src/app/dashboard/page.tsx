@@ -278,27 +278,11 @@ function OwnerDashboard() {
   }, [allBudgets, expenses, categories, currencyConverter, date]);
   
   const currencyOptions = useMemo(() => {
-    const options = new Map<string, { id: string; code: string; name: string }>();
-    
-    // Add ARS as default
-    options.set('ARS', { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' });
-
-    // Add currencies from Firestore
-    if (currencies) {
-        currencies.forEach(c => {
-            if (!options.has(c.code)) {
-                options.set(c.code, { id: c.id, code: c.code, name: c.name });
-            }
-        });
-    }
-
-    // Ensure USD is present
-    if (!options.has('USD')) {
-        options.set('USD', { id: 'usd-default', code: 'USD', name: 'Dolar Estadounidense' });
-    }
-
-    return Array.from(options.values());
-  }, [currencies]);
+    return [
+        { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' },
+        { id: 'usd-default', code: 'USD', name: 'Dólar Estadounidense' }
+    ];
+  }, []);
 
 
   if (isLoading) {
@@ -395,7 +379,7 @@ function OwnerDashboard() {
                 </Select>
                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                         <SelectValue placeholder="Moneda">{selectedCurrencyName}</SelectValue>
+                         <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
@@ -625,4 +609,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
 
