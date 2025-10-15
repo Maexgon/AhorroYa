@@ -1,4 +1,3 @@
-
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -125,11 +124,7 @@ function OwnerDashboard() {
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
       console.log(`--- Iniciando conversión ---`);
-      if (!currencies || currencies.length === 0) {
-        console.log('DEBUG: Salida temprana, `currencies` no está listo.');
-        return amount;
-      }
-      if (!fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
+      if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
         console.log('Salida temprana, no se necesita conversion.');
         return amount;
       }
@@ -153,8 +148,8 @@ function OwnerDashboard() {
       console.log('d. exchangeRate destino:', toCurrency.exchangeRate);
       console.log('e. Monto origen:', amount);
 
-      const amountInUSD = amount / fromCurrency.exchangeRate;
-      const convertedAmount = amountInUSD * toCurrency.exchangeRate;
+      const amountInBase = amount / fromCurrency.exchangeRate;
+      const convertedAmount = amountInBase * toCurrency.exchangeRate;
       
       console.log('f. monto convertido:', convertedAmount);
       console.log(`--------------------------`);
@@ -197,7 +192,7 @@ function OwnerDashboard() {
   }, [expenses, date, selectedCategory]);
 
   const barData = useMemo(() => {
-    if (!filteredExpenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) {
+    if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) {
       return [];
     }
   
@@ -211,6 +206,7 @@ function OwnerDashboard() {
       if (!acc[categoryName]) {
         acc[categoryName] = 0;
       }
+      // The expense.currency field holds the CODE, which is what the converter expects.
       acc[categoryName] += currencyConverter(expense.amount, expense.currency, toCurrency.code);
       return acc;
     }, {} as Record<string, number>);
@@ -232,7 +228,7 @@ function OwnerDashboard() {
         'Vivienda': Home,
     };
     
-    if (!filteredExpenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) return [];
+    if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) return [];
 
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) return [];
@@ -252,7 +248,7 @@ function OwnerDashboard() {
   }, [filteredExpenses, categories, selectedCurrency, currencies, currencyConverter]);
 
   const budgetChartData = useMemo(() => {
-    if (!allBudgets || !expenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) return [];
+    if (!allBudgets || !expenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) return [];
 
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
