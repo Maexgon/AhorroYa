@@ -1,4 +1,3 @@
-
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -35,7 +34,6 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
-
 
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -111,7 +109,7 @@ function OwnerDashboard() {
     if (!firestore) return null;
     return collection(firestore, 'currencies');
   }, [firestore]);
-  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency & WithId>(currenciesQuery);
+  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
 
   useEffect(() => {
     if (currencies && !selectedCurrency) {
@@ -169,33 +167,31 @@ function OwnerDashboard() {
   };
 
   const currencyConverter = useMemo(() => {
-    return (amount: number, fromCurrencyCode: string) => {
-        if (!currencies || !selectedCurrency) return amount;
-        
-        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        const toCurrency = currencies.find(c => c.id === selectedCurrency);
-        const arsCurrency = currencies.find(c => c.code === 'ARS');
-
-        if (!fromCurrency || !toCurrency || !arsCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate || !arsCurrency.exchangeRate) {
+    return (amount: number, fromCurrencyId: string, toCurrencyId: string) => {
+        if (!currencies || !fromCurrencyId || !toCurrencyId) {
             return amount;
         }
-        
-        if (fromCurrency.code === toCurrency.code) {
+
+        const fromCurrency = currencies.find(c => c.id === fromCurrencyId);
+        const toCurrency = currencies.find(c => c.id === toCurrencyId);
+
+        if (!fromCurrency || !toCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
+            // console.warn("Cannot find currency or exchange rate", {fromCurrency, toCurrency});
+            return amount; // Return original amount if conversion is not possible
+        }
+
+        if (fromCurrency.id === toCurrency.id) {
             return amount;
         }
 
         // Convert amount from its original currency to USD
-        let amountInUSD;
-        if (fromCurrency.code === 'ARS') {
-            amountInUSD = amount / arsCurrency.exchangeRate;
-        } else {
-            amountInUSD = amount / fromCurrency.exchangeRate;
-        }
+        const amountInUSD = amount / fromCurrency.exchangeRate;
 
         // Convert amount from USD to the target currency
         return amountInUSD * toCurrency.exchangeRate;
     };
-}, [currencies, selectedCurrency]);
+  }, [currencies]);
+
 
   const formatCurrency = useMemo(() => {
       return (amount: number) => {
@@ -230,13 +226,14 @@ function OwnerDashboard() {
   }, [expenses, date, selectedCategory]);
 
   const barData = useMemo(() => {
-    if (!filteredExpenses || !categories) return [];
+    if (!filteredExpenses || !categories || !selectedCurrency) return [];
+    
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         if (!acc[categoryName]) {
             acc[categoryName] = 0;
         }
-        acc[categoryName] += currencyConverter(expense.amount, expense.currency);
+        acc[categoryName] += currencyConverter(expense.amount, expense.currency, selectedCurrency);
         return acc;
     }, {} as Record<string, number>);
 
@@ -265,30 +262,33 @@ function OwnerDashboard() {
                 icon: expenseIcons[categoryName] || expenseIcons.default,
                 entity: expense.entityName || 'N/A',
                 category: categoryName,
-                amount: currencyConverter(expense.amount, expense.currency),
+                amount: currencyConverter(expense.amount, expense.currency, selectedCurrency),
             }
         });
   }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
 
   const budgetChartData = useMemo(() => {
-    if (!allBudgets || !expenses || !categories) return [];
+    if (!allBudgets || !expenses || !categories || !selectedCurrency) return [];
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
+    const arsCurrency = currencies?.find(c => c.code === 'ARS');
 
     return allBudgets
         .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
         .map(budget => {
             const spent = expenses
                 .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
-                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency), 0);
+                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency, selectedCurrency), 0);
             
+            const budgetAmountConverted = arsCurrency ? currencyConverter(budget.amountARS, arsCurrency.id, selectedCurrency) : budget.amountARS;
+
             return {
                 name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A',
-                Presupuestado: currencyConverter(budget.amountARS, 'ARS'),
+                Presupuestado: budgetAmountConverted,
                 Gastado: spent,
             };
         }).slice(0, 5);
-  }, [allBudgets, expenses, categories, date, selectedCurrency, currencyConverter]);
+  }, [allBudgets, expenses, categories, date, selectedCurrency, currencyConverter, currencies]);
   
   if (isLoading) {
     return (
