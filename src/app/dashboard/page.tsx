@@ -41,7 +41,6 @@ function OwnerDashboard() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
-
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
@@ -175,11 +174,9 @@ function OwnerDashboard() {
       const exchangeRate = activeCurrency?.exchangeRate;
   
       if (!exchangeRate || exchangeRate === 0) {
-        // If no rate, return original amount to avoid breaking the UI
         return amount;
       }
       
-      // All base expenses are in ARS, so to convert to another currency we divide
       return amount / exchangeRate;
     };
   }, [selectedCurrency, currencies]);
@@ -362,15 +359,15 @@ function OwnerDashboard() {
                         ))}
                     </SelectContent>
                 </Select>
-                <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                         <SelectValue placeholder="Moneda" />
+                        <SelectValue placeholder={currencies?.find(c => c.code === selectedCurrency)?.name || "Moneda"} />
                     </SelectTrigger>
                     <SelectContent>
                         {currencies?.map(c => (
-                             <SelectItem key={c.id} value={c.code}>
+                            <SelectItem key={c.id} value={c.code}>
                                 {c.name}
-                             </SelectItem>
+                            </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -601,3 +598,4 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
