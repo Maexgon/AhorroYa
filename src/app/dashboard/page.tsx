@@ -28,11 +28,6 @@ import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-
-// Extend the Currency type to include the exchangeRate if it's not in the base type
-type CurrencyWithRate = Currency & { exchangeRate?: number };
-
-
 function OwnerDashboard() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
@@ -174,9 +169,10 @@ function OwnerDashboard() {
       const exchangeRate = activeCurrency?.exchangeRate;
   
       if (!exchangeRate || exchangeRate === 0) {
-        return amount;
+        return amount; // Return original amount if no rate found
       }
       
+      // If base is ARS, to convert to another currency, divide by its rate vs ARS
       return amount / exchangeRate;
     };
   }, [selectedCurrency, currencies]);
@@ -361,10 +357,10 @@ function OwnerDashboard() {
                 </Select>
                  <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                        <SelectValue placeholder={currencies?.find(c => c.code === selectedCurrency)?.name || "Moneda"} />
+                        <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
                     <SelectContent>
-                        {currencies?.map(c => (
+                        {currencies?.filter(c => c.code).map(c => (
                             <SelectItem key={c.id} value={c.code}>
                                 {c.name}
                             </SelectItem>
@@ -598,4 +594,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
