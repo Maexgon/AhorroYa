@@ -130,7 +130,7 @@ function OwnerDashboard() {
         return amount;
       }
       if (!fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
-        console.log('DEBUG: Salida temprana, no se necesita conversión.');
+        console.log('Salida temprana, no se necesita conversion.');
         return amount;
       }
 
@@ -198,29 +198,27 @@ function OwnerDashboard() {
 
   const barData = useMemo(() => {
     if (!filteredExpenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) {
-        console.log("barData calculation skipped, data not ready");
-        return [];
+      return [];
     }
-
+  
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) {
-        console.log("barData calculation skipped, toCurrency not found");
-        return [];
+      return [];
     }
-
+  
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
-        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-        if (!acc[categoryName]) {
-            acc[categoryName] = 0;
-        }
-        acc[categoryName] += currencyConverter(expense.amount, expense.currency, toCurrency.code);
-        return acc;
+      const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+      if (!acc[categoryName]) {
+        acc[categoryName] = 0;
+      }
+      acc[categoryName] += currencyConverter(expense.amount, expense.currency, toCurrency.code);
+      return acc;
     }, {} as Record<string, number>);
-
+  
     return Object.entries(expenseByCategory)
-        .map(([name, total]) => ({ name, total }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 5);
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
   }, [filteredExpenses, categories, selectedCurrency, currencies, currencyConverter]);
 
 
@@ -654,5 +652,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
