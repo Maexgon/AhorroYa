@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency, FxRate } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -40,6 +40,7 @@ function OwnerDashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
 
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -169,12 +170,15 @@ function OwnerDashboard() {
       if (selectedCurrency === 'ARS' || !currencies) {
         return amount;
       }
+      
       const activeCurrency = currencies.find(c => c.code === selectedCurrency);
       const exchangeRate = activeCurrency?.exchangeRate;
   
       if (!exchangeRate || exchangeRate === 0) {
+        // If no rate, return original amount to avoid breaking the UI
         return amount;
       }
+      
       // All base expenses are in ARS, so to convert to another currency we divide
       return amount / exchangeRate;
     };
@@ -277,8 +281,6 @@ function OwnerDashboard() {
   }
 
   const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
-  const selectedCurrencyName = currencies?.find(c => c.code === selectedCurrency)?.name;
-
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -362,9 +364,7 @@ function OwnerDashboard() {
                 </Select>
                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                         <SelectValue placeholder="Moneda">
-                            {currencies?.find(c => c.code === selectedCurrency)?.name}
-                         </SelectValue>
+                         <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
                     <SelectContent>
                         {currencies?.map(c => (
@@ -601,4 +601,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
