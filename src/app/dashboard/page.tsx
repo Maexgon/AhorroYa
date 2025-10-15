@@ -120,41 +120,41 @@ function OwnerDashboard() {
     }
   }, [currencies]);
 
-
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
-      console.log(`--- Iniciando conversión ---`);
-      if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
-        console.log('Salida temprana, no se necesita conversion.');
-        return amount;
-      }
+        console.log("--- Iniciando conversión ---");
 
-      const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-      const toCurrency = currencies.find(c => c.code === toCurrencyCode);
-      
-      console.log('a. simbolo moneda origen:', fromCurrencyCode);
-      console.log('b. simbolo moneda destino:', toCurrencyCode);
+        if (fromCurrencyCode === toCurrencyCode) {
+            console.log("Salida temprana, no se necesita conversion.");
+            return amount;
+        }
 
-      if (!fromCurrency || typeof fromCurrency.exchangeRate !== 'number') {
-        console.log(`DEBUG: No se encontró moneda de origen o tasa de cambio para ${fromCurrencyCode}`);
-        return amount;
-      }
-      if (!toCurrency || typeof toCurrency.exchangeRate !== 'number') {
-        console.log(`DEBUG: No se encontró moneda de destino o tasa de cambio para ${toCurrencyCode}`);
-        return amount;
-      }
-      
-      console.log('c. exchangeRate origen:', fromCurrency.exchangeRate);
-      console.log('d. exchangeRate destino:', toCurrency.exchangeRate);
-      console.log('e. Monto origen:', amount);
+        if (!currencies || currencies.length === 0) {
+            console.log("Salida temprana, las monedas no han cargado.");
+            return amount;
+        }
 
-      const amountInBase = amount / fromCurrency.exchangeRate;
-      const convertedAmount = amountInBase * toCurrency.exchangeRate;
-      
-      console.log('f. monto convertido:', convertedAmount);
-      console.log(`--------------------------`);
+        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+        const toCurrency = currencies.find(c => c.code === toCurrencyCode);
+        
+        console.log("a. simbolo moneda origen:", fromCurrency?.code);
+        console.log("b. simbolo moneda destino:", toCurrency?.code);
 
-      return convertedAmount;
+        if (!fromCurrency || typeof fromCurrency.exchangeRate !== 'number' || !toCurrency || typeof toCurrency.exchangeRate !== 'number') {
+            console.log("Salida temprana, no se encontraron las monedas o sus tasas de cambio.");
+            return amount;
+        }
+
+        console.log("c. exchangeRate origen:", fromCurrency.exchangeRate);
+        console.log("d. exchangeRate destino:", toCurrency.exchangeRate);
+        console.log("e. Monto origen:", amount);
+
+        const amountInBase = amount / fromCurrency.exchangeRate;
+        const convertedAmount = amountInBase * toCurrency.exchangeRate;
+        
+        console.log("f. monto convertido:", convertedAmount);
+
+        return convertedAmount;
     };
   }, [currencies]);
 
@@ -192,7 +192,7 @@ function OwnerDashboard() {
   }, [expenses, date, selectedCategory]);
 
   const barData = useMemo(() => {
-    if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) {
+    if (!filteredExpenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) {
       return [];
     }
   
@@ -206,7 +206,6 @@ function OwnerDashboard() {
       if (!acc[categoryName]) {
         acc[categoryName] = 0;
       }
-      // The expense.currency field holds the CODE, which is what the converter expects.
       acc[categoryName] += currencyConverter(expense.amount, expense.currency, toCurrency.code);
       return acc;
     }, {} as Record<string, number>);
