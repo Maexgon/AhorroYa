@@ -18,7 +18,6 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
-import { Calendar } from '@/components/ui/calendar';
 import { ArrowLeft, Loader2, Check, ChevronsUpDown } from 'lucide-react';
 import Link from 'next/link';
 import type { Category, Budget } from '@/lib/types';
@@ -209,19 +208,22 @@ export default function EditBudgetPage() {
                                         <PopoverContent 
                                             className="w-[--radix-popover-trigger-width] p-0"
                                         >
-                                            <Command>
+                                            <Command
+                                                filter={(value, search) => {
+                                                    const category = categories?.find(cat => cat.id === value);
+                                                    if (category?.name.toLowerCase().includes(search.toLowerCase())) return 1;
+                                                    return 0;
+                                                }}
+                                            >
                                                 <CommandInput placeholder="Buscar categoría..." />
                                                 <CommandEmpty>No se encontraron categorías.</CommandEmpty>
                                                 <CommandGroup>
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.name}
+                                                            value={cat.id}
                                                             onSelect={(currentValue) => {
-                                                                const selectedCategory = categories.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
-                                                                if (selectedCategory) {
-                                                                    field.onChange(selectedCategory.id);
-                                                                }
+                                                                field.onChange(currentValue);
                                                                 setOpenCategoryCombobox(false);
                                                             }}
                                                         >
@@ -279,5 +281,3 @@ export default function EditBudgetPage() {
     </div>
   );
 }
-
-    

@@ -307,20 +307,23 @@ export default function EditExpensePage() {
                                         <PopoverContent 
                                             className="w-[--radix-popover-trigger-width] p-0"
                                         >
-                                            <Command>
+                                            <Command
+                                                filter={(value, search) => {
+                                                    const category = categories?.find(cat => cat.id === value);
+                                                    if (category?.name.toLowerCase().includes(search.toLowerCase())) return 1;
+                                                    return 0;
+                                                }}
+                                            >
                                                 <CommandInput placeholder="Buscar categoría..." />
                                                 <CommandEmpty>No se encontraron categorías.</CommandEmpty>
                                                 <CommandGroup>
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.name}
+                                                            value={cat.id}
                                                             onSelect={(currentValue) => {
-                                                                const selectedCategory = categories.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
-                                                                if (selectedCategory) {
-                                                                    field.onChange(selectedCategory.id);
-                                                                    setValue('subcategoryId', '');
-                                                                }
+                                                                field.onChange(currentValue);
+                                                                setValue('subcategoryId', '');
                                                                 setOpenCategoryCombobox(false);
                                                             }}
                                                         >
@@ -376,5 +379,3 @@ export default function EditExpensePage() {
     </div>
   );
 }
-
-    
