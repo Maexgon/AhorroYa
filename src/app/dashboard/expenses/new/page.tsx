@@ -476,26 +476,21 @@ export default function NewExpensePage() {
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent 
-                                            className="w-[--radix-popover-trigger-width] p-0"
-                                            onPointerDownOutside={(e) => e.preventDefault()}
-                                        >
-                                            <Command
-                                                filter={(value, search) => {
-                                                    const category = categories?.find(cat => cat.id === value);
-                                                    if (category?.name.toLowerCase().includes(search.toLowerCase())) return 1;
-                                                    return 0;
-                                                }}
-                                            >
+                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                            <Command>
                                                 <CommandInput placeholder="Buscar categoría..." />
                                                 <CommandEmpty>No se encontraron categorías.</CommandEmpty>
                                                 <CommandGroup>
                                                     {categories?.map((cat) => (
                                                         <CommandItem
                                                             key={cat.id}
-                                                            value={cat.id}
+                                                            value={cat.name}
                                                             onSelect={(currentValue) => {
-                                                                field.onChange(currentValue);
+                                                                const category = categories?.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
+                                                                if (category) {
+                                                                    field.onChange(category.id);
+                                                                    setValue('subcategoryId', '');
+                                                                }
                                                                 setOpenCategoryCombobox(false);
                                                             }}
                                                         >
@@ -551,4 +546,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
