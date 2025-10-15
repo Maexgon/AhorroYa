@@ -169,10 +169,10 @@ function OwnerDashboard() {
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyId: string) => {
       if (!currencies || !fromCurrencyCode || !toCurrencyId) return amount;
-  
+      
       const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
       const toCurrency = currencies.find(c => c.id === toCurrencyId);
-  
+
       if (!fromCurrency || !toCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
         return amount;
       }
@@ -224,16 +224,13 @@ function OwnerDashboard() {
 
   const barData = useMemo(() => {
     if (!filteredExpenses || !categories || !selectedCurrency) return [];
-    
-    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
 
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         if (!acc[categoryName]) {
             acc[categoryName] = 0;
         }
-        acc[categoryName] += currencyConverter(expense.amount, expense.currency, toCurrency.id);
+        acc[categoryName] += currencyConverter(expense.amount, expense.currency, selectedCurrency);
         return acc;
     }, {} as Record<string, number>);
 
@@ -241,7 +238,7 @@ function OwnerDashboard() {
         .map(([name, total]) => ({ name, total }))
         .sort((a, b) => b.total - a.total)
         .slice(0, 5);
-  }, [filteredExpenses, categories, selectedCurrency, currencyConverter, currencies]);
+  }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
 
   const recentExpenses = useMemo(() => {
     const expenseIcons: { [key: string]: React.ElementType } = {
@@ -254,8 +251,6 @@ function OwnerDashboard() {
     };
     
     if (!filteredExpenses || !categories || !selectedCurrency) return [];
-    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
 
     return filteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -266,16 +261,13 @@ function OwnerDashboard() {
                 icon: expenseIcons[categoryName] || expenseIcons.default,
                 entity: expense.entityName || 'N/A',
                 category: categoryName,
-                amount: currencyConverter(expense.amount, expense.currency, toCurrency.id),
+                amount: currencyConverter(expense.amount, expense.currency, selectedCurrency),
             }
         });
-  }, [filteredExpenses, categories, selectedCurrency, currencyConverter, currencies]);
+  }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
 
   const budgetChartData = useMemo(() => {
     if (!allBudgets || !expenses || !categories || !selectedCurrency) return [];
-    
-    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
 
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
@@ -286,9 +278,9 @@ function OwnerDashboard() {
         .map(budget => {
             const spent = expenses
                 .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
-                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency, toCurrency.id), 0);
+                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency, selectedCurrency), 0);
             
-            const budgetAmountConverted = currencyConverter(budget.amountARS, 'ARS', toCurrency.id);
+            const budgetAmountConverted = currencyConverter(budget.amountARS, 'ARS', selectedCurrency);
 
             return {
                 name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A',
@@ -296,7 +288,7 @@ function OwnerDashboard() {
                 Gastado: spent,
             };
         }).slice(0, 5);
-  }, [allBudgets, expenses, categories, date, selectedCurrency, currencyConverter, currencies]);
+  }, [allBudgets, expenses, categories, date, selectedCurrency, currencyConverter]);
   
   if (isLoading) {
     return (
