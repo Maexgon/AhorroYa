@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency, FxRate } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -43,7 +43,7 @@ function OwnerDashboard() {
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [selectedCurrency, setSelectedCurrency] = useState('ARS');
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('ARS');
   
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) {
@@ -111,7 +111,16 @@ function OwnerDashboard() {
     if (!firestore) return null;
     return collection(firestore, 'currencies');
   }, [firestore]);
-  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
+  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency & WithId<Currency>>(currenciesQuery);
+
+  useEffect(() => {
+    if (currencies && !selectedCurrency) {
+      const ars = currencies.find(c => c.code === 'ARS');
+      if (ars) {
+        setSelectedCurrency(ars.id);
+      }
+    }
+  }, [currencies, selectedCurrency]);
 
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
@@ -160,34 +169,32 @@ function OwnerDashboard() {
     }
   };
 
+ const activeCurrency = useMemo(() => {
+    if (!currencies || !selectedCurrency) return null;
+    return currencies.find(c => c.id === selectedCurrency);
+  }, [currencies, selectedCurrency]);
+
   const currencyConverter = useMemo(() => {
     return (amount: number) => {
-      if (selectedCurrency === 'ARS' || !currencies) {
+      if (!activeCurrency || activeCurrency.code === 'ARS' || !activeCurrency.exchangeRate) {
         return amount;
       }
-      
-      const activeCurrency = currencies.find(c => c.code === selectedCurrency);
-      const exchangeRate = activeCurrency?.exchangeRate;
-  
-      if (!exchangeRate || exchangeRate === 0) {
-        return amount;
-      }
-      
-      return amount / exchangeRate;
+      return amount / activeCurrency.exchangeRate;
     };
-  }, [selectedCurrency, currencies]);
+  }, [activeCurrency]);
 
 
   const formatCurrency = useMemo(() => {
     return (amount: number) => {
+      const currencyCode = activeCurrency?.code || 'ARS';
       return new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: selectedCurrency || 'ARS',
+        currency: currencyCode,
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(amount);
     }
-  }, [selectedCurrency]);
+  }, [activeCurrency]);
 
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
@@ -344,7 +351,7 @@ function OwnerDashboard() {
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value === 'all' ? 'all' : value)}>
+                 <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value)}>
                     <SelectTrigger className="w-full">
                         <SelectValue placeholder="Categoría" />
                     </SelectTrigger>
@@ -361,7 +368,7 @@ function OwnerDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                         {currencies?.map(c => (
-                            <SelectItem key={c.id} value={c.code}>
+                            <SelectItem key={c.id} value={c.id}>
                                 {c.name}
                             </SelectItem>
                         ))}
@@ -408,7 +415,7 @@ function OwnerDashboard() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Análisis de Gastos</CardTitle>
-                 <CardDescription>Resumen por categoría del período seleccionado en {selectedCurrency}.</CardDescription>
+                 <CardDescription>Resumen por categoría del período seleccionado en {activeCurrency?.code}.</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
@@ -433,7 +440,7 @@ function OwnerDashboard() {
             <Card className="lg:col-span-3">
               <CardHeader>
                 <CardTitle>Presupuestos</CardTitle>
-                <CardDescription>Tu progreso de gastos del mes en {selectedCurrency}.</CardDescription>
+                <CardDescription>Tu progreso de gastos del mes en {activeCurrency?.code}.</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -594,3 +601,6 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+
+    
