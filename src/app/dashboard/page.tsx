@@ -107,11 +107,12 @@ function OwnerDashboard() {
   
   const currenciesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return collection(firestore, 'currencies');
+    return query(collection(firestore, 'currencies'));
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
 
   useEffect(() => {
+    // Set default currency to ARS when currencies are loaded and no currency is selected yet.
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
       if (arsCurrency) {
@@ -119,6 +120,7 @@ function OwnerDashboard() {
       }
     }
   }, [currencies]);
+
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
   const activeLicense = licenses?.[0];
@@ -168,20 +170,19 @@ function OwnerDashboard() {
   
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
-      if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
-        return amount;
-      }
-  
-      const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-      const toCurrency = currencies.find(c => c.code === toCurrencyCode);
-  
-      if (!fromCurrency?.exchangeRate || !toCurrency?.exchangeRate) {
-        return amount;
-      }
-  
-      const amountInUSD = amount / fromCurrency.exchangeRate;
-  
-      return amountInUSD * toCurrency.exchangeRate;
+        if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
+            return amount;
+        }
+
+        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+        const toCurrency = currencies.find(c => c.code === toCurrencyCode);
+
+        if (!fromCurrency?.exchangeRate || !toCurrency?.exchangeRate) {
+            return amount;
+        }
+
+        const amountInUSD = amount / fromCurrency.exchangeRate;
+        return amountInUSD * toCurrency.exchangeRate;
     };
   }, [currencies]);
 
@@ -274,9 +275,9 @@ function OwnerDashboard() {
 
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
+    
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) return [];
-    
 
     return allBudgets
         .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
