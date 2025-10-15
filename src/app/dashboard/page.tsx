@@ -165,7 +165,7 @@ function OwnerDashboard() {
         setIsSeeding(false);
     }
   };
-
+  
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyId: string) => {
       if (!currencies || !fromCurrencyCode || !toCurrencyId) return amount;
@@ -181,10 +181,10 @@ function OwnerDashboard() {
         return amount;
       }
   
-      // Convert amount from its original currency to USD
+      // First, convert amount from its original currency to USD
       const amountInUSD = amount / fromCurrency.exchangeRate;
   
-      // Convert amount from USD to the target currency
+      // Then, convert amount from USD to the target currency
       return amountInUSD * toCurrency.exchangeRate;
     };
   }, [currencies]);
