@@ -117,10 +117,11 @@ function OwnerDashboard() {
   const { data: fxRatesData, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
 
   // SIMULATED FX RATES FOR DEMO
-  const fxRates: FxRate[] = [
+  const fxRates: FxRate[] = useMemo(() => [
     { tenantId: tenantId || '', code: 'USD', date: new Date().toISOString(), rateToARS: 1000 },
     ...(fxRatesData || [])
-  ];
+  ], [tenantId, fxRatesData]);
+
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingFxRates;
   const activeLicense = licenses?.[0];
@@ -173,12 +174,14 @@ function OwnerDashboard() {
       return (amount: number) => amount;
     }
     const rate = fxRates?.find(r => r.code === selectedCurrency)?.rateToARS;
-    if (!rate) {
-      // Fallback to ARS if rate not found
+    if (!rate || rate === 0) {
+      // Fallback to ARS if rate not found or is zero
       return (amount: number) => amount;
     }
+    // All expenses are in ARS, so to get USD we divide by the rate
     return (amount: number) => amount / rate;
   }, [selectedCurrency, fxRates]);
+
 
   const formatCurrency = useMemo(() => {
     return (amount: number) => {
