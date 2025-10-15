@@ -43,7 +43,7 @@ function OwnerDashboard() {
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('ARS');
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('');
   
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) {
@@ -111,9 +111,9 @@ function OwnerDashboard() {
     if (!firestore) return null;
     return collection(firestore, 'currencies');
   }, [firestore]);
-  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency & WithId<Currency>>(currenciesQuery);
+  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency & WithId>(currenciesQuery);
 
-  useEffect(() => {
+ useEffect(() => {
     if (currencies && !selectedCurrency) {
       const ars = currencies.find(c => c.code === 'ARS');
       if (ars) {
@@ -121,7 +121,6 @@ function OwnerDashboard() {
       }
     }
   }, [currencies, selectedCurrency]);
-
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
   const activeLicense = licenses?.[0];
@@ -169,32 +168,45 @@ function OwnerDashboard() {
     }
   };
 
- const activeCurrency = useMemo(() => {
-    if (!currencies || !selectedCurrency) return null;
-    return currencies.find(c => c.id === selectedCurrency);
+  const currencyConverter = useMemo(() => {
+    return (amountInARS: number) => {
+        if (!currencies || !selectedCurrency) return amountInARS;
+        
+        const targetCurrency = currencies.find(c => c.id === selectedCurrency);
+        const arsCurrency = currencies.find(c => c.code === 'ARS');
+
+        if (!targetCurrency || !arsCurrency || !arsCurrency.exchangeRate) {
+            return amountInARS; 
+        }
+
+        if (targetCurrency.code === 'ARS') {
+            return amountInARS;
+        }
+
+        // Convert ARS to USD first
+        const amountInUSD = amountInARS / arsCurrency.exchangeRate;
+
+        // Then convert USD to the target currency
+        return amountInUSD * (targetCurrency.exchangeRate || 1);
+    };
   }, [currencies, selectedCurrency]);
 
-  const currencyConverter = useMemo(() => {
-    return (amount: number) => {
-      if (!activeCurrency || activeCurrency.code === 'ARS' || !activeCurrency.exchangeRate) {
-        return amount;
-      }
-      return amount / activeCurrency.exchangeRate;
-    };
-  }, [activeCurrency]);
-
-
   const formatCurrency = useMemo(() => {
-    return (amount: number) => {
-      const currencyCode = activeCurrency?.code || 'ARS';
-      return new Intl.NumberFormat('es-AR', {
-        style: 'currency',
-        currency: currencyCode,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(amount);
-    }
-  }, [activeCurrency]);
+      return (amount: number) => {
+          if (!currencies || !selectedCurrency) {
+              return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+          }
+          const currencyInfo = currencies.find(c => c.id === selectedCurrency);
+          const currencyCode = currencyInfo?.code || 'ARS';
+
+          return new Intl.NumberFormat('es-AR', {
+              style: 'currency',
+              currency: currencyCode,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+          }).format(amount);
+      }
+  }, [currencies, selectedCurrency]);
 
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
@@ -415,7 +427,7 @@ function OwnerDashboard() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Análisis de Gastos</CardTitle>
-                 <CardDescription>Resumen por categoría del período seleccionado en {activeCurrency?.code}.</CardDescription>
+                 <CardDescription>Resumen por categoría del período seleccionado en {currencies?.find(c => c.id === selectedCurrency)?.code}.</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
@@ -440,7 +452,7 @@ function OwnerDashboard() {
             <Card className="lg:col-span-3">
               <CardHeader>
                 <CardTitle>Presupuestos</CardTitle>
-                <CardDescription>Tu progreso de gastos del mes en {activeCurrency?.code}.</CardDescription>
+                <CardDescription>Tu progreso de gastos del mes en {currencies?.find(c => c.id === selectedCurrency)?.code}.</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -601,6 +613,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
 
     
