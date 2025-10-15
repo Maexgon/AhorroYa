@@ -39,6 +39,7 @@ function OwnerDashboard() {
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -48,8 +49,6 @@ function OwnerDashboard() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCurrency, setSelectedCurrency] = useState('ARS');
   
-  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
-
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) {
       return null;
@@ -111,12 +110,12 @@ function OwnerDashboard() {
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, ready, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
-
+  
   const currenciesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'currencies');
   }, [firestore]);
-  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<CurrencyWithRate>(currenciesQuery);
+  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
@@ -164,20 +163,21 @@ function OwnerDashboard() {
         setIsSeeding(false);
     }
   };
-  
+
   const currencyConverter = useMemo(() => {
-    if (selectedCurrency === 'ARS' || !currencies) {
-        return (amount: number) => amount;
-    }
-    const selectedCurr = currencies.find(c => c.code === selectedCurrency);
-    const exchangeRate = selectedCurr?.exchangeRate;
-
-    if (!exchangeRate || exchangeRate === 0) {
-        return (amount: number) => amount; // Return original amount if no rate
-    }
-
-    // All expenses are in ARS, so to get other currency we divide by the rate
-    return (amount: number) => amount / exchangeRate;
+    return (amount: number) => {
+      if (selectedCurrency === 'ARS' || !currencies) {
+        return amount;
+      }
+      const activeCurrency = currencies.find(c => c.code === selectedCurrency);
+      const exchangeRate = activeCurrency?.exchangeRate;
+  
+      if (!exchangeRate || exchangeRate === 0) {
+        return amount;
+      }
+      // All base expenses are in ARS, so to convert to another currency we divide
+      return amount / exchangeRate;
+    };
   }, [selectedCurrency, currencies]);
 
 
@@ -362,12 +362,14 @@ function OwnerDashboard() {
                 </Select>
                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                         <SelectValue placeholder="Moneda" />
+                         <SelectValue placeholder="Moneda">
+                            {currencies?.find(c => c.code === selectedCurrency)?.name}
+                         </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                         {currencies?.map(c => (
                              <SelectItem key={c.id} value={c.code}>
-                                {c.name} ({c.code})
+                                {c.name}
                              </SelectItem>
                         ))}
                     </SelectContent>
