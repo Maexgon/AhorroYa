@@ -173,11 +173,7 @@ function OwnerDashboard() {
       const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
       const toCurrency = currencies.find(c => c.id === toCurrencyId);
 
-      if (!fromCurrency || !toCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
-        return amount;
-      }
-  
-      if (fromCurrency.id === toCurrency.id) {
+      if (!fromCurrency || !toCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate || fromCurrency.id === toCurrency.id) {
         return amount;
       }
   
