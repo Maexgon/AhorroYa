@@ -116,13 +116,11 @@ function OwnerDashboard() {
   }, [firestore, ready, tenantId]);
   const { data: fxRatesData, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
 
-  const fxRates = useMemo(() => {
-    const rates = fxRatesData ? [...fxRatesData] : [];
-    if (!rates.some(rate => rate.code === 'USD')) {
-        rates.push({ tenantId: tenantId || '', code: 'USD', date: new Date().toISOString(), rateToARS: 1000 });
-    }
-    return rates;
-  }, [fxRatesData, tenantId]);
+  // SIMULATED FX RATES FOR DEMO
+  const fxRates: FxRate[] = [
+    { tenantId: tenantId || '', code: 'USD', date: new Date().toISOString(), rateToARS: 1000 },
+    ...(fxRatesData || [])
+  ];
 
 
   const currenciesQuery = useMemoFirebase(() => {
@@ -196,7 +194,7 @@ function OwnerDashboard() {
     return (amount: number) => {
       return new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: selectedCurrency,
+        currency: selectedCurrency || 'ARS',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(amount);
@@ -627,3 +625,4 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
