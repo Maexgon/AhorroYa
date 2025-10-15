@@ -124,35 +124,45 @@ function OwnerDashboard() {
 
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
-      if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
+      console.log(`--- Iniciando conversión ---`);
+      if (!currencies || currencies.length === 0) {
+        console.log('DEBUG: Salida temprana, `currencies` no está listo.');
+        return amount;
+      }
+      if (!fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
+        console.log('DEBUG: Salida temprana, no se necesita conversión.');
         return amount;
       }
 
       const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
       const toCurrency = currencies.find(c => c.code === toCurrencyCode);
+      
+      console.log('a. simbolo moneda origen:', fromCurrencyCode);
+      console.log('b. simbolo moneda destino:', toCurrencyCode);
 
-      if (!fromCurrency?.exchangeRate || !toCurrency?.exchangeRate) {
-         if (fromCurrencyCode !== toCurrencyCode) {
-            console.log('DEBUG: Conversión abortada por falta de datos.', { fromCurrencyCode, toCurrencyCode, fromCurrency, toCurrency });
-        }
+      if (!fromCurrency || typeof fromCurrency.exchangeRate !== 'number') {
+        console.log(`DEBUG: No se encontró moneda de origen o tasa de cambio para ${fromCurrencyCode}`);
         return amount;
       }
+      if (!toCurrency || typeof toCurrency.exchangeRate !== 'number') {
+        console.log(`DEBUG: No se encontró moneda de destino o tasa de cambio para ${toCurrencyCode}`);
+        return amount;
+      }
+      
+      console.log('c. exchangeRate origen:', fromCurrency.exchangeRate);
+      console.log('d. exchangeRate destino:', toCurrency.exchangeRate);
+      console.log('e. Monto origen:', amount);
 
       const amountInUSD = amount / fromCurrency.exchangeRate;
       const convertedAmount = amountInUSD * toCurrency.exchangeRate;
-
-      console.log('--- DEBUG CONVERSION ---');
-      console.log('a. Simbolo moneda origen:', fromCurrency.code);
-      console.log('b. Simbolo moneda destino:', toCurrency.code);
-      console.log('c. ExchangeRate origen:', fromCurrency.exchangeRate);
-      console.log('d. ExchangeRate destino:', toCurrency.exchangeRate);
-      console.log('e. Monto origen:', amount);
-      console.log('f. Monto convertido:', convertedAmount);
-      console.log('------------------------');
       
+      console.log('f. monto convertido:', convertedAmount);
+      console.log(`--------------------------`);
+
       return convertedAmount;
     };
   }, [currencies]);
+
 
   const formatCurrency = useMemo(() => {
       return (amount: number) => {
@@ -187,10 +197,16 @@ function OwnerDashboard() {
   }, [expenses, date, selectedCategory]);
 
   const barData = useMemo(() => {
-    if (!filteredExpenses || !categories || !selectedCurrency || !currencies) return [];
+    if (!filteredExpenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) {
+        console.log("barData calculation skipped, data not ready");
+        return [];
+    }
 
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
+    if (!toCurrency) {
+        console.log("barData calculation skipped, toCurrency not found");
+        return [];
+    }
 
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
@@ -218,7 +234,7 @@ function OwnerDashboard() {
         'Vivienda': Home,
     };
     
-    if (!filteredExpenses || !categories || !selectedCurrency || !currencies) return [];
+    if (!filteredExpenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) return [];
 
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) return [];
@@ -238,7 +254,7 @@ function OwnerDashboard() {
   }, [filteredExpenses, categories, selectedCurrency, currencies, currencyConverter]);
 
   const budgetChartData = useMemo(() => {
-    if (!allBudgets || !expenses || !categories || !selectedCurrency || !currencies) return [];
+    if (!allBudgets || !expenses || !categories || !selectedCurrency || !currencies || currencies.length === 0) return [];
 
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
@@ -638,3 +654,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
