@@ -290,10 +290,7 @@ export default function EditExpensePage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                     <Popover open={openCategoryCombobox} onOpenChange={(isOpen) => {
-                                         console.log('[DEBUG] Popover onOpenChange, isOpen:', isOpen);
-                                         setOpenCategoryCombobox(isOpen);
-                                     }}>
+                                     <Popover open={openCategoryCombobox} onOpenChange={setOpenCategoryCombobox}>
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
@@ -307,7 +304,10 @@ export default function EditExpensePage() {
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                        <PopoverContent 
+                                          className="w-[--radix-popover-trigger-width] p-0"
+                                          onOpenAutoFocus={(e) => e.preventDefault()}
+                                        >
                                             <Command>
                                                 <CommandInput placeholder="Buscar categoría..." />
                                                 <CommandEmpty>No se encontraron categorías.</CommandEmpty>
@@ -317,14 +317,10 @@ export default function EditExpensePage() {
                                                             key={cat.id}
                                                             value={cat.name}
                                                             onSelect={(currentValue) => {
-                                                                console.log('[DEBUG] CommandItem onSelect triggered. currentValue:', currentValue);
                                                                 const category = categories?.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
                                                                 if (category) {
-                                                                    console.log('[DEBUG] Category found, updating form. ID:', category.id);
                                                                     field.onChange(category.id);
                                                                     setValue('subcategoryId', '');
-                                                                } else {
-                                                                    console.log('[DEBUG] Category NOT found for value:', currentValue);
                                                                 }
                                                                 setOpenCategoryCombobox(false);
                                                             }}
