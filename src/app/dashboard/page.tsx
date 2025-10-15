@@ -1,3 +1,4 @@
+
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -376,11 +377,13 @@ function OwnerDashboard() {
                 </Select>
                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Moneda" />
+                         <SelectValue placeholder="Moneda">
+                            {currencyOptions.find(c => c.code === selectedCurrency)?.name || selectedCurrency}
+                        </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
-                             <SelectItem key={c.code} value={c.code}>
+                             <SelectItem key={c.id} value={c.code}>
                                 {c.name} ({c.code})
                              </SelectItem>
                         ))}
