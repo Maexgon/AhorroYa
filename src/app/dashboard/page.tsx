@@ -176,14 +176,11 @@ function OwnerDashboard() {
       const toCurrency = currencies.find(c => c.code === toCurrencyCode);
   
       if (!fromCurrency?.exchangeRate || !toCurrency?.exchangeRate) {
-        console.warn(`Exchange rate not found for ${fromCurrencyCode} or ${toCurrencyCode}`);
         return amount;
       }
   
-      // First, convert the original amount to USD.
       const amountInUSD = amount / fromCurrency.exchangeRate;
   
-      // Then, convert the USD amount to the target currency.
       return amountInUSD * toCurrency.exchangeRate;
     };
   }, [currencies]);
