@@ -380,7 +380,9 @@ function OwnerDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
-                            <SelectItem key={c.id} value={c.code}>{c.name} ({c.code})</SelectItem>
+                             <SelectItem key={c.code} value={c.code}>
+                                {c.name} ({c.code})
+                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
