@@ -22,7 +22,7 @@ import { CalendarIcon, ArrowLeft, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import type { Category, Subcategory, Expense, FxRate } from '@/lib/types';
+import type { Category, Subcategory, Expense, Currency } from '@/lib/types';
 
 
 const expenseFormSchema = z.object({
@@ -58,17 +58,6 @@ export default function EditExpensePage() {
 
   const { control, handleSubmit, watch, formState: { errors }, reset, setValue } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
-    defaultValues: {
-      entityName: '',
-      entityCuit: '',
-      amount: 0,
-      currency: 'ARS',
-      categoryId: '',
-      subcategoryId: '',
-      paymentMethod: 'cash',
-      notes: '',
-      date: new Date(),
-    }
   });
   
   // When expense data loads, reset the form with its values
@@ -101,11 +90,11 @@ export default function EditExpensePage() {
   }, [firestore, tenantId]);
   const { data: allSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
   
-  const fxRatesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
-  const { data: fxRates } = useCollection<FxRate>(fxRatesQuery);
+  const currenciesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'currencies'));
+  }, [firestore]);
+  const { data: currencies } = useCollection<Currency>(currenciesQuery);
 
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -114,7 +103,7 @@ export default function EditExpensePage() {
   }, [allSubcategories, selectedCategoryId]);
 
   const onSubmit = async (data: ExpenseFormValues) => {
-     if (!firestore || !expenseId || !tenantId) {
+     if (!firestore || !expenseId || !tenantId || !currencies) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el gasto para actualizar.' });
         return;
     }
@@ -122,16 +111,14 @@ export default function EditExpensePage() {
     toast({ title: "Procesando...", description: "Actualizando el gasto." });
 
     const expenseToUpdateRef = doc(firestore, 'expenses', expenseId);
+    
+    const selectedCurrencyDoc = currencies.find(c => c.id === data.currency);
+    const arsCurrencyDoc = currencies.find(c => c.code === 'ARS');
+
     let amountARS = data.amount;
-    if (data.currency !== 'ARS' && fxRates) {
-        const rate = fxRates.find(r => r.code === data.currency);
-        if (rate) {
-            amountARS = data.amount * rate.rateToARS;
-        } else {
-            toast({ variant: 'destructive', title: 'Error de Conversión', description: `No se encontró tipo de cambio para ${data.currency}.` });
-            setIsSubmitting(false);
-            return;
-        }
+    if (selectedCurrencyDoc && arsCurrencyDoc && selectedCurrencyDoc.code !== 'ARS') {
+        const amountInUSD = data.amount / (selectedCurrencyDoc.exchangeRate || 1);
+        amountARS = amountInUSD * (arsCurrencyDoc.exchangeRate || 1);
     }
     
     const updatedData = {
@@ -248,9 +235,8 @@ export default function EditExpensePage() {
                                         <Select onValueChange={field.onChange} value={field.value}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="ARS">ARS</SelectItem>
-                                                {fxRates?.map(rate => (
-                                                    <SelectItem key={rate.code} value={rate.code}>{rate.code}</SelectItem>
+                                                {currencies?.map(rate => (
+                                                    <SelectItem key={rate.id} value={rate.id}>{rate.code}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>

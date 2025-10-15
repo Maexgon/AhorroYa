@@ -24,7 +24,7 @@ import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
-import type { Category, Subcategory, User as UserType, FxRate } from '@/lib/types';
+import type { Category, Subcategory, User as UserType, FxRate, Currency } from '@/lib/types';
 
 
 const expenseFormSchema = z.object({
@@ -60,7 +60,7 @@ export default function NewExpensePage() {
       entityName: '',
       entityCuit: '',
       amount: 0,
-      currency: 'ARS',
+      currency: '', // Will be set by default ARS currency
       categoryId: '',
       subcategoryId: '',
       paymentMethod: 'cash',
@@ -98,11 +98,22 @@ export default function NewExpensePage() {
   }, [firestore, tenantId]);
   const { data: allSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
   
-  const fxRatesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
-  const { data: fxRates } = useCollection<FxRate>(fxRatesQuery);
+  const currenciesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'currencies'));
+  }, [firestore]);
+  const { data: currencies } = useCollection<Currency>(currenciesQuery);
+
+  // Set default currency to ARS
+  React.useEffect(() => {
+    if (currencies) {
+        const arsCurrency = currencies.find(c => c.code === 'ARS');
+        if (arsCurrency) {
+            setValue('currency', arsCurrency.id);
+        }
+    }
+  }, [currencies, setValue]);
+
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
     if (!allSubcategories || !selectedCategoryId) return [];
@@ -203,8 +214,8 @@ export default function NewExpensePage() {
   };
   
   const onSubmit = async (data: ExpenseFormValues) => {
-    if (!tenantId || !user || !firestore) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
+    if (!tenantId || !user || !firestore || !currencies) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario, tenant o monedas.' });
         return;
     }
     setIsSubmitting(true);
@@ -254,18 +265,14 @@ export default function NewExpensePage() {
              writes.push({path: newReceiptRef.path, data: receiptData});
         }
         
-        let amountARS = data.amount;
-        if (data.currency !== 'ARS' && fxRates) {
-            const rate = fxRates.find(r => r.code === data.currency);
-            if (rate) {
-                amountARS = data.amount * rate.rateToARS;
-            } else {
-                toast({ variant: 'destructive', title: 'Error de Conversión', description: `No se encontró tipo de cambio para ${data.currency}. No se puede guardar el gasto.` });
-                setIsSubmitting(false);
-                return;
-            }
-        }
+        const selectedCurrencyDoc = currencies.find(c => c.id === data.currency);
+        const arsCurrencyDoc = currencies.find(c => c.code === 'ARS');
 
+        let amountARS = data.amount;
+        if (selectedCurrencyDoc && arsCurrencyDoc && selectedCurrencyDoc.code !== 'ARS') {
+            const amountInUSD = data.amount / (selectedCurrencyDoc.exchangeRate || 1);
+            amountARS = amountInUSD * (arsCurrencyDoc.exchangeRate || 1);
+        }
 
         // 3. Handle Expense
         const expenseData = {
@@ -274,7 +281,7 @@ export default function NewExpensePage() {
             userId: user.uid,
             date: data.date.toISOString(),
             amount: data.amount,
-            currency: data.currency,
+            currency: data.currency, // Storing the currency document ID
             amountARS: amountARS,
             categoryId: data.categoryId,
             subcategoryId: data.subcategoryId || null,
@@ -421,9 +428,8 @@ export default function NewExpensePage() {
                                         <Select onValueChange={field.onChange} value={field.value}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="ARS">ARS</SelectItem>
-                                                {fxRates?.map(rate => (
-                                                    <SelectItem key={rate.code} value={rate.code}>{rate.code}</SelectItem>
+                                                {currencies?.map(rate => (
+                                                    <SelectItem key={rate.id} value={rate.id}>{rate.code}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>

@@ -120,6 +120,7 @@ function OwnerDashboard() {
     }
   }, [currencies]);
 
+
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
         console.log("--- Iniciando conversión ---");
@@ -139,7 +140,7 @@ function OwnerDashboard() {
         
         console.log("a. simbolo moneda origen:", fromCurrency?.code);
         console.log("b. simbolo moneda destino:", toCurrency?.code);
-
+        
         if (!fromCurrency || typeof fromCurrency.exchangeRate !== 'number' || !toCurrency || typeof toCurrency.exchangeRate !== 'number') {
             console.log("Salida temprana, no se encontraron las monedas o sus tasas de cambio.");
             return amount;
@@ -203,10 +204,17 @@ function OwnerDashboard() {
   
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
       const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+      const fromCurrency = currencies.find(c => c.id === expense.currency);
+
       if (!acc[categoryName]) {
         acc[categoryName] = 0;
       }
-      acc[categoryName] += currencyConverter(expense.amount, expense.currency, toCurrency.code);
+
+      if(fromCurrency){
+        acc[categoryName] += currencyConverter(expense.amount, fromCurrency.code, toCurrency.code);
+      } else {
+        acc[categoryName] += expense.amount; // fallback if currency not found
+      }
       return acc;
     }, {} as Record<string, number>);
   
@@ -237,11 +245,17 @@ function OwnerDashboard() {
         .slice(0, 5)
         .map(expense => {
             const categoryName = categories?.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+            const fromCurrency = currencies.find(c => c.id === expense.currency);
+            let convertedAmount = expense.amount;
+            if(fromCurrency){
+              convertedAmount = currencyConverter(expense.amount, fromCurrency.code, toCurrency.code);
+            }
+
             return {
                 icon: expenseIcons[categoryName] || expenseIcons.default,
                 entity: expense.entityName || 'N/A',
                 category: categoryName,
-                amount: currencyConverter(expense.amount, expense.currency, toCurrency.code),
+                amount: convertedAmount,
             }
         });
   }, [filteredExpenses, categories, selectedCurrency, currencies, currencyConverter]);
@@ -260,7 +274,13 @@ function OwnerDashboard() {
         .map(budget => {
             const spent = expenses
                 .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
-                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency, toCurrency.code), 0);
+                .reduce((acc, e) => {
+                  const fromCurrency = currencies.find(c => c.id === e.currency);
+                  if (fromCurrency) {
+                    return acc + currencyConverter(e.amount, fromCurrency.code, toCurrency.code);
+                  }
+                  return acc;
+                }, 0);
             
             const budgetAmountConverted = currencyConverter(budget.amountARS, 'ARS', toCurrency.code);
 

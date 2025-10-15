@@ -38,6 +38,7 @@ export type User = {
   isSuperadmin?: boolean; // Indicates if the user has superadmin privileges.
 };
 export type Currency = {
+  id: string; // Unique identifier for the currency document
   code: string; // Currency code (e.g., ARS, USD).
   name: string; // Name of the currency (e.g., Argentine Peso).
   exchangeRate?: number; // Exchange rate to the base currency.
@@ -80,7 +81,7 @@ export type Expense = {
   userId: string; // Reference to User. (Relationship: User 1:N Expense)
   date: string; // Date of the expense.
   amount: number; // Amount of the expense.
-  currency: string; // Currency of the expense.
+  currency: string; // Currency of the expense. This should be the document ID of a currency.
   amountARS: number; // Amount of the expense in ARS.
   categoryId: string; // Reference to Category. (Relationship: Category 1:N Expense)
   subcategoryId?: string; // Reference to Subcategory. (Relationship: Subcategory 1:N Expense)
@@ -143,5 +144,3 @@ export type AuditLog = {
   userId: string; // Reference to User. (Relationship: User 1:N AuditLog)
   ts: string; // Timestamp of when the audit log entry was created.
 };
-
-    
