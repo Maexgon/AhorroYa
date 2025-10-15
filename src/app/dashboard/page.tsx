@@ -171,12 +171,12 @@ function OwnerDashboard() {
   const currencyConverter = useMemo(() => {
     return (amountInARS: number) => {
         if (!currencies || !selectedCurrency) return amountInARS;
-        
+
         const targetCurrency = currencies.find(c => c.id === selectedCurrency);
         const arsCurrency = currencies.find(c => c.code === 'ARS');
 
         if (!targetCurrency || !arsCurrency || !arsCurrency.exchangeRate) {
-            return amountInARS; 
+            return amountInARS;
         }
 
         if (targetCurrency.code === 'ARS') {
@@ -189,7 +189,7 @@ function OwnerDashboard() {
         // Then convert USD to the target currency
         return amountInUSD * (targetCurrency.exchangeRate || 1);
     };
-  }, [currencies, selectedCurrency]);
+}, [currencies, selectedCurrency]);
 
   const formatCurrency = useMemo(() => {
       return (amount: number) => {
@@ -238,7 +238,7 @@ function OwnerDashboard() {
         .map(([name, total]) => ({ name, total: currencyConverter(total) }))
         .sort((a, b) => b.total - a.total)
         .slice(0, 5);
-  }, [filteredExpenses, categories, currencyConverter]);
+  }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
 
   const recentExpenses = useMemo(() => {
     const expenseIcons: { [key: string]: React.ElementType } = {
@@ -262,7 +262,7 @@ function OwnerDashboard() {
                 amount: currencyConverter(expense.amountARS),
             }
         });
-  }, [filteredExpenses, categories, currencyConverter]);
+  }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
 
   const budgetChartData = useMemo(() => {
     if (!allBudgets || !expenses || !categories) return [];
@@ -282,7 +282,7 @@ function OwnerDashboard() {
                 Gastado: currencyConverter(spent),
             };
         }).slice(0, 5);
-  }, [allBudgets, expenses, categories, currencyConverter, date]);
+  }, [allBudgets, expenses, categories, date, selectedCurrency, currencyConverter]);
   
   if (isLoading) {
     return (
@@ -614,4 +614,3 @@ export default function DashboardPageContainer() {
   );
 }
 
-    
