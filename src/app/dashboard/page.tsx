@@ -167,28 +167,25 @@ function OwnerDashboard() {
   };
 
   const currencyConverter = useMemo(() => {
-    return (amount: number, fromCurrencyId: string, toCurrencyId: string) => {
-        if (!currencies || !fromCurrencyId || !toCurrencyId) {
-            return amount;
-        }
-
-        const fromCurrency = currencies.find(c => c.id === fromCurrencyId);
-        const toCurrency = currencies.find(c => c.id === toCurrencyId);
-
-        if (!fromCurrency || !toCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
-            // console.warn("Cannot find currency or exchange rate", {fromCurrency, toCurrency});
-            return amount; // Return original amount if conversion is not possible
-        }
-
-        if (fromCurrency.id === toCurrency.id) {
-            return amount;
-        }
-
-        // Convert amount from its original currency to USD
-        const amountInUSD = amount / fromCurrency.exchangeRate;
-
-        // Convert amount from USD to the target currency
-        return amountInUSD * toCurrency.exchangeRate;
+    return (amount: number, fromCurrencyCode: string, toCurrencyId: string) => {
+      if (!currencies || !fromCurrencyCode || !toCurrencyId) return amount;
+  
+      const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+      const toCurrency = currencies.find(c => c.id === toCurrencyId);
+  
+      if (!fromCurrency || !toCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
+        return amount;
+      }
+  
+      if (fromCurrency.id === toCurrency.id) {
+        return amount;
+      }
+  
+      // Convert amount from its original currency to USD
+      const amountInUSD = amount / fromCurrency.exchangeRate;
+  
+      // Convert amount from USD to the target currency
+      return amountInUSD * toCurrency.exchangeRate;
     };
   }, [currencies]);
 
@@ -228,12 +225,15 @@ function OwnerDashboard() {
   const barData = useMemo(() => {
     if (!filteredExpenses || !categories || !selectedCurrency) return [];
     
+    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
+    if (!toCurrency) return [];
+
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         if (!acc[categoryName]) {
             acc[categoryName] = 0;
         }
-        acc[categoryName] += currencyConverter(expense.amount, expense.currency, selectedCurrency);
+        acc[categoryName] += currencyConverter(expense.amount, expense.currency, toCurrency.id);
         return acc;
     }, {} as Record<string, number>);
 
@@ -241,7 +241,7 @@ function OwnerDashboard() {
         .map(([name, total]) => ({ name, total }))
         .sort((a, b) => b.total - a.total)
         .slice(0, 5);
-  }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
+  }, [filteredExpenses, categories, selectedCurrency, currencyConverter, currencies]);
 
   const recentExpenses = useMemo(() => {
     const expenseIcons: { [key: string]: React.ElementType } = {
@@ -252,6 +252,10 @@ function OwnerDashboard() {
         'Vida y Entretenimiento': Film,
         'Vivienda': Home,
     };
+    
+    if (!filteredExpenses || !categories || !selectedCurrency) return [];
+    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
+    if (!toCurrency) return [];
 
     return filteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -262,25 +266,29 @@ function OwnerDashboard() {
                 icon: expenseIcons[categoryName] || expenseIcons.default,
                 entity: expense.entityName || 'N/A',
                 category: categoryName,
-                amount: currencyConverter(expense.amount, expense.currency, selectedCurrency),
+                amount: currencyConverter(expense.amount, expense.currency, toCurrency.id),
             }
         });
-  }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
+  }, [filteredExpenses, categories, selectedCurrency, currencyConverter, currencies]);
 
   const budgetChartData = useMemo(() => {
     if (!allBudgets || !expenses || !categories || !selectedCurrency) return [];
+    
+    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
+    if (!toCurrency) return [];
+
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
-    const arsCurrency = currencies?.find(c => c.code === 'ARS');
+    
 
     return allBudgets
         .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
         .map(budget => {
             const spent = expenses
                 .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
-                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency, selectedCurrency), 0);
+                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency, toCurrency.id), 0);
             
-            const budgetAmountConverted = arsCurrency ? currencyConverter(budget.amountARS, arsCurrency.id, selectedCurrency) : budget.amountARS;
+            const budgetAmountConverted = currencyConverter(budget.amountARS, 'ARS', toCurrency.id);
 
             return {
                 name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A',
