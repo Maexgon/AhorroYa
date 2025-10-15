@@ -113,7 +113,7 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency & WithId>(currenciesQuery);
 
- useEffect(() => {
+  useEffect(() => {
     if (currencies && !selectedCurrency) {
       const ars = currencies.find(c => c.code === 'ARS');
       if (ars) {
@@ -169,25 +169,31 @@ function OwnerDashboard() {
   };
 
   const currencyConverter = useMemo(() => {
-    return (amountInARS: number) => {
-        if (!currencies || !selectedCurrency) return amountInARS;
-
-        const targetCurrency = currencies.find(c => c.id === selectedCurrency);
+    return (amount: number, fromCurrencyCode: string) => {
+        if (!currencies || !selectedCurrency) return amount;
+        
+        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+        const toCurrency = currencies.find(c => c.id === selectedCurrency);
         const arsCurrency = currencies.find(c => c.code === 'ARS');
 
-        if (!targetCurrency || !arsCurrency || !arsCurrency.exchangeRate) {
-            return amountInARS;
+        if (!fromCurrency || !toCurrency || !arsCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate || !arsCurrency.exchangeRate) {
+            return amount;
+        }
+        
+        if (fromCurrency.code === toCurrency.code) {
+            return amount;
         }
 
-        if (targetCurrency.code === 'ARS') {
-            return amountInARS;
+        // Convert amount from its original currency to USD
+        let amountInUSD;
+        if (fromCurrency.code === 'ARS') {
+            amountInUSD = amount / arsCurrency.exchangeRate;
+        } else {
+            amountInUSD = amount / fromCurrency.exchangeRate;
         }
 
-        // Convert ARS to USD first
-        const amountInUSD = amountInARS / arsCurrency.exchangeRate;
-
-        // Then convert USD to the target currency
-        return amountInUSD * (targetCurrency.exchangeRate || 1);
+        // Convert amount from USD to the target currency
+        return amountInUSD * toCurrency.exchangeRate;
     };
 }, [currencies, selectedCurrency]);
 
@@ -230,12 +236,12 @@ function OwnerDashboard() {
         if (!acc[categoryName]) {
             acc[categoryName] = 0;
         }
-        acc[categoryName] += expense.amountARS;
+        acc[categoryName] += currencyConverter(expense.amount, expense.currency);
         return acc;
     }, {} as Record<string, number>);
 
     return Object.entries(expenseByCategory)
-        .map(([name, total]) => ({ name, total: currencyConverter(total) }))
+        .map(([name, total]) => ({ name, total }))
         .sort((a, b) => b.total - a.total)
         .slice(0, 5);
   }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
@@ -259,7 +265,7 @@ function OwnerDashboard() {
                 icon: expenseIcons[categoryName] || expenseIcons.default,
                 entity: expense.entityName || 'N/A',
                 category: categoryName,
-                amount: currencyConverter(expense.amountARS),
+                amount: currencyConverter(expense.amount, expense.currency),
             }
         });
   }, [filteredExpenses, categories, selectedCurrency, currencyConverter]);
@@ -274,12 +280,12 @@ function OwnerDashboard() {
         .map(budget => {
             const spent = expenses
                 .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
-                .reduce((acc, e) => acc + e.amountARS, 0);
+                .reduce((acc, e) => acc + currencyConverter(e.amount, e.currency), 0);
             
             return {
                 name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A',
-                Presupuestado: currencyConverter(budget.amountARS),
-                Gastado: currencyConverter(spent),
+                Presupuestado: currencyConverter(budget.amountARS, 'ARS'),
+                Gastado: spent,
             };
         }).slice(0, 5);
   }, [allBudgets, expenses, categories, date, selectedCurrency, currencyConverter]);
@@ -613,4 +619,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
