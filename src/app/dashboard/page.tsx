@@ -122,17 +122,7 @@ function OwnerDashboard() {
     ...(fxRatesData || [])
   ];
 
-
-  const currenciesQuery = useMemoFirebase(() => {
-      if (!ready) {
-        return null;
-      }
-      return query(collection(firestore, 'currencies'));
-  }, [firestore, ready, tenantId]);
-  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
-
-
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || isUserLoading || isLoadingFxRates;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingFxRates;
   const activeLicense = licenses?.[0];
 
   const handleSeedCategories = async () => {
@@ -283,7 +273,6 @@ function OwnerDashboard() {
         { id: 'usd-default', code: 'USD', name: 'Dólar Estadounidense' }
     ];
   }, []);
-
 
   if (isLoading) {
     return (
@@ -436,7 +425,14 @@ function OwnerDashboard() {
                  <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={barData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="name" position="top" offset={8} className="fill-foreground" fontSize={12} />
+                        <LabelList
+                            dataKey="total"
+                            position="top"
+                            offset={8}
+                            className="fill-foreground"
+                            fontSize={12}
+                            formatter={(value: number) => formatCurrency(value)}
+                        />
                       {barData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
@@ -609,5 +605,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-
