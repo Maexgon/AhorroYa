@@ -106,12 +106,24 @@ function OwnerDashboard() {
     }
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, ready, tenantId]);
-  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(allBudgetsQuery);
+  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
-  // SIMULATED FX RATES FOR DEMO
-  const fxRates: FxRate[] = [
-    { tenantId: tenantId || '', code: 'USD', date: new Date().toISOString(), rateToARS: 1000 }
-  ];
+  const fxRatesQuery = useMemoFirebase(() => {
+    if (!ready) {
+      return null;
+    }
+    return query(collection(firestore, 'fx_rates'), where('tenantId', '==', tenantId));
+  }, [firestore, ready, tenantId]);
+  const { data: fxRatesData, isLoading: isLoadingFxRates } = useCollection<FxRate>(fxRatesQuery);
+
+  const fxRates = useMemo(() => {
+    const rates = fxRatesData ? [...fxRatesData] : [];
+    if (!rates.some(rate => rate.code === 'USD')) {
+        rates.push({ tenantId: tenantId || '', code: 'USD', date: new Date().toISOString(), rateToARS: 1000 });
+    }
+    return rates;
+  }, [fxRatesData, tenantId]);
+
 
   const currenciesQuery = useMemoFirebase(() => {
       if (!ready) {
@@ -122,7 +134,7 @@ function OwnerDashboard() {
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<Currency>(currenciesQuery);
 
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || isUserLoading;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || isUserLoading || isLoadingFxRates;
   const activeLicense = licenses?.[0];
 
   const handleSeedCategories = async () => {
@@ -268,21 +280,26 @@ function OwnerDashboard() {
   }, [allBudgets, expenses, categories, currencyConverter, date]);
   
   const currencyOptions = useMemo(() => {
-    const options = [
-        { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' }
-    ];
+    const options = new Map<string, { id: string; code: string; name: string }>();
+    
+    // Add ARS as default
+    options.set('ARS', { id: 'ars-default', code: 'ARS', name: 'Peso Argentino' });
+
+    // Add currencies from Firestore
     if (currencies) {
         currencies.forEach(c => {
-            if (c.code !== 'ARS') {
-                options.push({ id: c.id, code: c.code, name: c.name });
+            if (!options.has(c.code)) {
+                options.set(c.code, { id: c.id, code: c.code, name: c.name });
             }
         });
     }
-    // Add USD if not present
-    if (!options.some(o => o.code === 'USD')) {
-        options.push({ id: 'usd-default', code: 'USD', name: 'Dolar Estadounidense' });
+
+    // Ensure USD is present
+    if (!options.has('USD')) {
+        options.set('USD', { id: 'usd-default', code: 'USD', name: 'Dolar Estadounidense' });
     }
-    return options;
+
+    return Array.from(options.values());
   }, [currencies]);
 
 
@@ -295,6 +312,8 @@ function OwnerDashboard() {
   }
 
   const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
+  const selectedCurrencyName = currencyOptions.find(c => c.code === selectedCurrency)?.name;
+
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -378,7 +397,7 @@ function OwnerDashboard() {
                 </Select>
                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                         <SelectValue placeholder="Moneda" />
+                         <SelectValue placeholder="Moneda">{selectedCurrencyName}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                         {currencyOptions.map(c => (
