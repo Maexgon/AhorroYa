@@ -36,6 +36,7 @@ function OwnerDashboard() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
+
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
@@ -169,10 +170,9 @@ function OwnerDashboard() {
       const exchangeRate = activeCurrency?.exchangeRate;
   
       if (!exchangeRate || exchangeRate === 0) {
-        return amount; // Return original amount if no rate found
+        return amount;
       }
       
-      // If base is ARS, to convert to another currency, divide by its rate vs ARS
       return amount / exchangeRate;
     };
   }, [selectedCurrency, currencies]);
@@ -357,10 +357,10 @@ function OwnerDashboard() {
                 </Select>
                  <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Moneda" />
+                         <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
                     <SelectContent>
-                        {currencies?.filter(c => c.code).map(c => (
+                        {currencies?.map(c => (
                             <SelectItem key={c.id} value={c.code}>
                                 {c.name}
                             </SelectItem>
