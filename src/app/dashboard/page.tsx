@@ -47,6 +47,8 @@ function OwnerDashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCurrency, setSelectedCurrency] = useState('ARS');
+  
+  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) {
@@ -165,16 +167,15 @@ function OwnerDashboard() {
   
   const currencyConverter = useMemo(() => {
     if (selectedCurrency === 'ARS' || !currencies) {
-      return (amount: number) => amount;
+        return (amount: number) => amount;
     }
-    
     const selectedCurr = currencies.find(c => c.code === selectedCurrency);
     const exchangeRate = selectedCurr?.exchangeRate;
 
     if (!exchangeRate || exchangeRate === 0) {
-      return (amount: number) => amount; // Return original amount if no rate
+        return (amount: number) => amount; // Return original amount if no rate
     }
-    
+
     // All expenses are in ARS, so to get other currency we divide by the rate
     return (amount: number) => amount / exchangeRate;
   }, [selectedCurrency, currencies]);
@@ -599,4 +600,3 @@ export default function DashboardPageContainer() {
   );
 }
 
-    
