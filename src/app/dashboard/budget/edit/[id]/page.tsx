@@ -16,12 +16,9 @@ import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
-import { ArrowLeft, Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Category, Budget } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 
 const budgetFormSchema = z.object({
@@ -42,7 +39,6 @@ export default function EditBudgetPage() {
   const budgetId = params.id as string;
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [openCategoryCombobox, setOpenCategoryCombobox] = React.useState(false);
 
 
   const budgetRef = useMemoFirebase(() => {
@@ -187,57 +183,22 @@ export default function EditBudgetPage() {
 
                         <div className="space-y-2">
                             <Label htmlFor="categoryId">Categoría</Label>
-                            <Controller
+                             <Controller
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                     <Popover open={openCategoryCombobox} onOpenChange={setOpenCategoryCombobox}>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                role="combobox"
-                                                aria-expanded={openCategoryCombobox}
-                                                className="w-full justify-between"
-                                            >
-                                                {field.value
-                                                    ? categories?.find((cat) => cat.id === field.value)?.name
-                                                    : "Selecciona una categoría"}
-                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent 
-                                          className="w-[--radix-popover-trigger-width] p-0"
-                                          onOpenAutoFocus={(e) => e.preventDefault()}
-                                        >
-                                            <Command>
-                                                <CommandInput placeholder="Buscar categoría..." />
-                                                <CommandEmpty>No se encontraron categorías.</CommandEmpty>
-                                                <CommandGroup>
-                                                    {categories?.map((cat) => (
-                                                        <CommandItem
-                                                            key={cat.id}
-                                                            value={cat.name}
-                                                            onSelect={(currentValue) => {
-                                                                const category = categories?.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
-                                                                if (category) {
-                                                                    field.onChange(category.id);
-                                                                }
-                                                                setOpenCategoryCombobox(false);
-                                                            }}
-                                                        >
-                                                            <Check
-                                                                className={cn(
-                                                                    "mr-2 h-4 w-4",
-                                                                    field.value === cat.id ? "opacity-100" : "opacity-0"
-                                                                )}
-                                                            />
-                                                            {cat.name}
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecciona una categoría" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {categories?.map((cat) => (
+                                                <SelectItem key={cat.id} value={cat.id}>
+                                                    {cat.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 )}
                             />
                             {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
