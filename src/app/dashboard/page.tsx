@@ -1,3 +1,4 @@
+
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -121,52 +122,6 @@ function OwnerDashboard() {
   }, [currencies]);
 
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
-  const activeLicense = licenses?.[0];
-
-  const handleSeedCategories = async () => {
-    if (!firestore || !activeTenant) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el tenant activo.' });
-        return;
-    }
-    setIsSeeding(true);
-    try {
-        const batch = writeBatch(firestore);
-
-        defaultCategories.forEach((category, catIndex) => {
-            const categoryId = crypto.randomUUID();
-            const categoryRef = doc(firestore, "categories", categoryId);
-            batch.set(categoryRef, {
-                id: categoryId,
-                tenantId: activeTenant.id,
-                name: category.name,
-                color: category.color,
-                order: catIndex
-            });
-
-            category.subcategories.forEach((subcategoryName, subCatIndex) => {
-                const subcategoryId = crypto.randomUUID();
-                const subcategoryRef = doc(firestore, "subcategories", subcategoryId);
-                batch.set(subcategoryRef, {
-                    id: subcategoryId,
-                    tenantId: activeTenant.id,
-                    categoryId: categoryId,
-                    name: subcategoryName,
-                    order: subCatIndex
-                });
-            });
-        });
-
-        await batch.commit();
-        toast({ title: '¡Éxito!', description: 'Las categorías por defecto han sido creadas. La página se refrescará.' });
-    } catch (error) {
-        console.error("Error seeding categories:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron crear las categorías.' });
-    } finally {
-        setIsSeeding(false);
-    }
-  };
-  
   const currencyConverter = useMemo(() => {
     return (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
       if (!currencies || !fromCurrencyCode || !toCurrencyCode || fromCurrencyCode === toCurrencyCode) {
@@ -177,14 +132,27 @@ function OwnerDashboard() {
       const toCurrency = currencies.find(c => c.code === toCurrencyCode);
 
       if (!fromCurrency?.exchangeRate || !toCurrency?.exchangeRate) {
+         if (fromCurrencyCode !== toCurrencyCode) {
+            console.log('DEBUG: Conversión abortada por falta de datos.', { fromCurrencyCode, toCurrencyCode, fromCurrency, toCurrency });
+        }
         return amount;
       }
 
       const amountInUSD = amount / fromCurrency.exchangeRate;
-      return amountInUSD * toCurrency.exchangeRate;
+      const convertedAmount = amountInUSD * toCurrency.exchangeRate;
+
+      console.log('--- DEBUG CONVERSION ---');
+      console.log('a. Simbolo moneda origen:', fromCurrency.code);
+      console.log('b. Simbolo moneda destino:', toCurrency.code);
+      console.log('c. ExchangeRate origen:', fromCurrency.exchangeRate);
+      console.log('d. ExchangeRate destino:', toCurrency.exchangeRate);
+      console.log('e. Monto origen:', amount);
+      console.log('f. Monto convertido:', convertedAmount);
+      console.log('------------------------');
+      
+      return convertedAmount;
     };
   }, [currencies]);
-
 
   const formatCurrency = useMemo(() => {
       return (amount: number) => {
@@ -295,6 +263,52 @@ function OwnerDashboard() {
         }).slice(0, 5);
   }, [allBudgets, expenses, categories, date, selectedCurrency, currencies, currencyConverter]);
   
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
+  const activeLicense = licenses?.[0];
+
+  const handleSeedCategories = async () => {
+    if (!firestore || !activeTenant) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el tenant activo.' });
+        return;
+    }
+    setIsSeeding(true);
+    try {
+        const batch = writeBatch(firestore);
+
+        defaultCategories.forEach((category, catIndex) => {
+            const categoryId = crypto.randomUUID();
+            const categoryRef = doc(firestore, "categories", categoryId);
+            batch.set(categoryRef, {
+                id: categoryId,
+                tenantId: activeTenant.id,
+                name: category.name,
+                color: category.color,
+                order: catIndex
+            });
+
+            category.subcategories.forEach((subcategoryName, subCatIndex) => {
+                const subcategoryId = crypto.randomUUID();
+                const subcategoryRef = doc(firestore, "subcategories", subcategoryId);
+                batch.set(subcategoryRef, {
+                    id: subcategoryId,
+                    tenantId: activeTenant.id,
+                    categoryId: categoryId,
+                    name: subcategoryName,
+                    order: subCatIndex
+                });
+            });
+        });
+
+        await batch.commit();
+        toast({ title: '¡Éxito!', description: 'Las categorías por defecto han sido creadas. La página se refrescará.' });
+    } catch (error) {
+        console.error("Error seeding categories:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron crear las categorías.' });
+    } finally {
+        setIsSeeding(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
