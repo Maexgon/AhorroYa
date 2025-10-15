@@ -18,7 +18,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { MultiSelect } from '@/components/shared/multi-select';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { Progress } from '@/components/ui/progress';
@@ -42,7 +41,7 @@ function OwnerDashboard() {
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCurrency, setSelectedCurrency] = useState('ARS');
 
@@ -205,11 +204,11 @@ function OwnerDashboard() {
 
         if (fromDate && expenseDate < fromDate) return false;
         if (toDate && expenseDate > toDate) return false;
-        if (selectedCategories.length > 0 && !selectedCategories.includes(expense.categoryId)) return false;
+        if (selectedCategory !== 'all' && expense.categoryId !== selectedCategory) return false;
         // User filter placeholder
         return true;
     });
-  }, [expenses, date, selectedCategories]);
+  }, [expenses, date, selectedCategory]);
 
   const barData = useMemo(() => {
     if (!filteredExpenses || !categories) return [];
@@ -271,8 +270,6 @@ function OwnerDashboard() {
             };
         }).slice(0, 5);
   }, [allBudgets, expenses, categories, currencyConverter, date]);
-  
-  const categoryOptions = categories?.map(c => ({ value: c.id, label: c.name })) || [];
   
   const currencyOptions = useMemo(() => {
     if (!currencies) return [];
@@ -366,13 +363,17 @@ function OwnerDashboard() {
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <MultiSelect
-                    options={categoryOptions}
-                    selected={selectedCategories}
-                    onChange={setSelectedCategories}
-                    placeholder="Categorías"
-                    className="w-full"
-                />
+                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todas las categorías</SelectItem>
+                        {categories?.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
                         <SelectValue placeholder="Moneda" />
