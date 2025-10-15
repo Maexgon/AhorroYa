@@ -28,7 +28,9 @@ import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
+// Extend the Currency type to include the exchangeRate if it's not in the base type
+type CurrencyWithRate = Currency & { exchangeRate?: number };
 
 
 function OwnerDashboard() {
@@ -108,14 +110,14 @@ function OwnerDashboard() {
   }, [firestore, ready, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
-  const currencyOptions: Currency[] = useMemo(() => {
-    return [
-        { code: 'ARS', name: 'Peso Argentino' },
-        { code: 'USD', name: 'Dólar Estadounidense' }
-    ];
-  }, []);
+  const currenciesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'currencies');
+  }, [firestore]);
+  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<CurrencyWithRate>(currenciesQuery);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading;
+
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
   const activeLicense = licenses?.[0];
 
   const handleSeedCategories = async () => {
@@ -161,16 +163,21 @@ function OwnerDashboard() {
     }
   };
   
-    const currencyConverter = useMemo(() => {
-    if (selectedCurrency === 'ARS') {
+  const currencyConverter = useMemo(() => {
+    if (selectedCurrency === 'ARS' || !currencies) {
       return (amount: number) => amount;
     }
-    // Hardcoded rate for demo purposes
-    const exchangeRate = 1000;
     
-    // All expenses are in ARS, so to get USD we divide by the rate
+    const selectedCurr = currencies.find(c => c.code === selectedCurrency);
+    const exchangeRate = selectedCurr?.exchangeRate;
+
+    if (!exchangeRate || exchangeRate === 0) {
+      return (amount: number) => amount; // Return original amount if no rate
+    }
+    
+    // All expenses are in ARS, so to get other currency we divide by the rate
     return (amount: number) => amount / exchangeRate;
-  }, [selectedCurrency]);
+  }, [selectedCurrency, currencies]);
 
 
   const formatCurrency = useMemo(() => {
@@ -269,7 +276,7 @@ function OwnerDashboard() {
   }
 
   const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
-  const selectedCurrencyName = currencyOptions.find(c => c.code === selectedCurrency)?.name;
+  const selectedCurrencyName = currencies?.find(c => c.code === selectedCurrency)?.name;
 
 
   return (
@@ -357,8 +364,8 @@ function OwnerDashboard() {
                          <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
                     <SelectContent>
-                        {currencyOptions.map(c => (
-                             <SelectItem key={c.code} value={c.code}>
+                        {currencies?.map(c => (
+                             <SelectItem key={c.id} value={c.code}>
                                 {c.name} ({c.code})
                              </SelectItem>
                         ))}

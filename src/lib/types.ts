@@ -40,6 +40,7 @@ export type User = {
 export type Currency = {
   code: string; // Currency code (e.g., ARS, USD).
   name: string; // Name of the currency (e.g., Argentine Peso).
+  exchangeRate?: number; // Exchange rate to the base currency.
 };
 export type FxRate = {
   tenantId: string; // Reference to Tenant. (Relationship: Tenant 1:N FxRate)
@@ -117,12 +118,13 @@ export type Alert = {
 };
 export type ReceiptRaw = {
   id: string; // Unique identifier for the raw receipt data.
-  tenantId: string; // Reference to Tenant. (Relationship: Tenant 1:N ReceiptRaw)
-  userId: string; // Reference to User. (Relationship: User 1:N ReceiptRaw)
-  expenseId?: string; // Reference to Expense. (Relationship: Expense 1:N ReceiptRaw)
+  tenantId: string; // Reference to Tenant.
+  userId: string; // Reference to User.
+  expenseId?: string; // Reference to the created Expense document (optional).
+  base64Content: string; // Base64 encoded content of the receipt file.
+  fileType: string; // The type of the file (e.g., image, pdf).
+  status: string; // The processing status (e.g., processing, processed, error).
   ocrPayload: string; // Raw OCR payload as a JSON string from the AI service.
-  parsedFields: string; // Normalized parsed fields from the OCR payload as a JSON string.
-  fingerprint: string; // Fingerprint of the receipt data for deduplication.
   createdAt: string; // Timestamp of when the raw receipt data was created.
 };
 export type ReceiptFingerprint = {
@@ -137,7 +139,9 @@ export type AuditLog = {
   entityId: string; // ID of the entity being audited.
   action: string; // Action performed on the entity (create, update, delete, softdelete).
   before: string; // State of the entity before the action as a JSON string.
-  after: 'string'; // State of the entity after the action as a JSON string.
+  after: string; // State of the entity after the action as a JSON string.
   userId: string; // Reference to User. (Relationship: User 1:N AuditLog)
   ts: string; // Timestamp of when the audit log entry was created.
 };
+
+    
