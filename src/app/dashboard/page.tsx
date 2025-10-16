@@ -112,7 +112,6 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   console.log('CONSULTA DE MONEDAS:', currenciesQuery?.toString());
-
   console.log('DATOS RECIBIDOS:', { expenses, currencies });
 
   useEffect(() => {
@@ -123,45 +122,6 @@ function OwnerDashboard() {
       }
     }
   }, [currencies, selectedCurrency]);
-
-  const currencyConverter = (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
-      console.log("--- Iniciando conversión ---");
-      if (!currencies) {
-        console.log("Salida temprana, el array de monedas no está listo.");
-        return amount;
-      }
-      
-      const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-      const toCurrency = currencies.find(c => c.code === toCurrencyCode);
-
-      console.log("a. simbolo moneda origen:", fromCurrency?.code);
-      console.log("b. simbolo moneda destino:", toCurrency?.code);
-
-      if (!fromCurrency || !toCurrency) {
-          console.log("Salida temprana, no se encontraron las monedas.");
-          return amount; // Devuelve el monto original si no se puede convertir
-      }
-      
-      const fromRate = fromCurrency.exchangeRate || 1;
-      const toRate = toCurrency.exchangeRate || 1;
-      
-      console.log("c. exchangeRate origen:", fromRate);
-      console.log("d. exchangeRate destino:", toRate);
-      console.log("e. valor original:", amount);
-
-      if (fromCurrency.id === toCurrency.id) {
-          console.log("Salida temprana, no se necesita conversion.");
-          return amount;
-      }
-
-      const amountInBase = amount / fromRate;
-      const convertedAmount = amountInBase * toRate;
-      
-      console.log("f. valor convertido:", convertedAmount);
-
-      return convertedAmount;
-  };
-
 
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
@@ -181,36 +141,32 @@ function OwnerDashboard() {
     if (!filteredExpenses || !categories || !currencies || !selectedCurrency) {
         return [];
     }
-    
-    const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
 
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-        const fromCurrency = currencies.find(c => c.code === expense.currency);
         
         console.log("--- Iniciando conversión ---");
+        const fromCurrency = currencies.find(c => c.code === expense.currency);
+        const toCurrency = currencies.find(c => c.id === selectedCurrency);
         console.log("a. simbolo moneda origen:", fromCurrency?.code);
-        console.log("b. simbolo moneda destino:", toCurrency.code);
-        
-        if (!fromCurrency) {
-          console.log("Salida temprana, no se encontró la moneda de origen.");
-          return acc;
+        console.log("b. simbolo moneda destino:", toCurrency?.code);
+
+        if (!fromCurrency || !toCurrency) {
+            console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+            return acc;
         }
 
         const fromRate = fromCurrency.exchangeRate || 1;
         const toRate = toCurrency.exchangeRate || 1;
-        
         console.log("c. exchangeRate origen:", fromRate);
         console.log("d. exchangeRate destino:", toRate);
         console.log("e. valor original:", expense.amount);
-        
+
         let convertedAmount = expense.amount;
-        if (fromCurrency.id !== toCurrency.id) {
+        if (fromCurrency.code !== toCurrency.code) {
             const amountInBase = expense.amount / fromRate;
             convertedAmount = amountInBase * toRate;
         }
-        
         console.log("f. valor convertido:", convertedAmount);
 
         if (!acc[categoryName]) {
@@ -229,6 +185,8 @@ function OwnerDashboard() {
 
 
   const recentExpenses = useMemo(() => {
+    if (!filteredExpenses || !categories || !currencies || !selectedCurrency) return [];
+    
     const expenseIcons: { [key: string]: React.ElementType } = {
         default: Sparkles,
         'Comestibles': Utensils,
@@ -237,8 +195,6 @@ function OwnerDashboard() {
         'Vida y Entretenimiento': Film,
         'Vivienda': Home,
     };
-    
-    if (!filteredExpenses || !categories || !currencies || !selectedCurrency) return [];
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) return [];
@@ -251,7 +207,7 @@ function OwnerDashboard() {
             const fromCurrency = currencies.find(c => c.code === expense.currency);
             
             let convertedAmount = expense.amount;
-            if (fromCurrency && fromCurrency.id !== toCurrency.id) {
+            if (fromCurrency && fromCurrency.code !== toCurrency.code) {
                 const fromRate = fromCurrency.exchangeRate || 1;
                 const toRate = toCurrency.exchangeRate || 1;
                 convertedAmount = (expense.amount / fromRate) * toRate;
@@ -284,7 +240,7 @@ function OwnerDashboard() {
                 .reduce((acc, e) => {
                     const fromCurrency = currencies.find(c => c.code === e.currency);
                     let convertedAmount = e.amount;
-                    if (fromCurrency && fromCurrency.id !== toCurrency.id) {
+                    if (fromCurrency && fromCurrency.code !== toCurrency.code) {
                         const fromRate = fromCurrency.exchangeRate || 1;
                         const toRate = toCurrency.exchangeRate || 1;
                         convertedAmount = (e.amount / fromRate) * toRate;
@@ -293,7 +249,7 @@ function OwnerDashboard() {
                 }, 0);
             
             let budgetAmountConverted = budget.amountARS;
-            if (arsCurrency.id !== toCurrency.id) {
+            if (arsCurrency.code !== toCurrency.code) {
                 const fromRate = arsCurrency.exchangeRate || 1;
                 const toRate = toCurrency.exchangeRate || 1;
                 budgetAmountConverted = (budget.amountARS / fromRate) * toRate;
@@ -699,4 +655,3 @@ export default function DashboardPageContainer() {
   );
 }
 
-    
