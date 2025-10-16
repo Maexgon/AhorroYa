@@ -28,7 +28,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 function OwnerDashboard() {
-  console.log("--- RENDER START ---");
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -41,87 +40,61 @@ function OwnerDashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
   
-  console.log("Estado actual:", { selectedCategory, selectedCurrency });
-
-  // --- 1. Carga de datos secuencial y controlada ---
-
   const userDocRef = useMemo(() => {
-    console.log("useMemo: Creando userDocRef. Deps:", { firestore: !!firestore, user: !!user });
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
   const tenantId = useMemo(() => {
-    const id = userData?.tenantIds?.[0];
-    console.log(`useMemo [tenantId]: Derivando tenantId. Resultado: ${id}`);
-    return id;
+    return userData?.tenantIds?.[0];
   }, [userData]);
 
 
   const tenantRef = useMemo(() => {
-    console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
     return tenantId ? doc(firestore, 'tenants', tenantId) : null;
   }, [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
   const licenseQuery = useMemo(() => {
-     console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null
   }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
   const categoriesQuery = useMemo(() => {
-     console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
   const expensesQuery = useMemo(() => {
-     console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null
   }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemo(() => {
-    console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null
   }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
   const currenciesQuery = useMemo(() => {
-    console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
     return firestore ? collection(firestore, 'currencies') : null
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
   useEffect(() => {
-    console.log("useEffect [currencies]: Se ejecuta.", { 
-      currencies: currencies?.length, 
-      selectedCurrency,
-      isEmpty: selectedCurrency === ''
-    });
-    
     if (currencies && currencies.length > 0 && selectedCurrency === '') {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
-      console.log("useEffect [currencies]: Buscando ARS. Encontrado:", arsCurrency);
-      
       if (arsCurrency) {
-        console.log("useEffect [currencies]: ✅ Estableciendo moneda por defecto a ARS:", arsCurrency.id);
         setSelectedCurrency(arsCurrency.id);
       } else {
-        console.log("useEffect [currencies]: ⚠️ No se encontró ARS. Usando primera moneda:", currencies[0]);
         setSelectedCurrency(currencies[0].id);
       }
     }
   }, [currencies, selectedCurrency]);
 
-  // --- 2. Lógica de renderizado y cálculos ---
-
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency || (!!tenantId && !activeTenant);
 
   const filteredExpenses = useMemo(() => {
-    console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses: !!allExpenses, date, selectedCategory });
     if (!allExpenses || !date?.from) return [];
     return allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
@@ -135,15 +108,12 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
-    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses: !!filteredExpenses, categories: !!categories, currencies: !!currencies, allBudgets: !!allBudgets, allExpenses: !!allExpenses, selectedCurrency });
     if (isLoading || !currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
-       console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
       return null;
     }
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) {
-      console.log("useMemo [processedData]: Salida temprana, moneda seleccionada no encontrada.");
       return null;
     };
 
@@ -209,7 +179,6 @@ function OwnerDashboard() {
                 };
             }).slice(0, 5);
     })();
-    console.log("useMemo [processedData]: ¡Cálculo Exitoso!");
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
   }, [filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date, isLoading]);
   
@@ -244,8 +213,6 @@ function OwnerDashboard() {
 
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
   
-  console.log("Estado de carga:", { isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, tenantId, selectedCurrency, processedData: !!processedData });
-
   if (isLoading || !processedData) {
     return (
       <div className="flex h-screen items-center justify-center">
