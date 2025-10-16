@@ -1,7 +1,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
@@ -39,8 +39,8 @@ function OwnerDashboard() {
     to: new Date(),
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedCurrency, setSelectedCurrency] = useState<string | undefined>(undefined);
-  
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('');
+
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
@@ -75,7 +75,7 @@ function OwnerDashboard() {
     if (!tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
-   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
+  const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
     if (!tenantId) return null;
@@ -89,7 +89,6 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  // Set default currency to ARS only once when currencies are loaded
   useEffect(() => {
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
@@ -97,9 +96,7 @@ function OwnerDashboard() {
         setSelectedCurrency(arsCurrency.id);
       }
     }
-  }, [currencies]);
-
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
+  }, [currencies, selectedCurrency]);
 
   const filteredExpenses = useMemo(() => {
     if (!allExpenses) return [];
@@ -116,22 +113,21 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
-    if (isLoading || !filteredExpenses || !categories || !currencies || !allBudgets || !allExpenses) {
+    if (!filteredExpenses || !categories || !currencies || !allBudgets || !allExpenses || !selectedCurrency) {
         return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) {
-        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
+      return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
-
+    
     const usdCurrency = currencies.find(c => c.code === 'USD');
     if (!usdCurrency) {
-        console.error("Moneda USD de referencia no encontrada.");
-        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
+      console.error("USD currency for reference not found.");
+      return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
-    const usdRate = usdCurrency.exchangeRate || 1;
-
+    
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
         if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) return 0;
@@ -210,7 +206,7 @@ function OwnerDashboard() {
 
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
 
-  }, [isLoading, filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
+  }, [filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
   
   const { barData, recentExpenses, budgetChartData, formatCurrency, toCurrencyCode } = processedData;
   
@@ -258,6 +254,8 @@ function OwnerDashboard() {
         setIsSeeding(false);
     }
   };
+  
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
 
   if (isLoading) {
     return (
