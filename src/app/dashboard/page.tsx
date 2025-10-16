@@ -86,16 +86,15 @@ function OwnerDashboard() {
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!ready || !user) {
+    if (!ready) {
         return null;
     }
     return query(
         collection(firestore, 'expenses'), 
         where('tenantId', '==', tenantId), 
-        where('deleted', '==', false),
-        where('userId', '==', user.uid)
+        where('deleted', '==', false)
     );
-  }, [firestore, ready, tenantId, user]);
+  }, [firestore, ready, tenantId]);
   const { data: expenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
@@ -137,7 +136,7 @@ function OwnerDashboard() {
   }, [expenses, date, selectedCategory]);
 
     const barData = useMemo(() => {
-        if (!filteredExpenses || !categories || !currencies || !selectedCurrency || currencies.length === 0) {
+        if (!filteredExpenses || !categories || !currencies || !selectedCurrency) {
             return [];
         }
 
@@ -153,7 +152,7 @@ function OwnerDashboard() {
             console.log("b. simbolo moneda destino:", toCurrency?.code);
 
             if (!fromCurrency || !toCurrency) {
-                 console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+                console.log("Salida temprana, no se encontró la moneda de origen o destino.");
                 return acc;
             }
             
@@ -162,6 +161,7 @@ function OwnerDashboard() {
             
             console.log("c. exchangeRate origen:", fromRate);
             console.log("d. exchangeRate destino:", toRate);
+            
             console.log("e. valor original:", expense.amount);
 
 
@@ -197,7 +197,7 @@ function OwnerDashboard() {
         'Vivienda': Home,
     };
     
-    if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) return [];
+    if (!filteredExpenses || !categories || !currencies || !selectedCurrency) return [];
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     if (!toCurrency) return [];
@@ -227,7 +227,7 @@ function OwnerDashboard() {
   }, [filteredExpenses, categories, selectedCurrency, currencies]);
 
   const budgetChartData = useMemo(() => {
-    if (!allBudgets || !expenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) return [];
+    if (!allBudgets || !expenses || !categories || !currencies || !selectedCurrency) return [];
 
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
@@ -659,3 +659,4 @@ export default function DashboardPageContainer() {
   );
 }
 
+    
