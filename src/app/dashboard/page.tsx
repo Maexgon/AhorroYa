@@ -72,10 +72,10 @@ function OwnerDashboard() {
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
+    if (!tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
-  const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(allExpensesQuery);
+  const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
     if (!tenantId) return null;
@@ -130,11 +130,11 @@ function OwnerDashboard() {
     
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+        
         if (!fromCurrency) return amount;
         
         const fromRate = fromCurrency.exchangeRate || 1;
         const toRate = toCurrency.exchangeRate || 1;
-        const usdRate = usdCurrency.exchangeRate || 1;
         
         const amountInUSD = amount / fromRate;
         return amountInUSD * toRate;
