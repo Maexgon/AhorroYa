@@ -33,7 +33,6 @@ function OwnerDashboard() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  // --- STATE MANAGEMENT ---
   const [isSeeding, setIsSeeding] = useState(false);
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -44,17 +43,13 @@ function OwnerDashboard() {
   
   console.log("Estado actual:", { selectedCategory, selectedCurrency });
 
-  // --- DATA FETCHING (SEQUENTIAL & CONTROLLED) ---
-
-  // 1. Fetch user data
-  console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    console.log("useMemo: Creando userDocRef. Deps:", { firestore, user: !!user });
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-  // 2. Derive tenantId directly from userData
   const tenantId = useMemo(() => {
     const id = userData?.tenantIds?.[0];
     console.log(`useMemo [tenantId]: Derivando tenantId. Resultado: ${id}`);
@@ -62,49 +57,55 @@ function OwnerDashboard() {
   }, [userData]);
 
 
-  // 3. Fetch all tenant-dependent data only when tenantId is available
-  console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
-  const tenantRef = useMemoFirebase(() => tenantId ? doc(firestore, 'tenants', tenantId) : null, [firestore, tenantId]);
+  const tenantRef = useMemoFirebase(() => {
+    console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
+    return tenantId ? doc(firestore, 'tenants', tenantId) : null;
+  }, [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
-  console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
-  const licenseQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
+  const licenseQuery = useMemoFirebase(() => {
+     console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
+    return tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null
+  }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
-  console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
-  const categoriesQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
+  const categoriesQuery = useMemoFirebase(() => {
+     console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
+    return tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null
+  }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
-  console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
-  const expensesQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null, [firestore, tenantId]);
+  const expensesQuery = useMemoFirebase(() => {
+     console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
+    return tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null
+  }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
-  const budgetsQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
+  const budgetsQuery = useMemoFirebase(() => {
+    console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
+    return tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null
+  }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  // 4. Fetch currencies (independent)
-  console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
-  const currenciesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'currencies') : null, [firestore]);
+  const currenciesQuery = useMemoFirebase(() => {
+    console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
+    return firestore ? collection(firestore, 'currencies') : null
+  }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  // --- EFFECT FOR DEFAULT CURRENCY ---
-  // This effect runs ONLY when currencies are loaded or change. It won't cause a loop.
   useEffect(() => {
     console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
     if (currencies && !selectedCurrency) {
-      const arsCurrency = currencies.find(c => c.code === 'ARS');
-      if (arsCurrency) {
-        console.log("useEffect [currencies]: Estableciendo moneda por defecto a ARS:", arsCurrency.id);
-        setSelectedCurrency(arsCurrency.id);
-      }
+        const arsCurrency = currencies.find(c => c.code === 'ARS');
+        if (arsCurrency) {
+            console.log("useEffect [currencies]: Estableciendo moneda por defecto a ARS:", arsCurrency.id);
+            setSelectedCurrency(arsCurrency.id);
+        }
     }
-  }, [currencies]);
-
-  // --- DERIVED STATE & MEMOIZED CALCULATIONS ---
+  }, [currencies, selectedCurrency]);
 
   const filteredExpenses = useMemo(() => {
-     console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses, date, selectedCategory });
+    console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses: !!allExpenses, date, selectedCategory });
     if (!allExpenses || !date?.from) return [];
     return allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
@@ -118,7 +119,7 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
-    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date });
+    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses: !!filteredExpenses, categories: !!categories, currencies: !!currencies, allBudgets: !!allBudgets, allExpenses: !!allExpenses, selectedCurrency });
     if (!currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
        console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
       return null;
@@ -136,9 +137,8 @@ function OwnerDashboard() {
           return amount;
         }
         if (!fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
-          return 0; // Or handle as an error
+          return 0;
         }
-        // Base conversion through USD as the common denominator
         const amountInBase = amount / fromCurrency.exchangeRate;
         return amountInBase * toCurrency.exchangeRate;
     };
@@ -197,7 +197,6 @@ function OwnerDashboard() {
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
   }, [filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date]);
   
-  // --- SEEDING LOGIC ---
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el tenant activo.' });
@@ -226,9 +225,7 @@ function OwnerDashboard() {
     }
   };
 
-  // --- RENDER LOGIC ---
 
-  // Master loading state. Render loader until all initial data is ready.
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency || !processedData;
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
   
