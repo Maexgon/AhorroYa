@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -24,7 +24,7 @@ import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tool
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const SAFE_DEFAULTS = {
@@ -46,7 +46,7 @@ function OwnerDashboard() {
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   
   // --- Data Fetching ---
   const userDocRef = useMemo(() => {
@@ -94,7 +94,7 @@ function OwnerDashboard() {
         const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
         const toDate = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : new Date(date.from.setHours(23, 59, 59, 999));
         if (expenseDate < fromDate || expenseDate > toDate) return false;
-        if (selectedCategory !== 'all' && expense.categoryId !== selectedCategory) return false;
+        if (selectedCategoryId !== 'all' && expense.categoryId !== selectedCategoryId) return false;
         return true;
     });
 
@@ -139,7 +139,7 @@ function OwnerDashboard() {
     })();
 
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS' };
-  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategory]);
+  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -172,6 +172,12 @@ function OwnerDashboard() {
 
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
   
+  const categoryOptions = useMemo(() => {
+    if (!categories) return [];
+    const options = categories.map(c => ({ label: c.name, value: c.id }));
+    return [{ label: 'Todas las categorías', value: 'all' }, ...options];
+  }, [categories]);
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -252,17 +258,14 @@ function OwnerDashboard() {
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value)}>
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Todas las categorías</SelectItem>
-                        {categories?.map(c => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                 <Combobox
+                    options={categoryOptions}
+                    value={selectedCategoryId}
+                    onSelect={(value) => setSelectedCategoryId(value === 'all' ? 'all' : value)}
+                    placeholder="Seleccionar categoría"
+                    searchPlaceholder="Buscar categoría..."
+                    emptyPlaceholder="No se encontró la categoría."
+                />
                  
                 <Popover>
                     <PopoverTrigger asChild>
