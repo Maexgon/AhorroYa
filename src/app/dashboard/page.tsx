@@ -90,18 +90,19 @@ function OwnerDashboard() {
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
   useEffect(() => {
+    // Set default currency to ARS only once when currencies are loaded
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
       if (arsCurrency) {
         setSelectedCurrency(arsCurrency.id);
       }
     }
-  }, [currencies]);
+  }, [currencies]); // Removed selectedCurrency from dependencies to prevent loop
 
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !activeTenant || !selectedCurrency;
 
   const filteredExpenses = useMemo(() => {
-    if (isLoading || !allExpenses) return [];
+    if (!allExpenses) return [];
     return allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
         const fromDate = date?.from ? new Date(date.from.setHours(0, 0, 0, 0)) : null;
@@ -112,7 +113,7 @@ function OwnerDashboard() {
         if (selectedCategory !== 'all' && expense.categoryId !== selectedCategory) return false;
         return true;
     });
-  }, [allExpenses, date, selectedCategory, isLoading]);
+  }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
     if (isLoading || !filteredExpenses || !categories || !currencies || !allBudgets || !allExpenses) {
@@ -130,14 +131,10 @@ function OwnerDashboard() {
     
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+        if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) return 0;
         
-        if (!fromCurrency) return amount;
-        
-        const fromRate = fromCurrency.exchangeRate || 1;
-        const toRate = toCurrency.exchangeRate || 1;
-        
-        const amountInUSD = amount / fromRate;
-        return amountInUSD * toRate;
+        const amountInUSD = amount / fromCurrency.exchangeRate;
+        return amountInUSD * toCurrency.exchangeRate;
     };
 
     const finalFormatCurrency = (amount: number) => {
@@ -587,3 +584,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
