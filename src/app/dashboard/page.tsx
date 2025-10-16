@@ -1,4 +1,3 @@
-
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -46,7 +45,7 @@ function OwnerDashboard() {
     to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('');
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string>('');
 
   // --- Data Fetching ---
   const userDocRef = useMemo(() => {
@@ -76,31 +75,21 @@ function OwnerDashboard() {
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies;
-
-  useEffect(() => {
-      if (currencies && !selectedCurrency) {
-          const arsCurrency = currencies.find(c => c.code === 'ARS');
-          if (arsCurrency) {
-              setSelectedCurrency(arsCurrency.id);
-          } else if (currencies.length > 0) {
-              setSelectedCurrency(currencies[0].id);
-          }
-      }
-  }, [currencies, selectedCurrency]);
-
+  
+  const defaultCurrencyId = useMemo(() => {
+    if (!currencies) return '';
+    return currencies.find(c => c.code === 'ARS')?.id || '';
+  }, [currencies]);
+  
+  const activeCurrencyId = selectedCurrencyId || defaultCurrencyId;
+  
   const processedData = useMemo(() => {
-    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets) {
+    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets || !activeCurrencyId) {
       return SAFE_DEFAULTS;
     }
 
-    const defaultCurrencyId = currencies.find(c => c.code === 'ARS')?.id || currencies[0]?.id || '';
-    const activeCurrencyId = selectedCurrency || defaultCurrencyId;
     const toCurrency = currencies.find(c => c.id === activeCurrencyId);
-
-    // Absolute guard against race conditions
-    if (!toCurrency) {
-      return SAFE_DEFAULTS;
-    }
+    if (!toCurrency) return SAFE_DEFAULTS;
 
     const finalFormatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
@@ -177,7 +166,7 @@ function OwnerDashboard() {
     })();
 
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
-  }, [isLoading, allExpenses, allBudgets, categories, currencies, date, selectedCategory, selectedCurrency]);
+  }, [isLoading, allExpenses, allBudgets, categories, currencies, date, selectedCategory, activeCurrencyId]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -301,7 +290,7 @@ function OwnerDashboard() {
                         ))}
                     </SelectContent>
                 </Select>
-                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+                 <Select value={activeCurrencyId} onValueChange={setSelectedCurrencyId}>
                     <SelectTrigger className="w-full">
                          <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
@@ -539,5 +528,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
