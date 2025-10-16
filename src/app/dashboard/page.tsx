@@ -45,26 +45,21 @@ function OwnerDashboard() {
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+  
+  const tenantId = useMemo(() => {
+    return userData?.tenantIds?.[0];
+  }, [userData]);
 
-  const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
-
-  const tenantRef = useMemo(() => {
-    return tenantId ? doc(firestore, 'tenants', tenantId) : null;
-  }, [tenantId]);
+  const tenantRef = useMemo(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
-
   const licenseQuery = useMemo(() => (tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
-
   const categoriesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
-
   const expensesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
-
   const budgetsQuery = useMemo(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
-  
   const currenciesQuery = useMemo(() => (firestore ? collection(firestore, 'currencies') : null), [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
