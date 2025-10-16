@@ -1,4 +1,3 @@
-
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -12,7 +11,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2 } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, ChevronDown, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -25,6 +24,7 @@ import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 function OwnerDashboard() {
   const { user } = useUser();
@@ -39,7 +39,7 @@ function OwnerDashboard() {
     to: new Date(),
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('');
+  const [selectedCurrency, setSelectedCurrency] = useState<string | undefined>(undefined);
   
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -75,7 +75,7 @@ function OwnerDashboard() {
     if (!tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
-  const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
+   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
     if (!tenantId) return null;
@@ -89,17 +89,17 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
+  // Set default currency to ARS only once when currencies are loaded
   useEffect(() => {
-    // Set default currency to ARS only once when currencies are loaded
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
       if (arsCurrency) {
         setSelectedCurrency(arsCurrency.id);
       }
     }
-  }, [currencies]); // Removed selectedCurrency from dependencies to prevent loop
+  }, [currencies]);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !activeTenant || !selectedCurrency;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
 
   const filteredExpenses = useMemo(() => {
     if (!allExpenses) return [];
@@ -117,18 +117,21 @@ function OwnerDashboard() {
 
   const processedData = useMemo(() => {
     if (isLoading || !filteredExpenses || !categories || !currencies || !allBudgets || !allExpenses) {
-        const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
-    }
-
-    const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    const usdCurrency = currencies.find(c => c.code === 'USD');
-
-    if (!toCurrency || !usdCurrency) {
-        const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
+        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
     
+    const toCurrency = currencies.find(c => c.id === selectedCurrency);
+    if (!toCurrency) {
+        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
+    }
+
+    const usdCurrency = currencies.find(c => c.code === 'USD');
+    if (!usdCurrency) {
+        console.error("Moneda USD de referencia no encontrada.");
+        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
+    }
+    const usdRate = usdCurrency.exchangeRate || 1;
+
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
         if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) return 0;
@@ -321,12 +324,12 @@ function OwnerDashboard() {
         <div className="flex flex-wrap gap-2">
             <Button asChild>
                 <Link href="/dashboard/budget">
-                    <Plus className="mr-2 h-4 w-4" /> Ver Presupuesto
+                    <TableIcon className="mr-2 h-4 w-4" /> Ver Presupuesto
                 </Link>
             </Button>
             <Button asChild>
                 <Link href="/dashboard/expenses">
-                    <Plus className="mr-2 h-4 w-4" /> Ver Gastos
+                    <TableIcon className="mr-2 h-4 w-4" /> Ver Gastos
                 </Link>
             </Button>
         </div>
@@ -584,5 +587,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
