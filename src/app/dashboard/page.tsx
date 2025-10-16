@@ -67,50 +67,37 @@ function OwnerDashboard() {
   const currenciesQuery = useMemo(() => (firestore ? collection(firestore, 'currencies') : null), [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  // Effect to set default currency once data is available
-  useEffect(() => {
-    if (currencies && selectedCurrency === '') {
-        const arsCurrency = currencies.find(c => c.code === 'ARS');
-        if (arsCurrency) {
-            setSelectedCurrency(arsCurrency.id);
-        } else if (currencies.length > 0) {
-            setSelectedCurrency(currencies[0].id);
-        }
-    }
-  }, [currencies, selectedCurrency]);
-
-  // Master loading state.
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId || !selectedCurrency;
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId;
 
   const processedData = useMemo(() => {
-    // This calculation will only run when isLoading is false, guaranteeing all data is available.
-    if (isLoading) {
+    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets) {
       return {
         barData: [],
         recentExpenses: [],
         budgetChartData: [],
-        formatCurrency: (amount: number) => amount.toString(),
-        toCurrencyCode: '',
+        formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+        toCurrencyCode: 'ARS',
+        activeCurrency: ''
       };
     }
 
-    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
-    
-    // Fallback to prevent crash if toCurrency is somehow not found even after loading.
-    const safeToCurrencyCode = toCurrency?.code ?? 'ARS';
+    const arsDefaultCurrency = currencies.find(c => c.code === 'ARS');
+    const defaultCurrencyId = arsDefaultCurrency?.id || (currencies.length > 0 ? currencies[0].id : '');
+    const activeCurrencyId = selectedCurrency || defaultCurrencyId;
+    const toCurrency = currencies.find(c => c.id === activeCurrencyId)!;
 
     const finalFormatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
             style: 'currency',
-            currency: safeToCurrencyCode,
+            currency: toCurrency.code,
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(amount);
     };
 
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
-        const fromCurrency = currencies!.find(c => c.code === fromCurrencyCode);
-        if (!fromCurrency || !toCurrency || fromCurrency.id === toCurrency.id) {
+        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+        if (!fromCurrency || fromCurrency.id === toCurrency.id) {
           return amount;
         }
         const fromRate = fromCurrency.exchangeRate || 1;
@@ -119,7 +106,7 @@ function OwnerDashboard() {
         return amountInBase * toRate;
     };
 
-    const filteredExpenses = allExpenses!.filter(expense => {
+    const filteredExpenses = allExpenses.filter(expense => {
         if (!date?.from) return false;
         const expenseDate = new Date(expense.date);
         const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
@@ -130,7 +117,7 @@ function OwnerDashboard() {
     });
 
     const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
-        const categoryName = categories!.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         const convertedAmount = convertAmount(expense.amount, expense.currency);
         if (!acc[categoryName]) acc[categoryName] = 0;
         acc[categoryName] += convertedAmount;
@@ -148,7 +135,7 @@ function OwnerDashboard() {
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
-            const categoryName = categories!.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+            const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
             return {
                 ...expense, icon: expenseIcons[categoryName] || expenseIcons.default, entity: expense.entityName || 'N/A', category: categoryName, amountConverted: convertAmount(expense.amount, expense.currency),
             }
@@ -157,10 +144,10 @@ function OwnerDashboard() {
     const budgetChartData = (() => {
         const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
         const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
-        return allBudgets!
+        return allBudgets
             .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
             .map(budget => {
-                const spentInARS = allExpenses!
+                const spentInARS = allExpenses
                     .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                     .reduce((acc, e) => acc + e.amountARS, 0);
                 
@@ -168,12 +155,12 @@ function OwnerDashboard() {
                 const budgetAmountConverted = convertAmount(budget.amountARS, 'ARS');
 
                 return {
-                    name: categories!.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budgetAmountConverted, Gastado: spentConverted,
+                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budgetAmountConverted, Gastado: spentConverted,
                 };
             }).slice(0, 5);
     })();
 
-    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: safeToCurrencyCode };
+    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code, activeCurrency: activeCurrencyId };
   }, [isLoading, allExpenses, allBudgets, categories, currencies, date, selectedCategory, selectedCurrency]);
   
   const handleSeedCategories = async () => {
@@ -215,7 +202,6 @@ function OwnerDashboard() {
     );
   }
 
-  // At this point, isLoading is false, so all data is guaranteed to be loaded.
   const showSeedButton = !isLoadingCategories && (!categories || categories.length === 0) && !!activeTenant;
   const activeLicense = licenses?.[0];
 
@@ -299,7 +285,7 @@ function OwnerDashboard() {
                         ))}
                     </SelectContent>
                 </Select>
-                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+                 <Select value={processedData.activeCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
                          <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
@@ -538,4 +524,3 @@ export default function DashboardPageContainer() {
   );
 }
 
-    
