@@ -70,7 +70,8 @@ function OwnerDashboard() {
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId;
 
   const processedData = useMemo(() => {
-    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets) {
+    // This is the main safeguard. If any required data is not loaded, return a safe, empty structure.
+    if (!currencies || !categories || !allExpenses || !allBudgets) {
       return {
         barData: [],
         recentExpenses: [],
@@ -81,10 +82,21 @@ function OwnerDashboard() {
       };
     }
 
-    const arsDefaultCurrency = currencies.find(c => c.code === 'ARS');
-    const defaultCurrencyId = arsDefaultCurrency?.id || (currencies.length > 0 ? currencies[0].id : '');
-    const activeCurrencyId = selectedCurrency || defaultCurrencyId;
-    const toCurrency = currencies.find(c => c.id === activeCurrencyId)!;
+    const defaultCurrency = currencies.find(c => c.code === 'ARS');
+    const activeCurrencyId = selectedCurrency || defaultCurrency?.id || '';
+    const toCurrency = currencies.find(c => c.id === activeCurrencyId);
+
+    // If toCurrency is STILL not found (edge case), we can't proceed with currency-dependent calcs.
+    if (!toCurrency) {
+       return {
+        barData: [],
+        recentExpenses: [],
+        budgetChartData: [],
+        formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+        toCurrencyCode: 'ARS',
+        activeCurrency: activeCurrencyId
+      };
+    }
 
     const finalFormatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
@@ -523,4 +535,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
