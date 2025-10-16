@@ -43,9 +43,11 @@ function OwnerDashboard() {
   
   console.log("Estado actual:", { selectedCategory, selectedCurrency });
 
+  // --- 1. Carga de datos secuencial y controlada ---
+
   const userDocRef = useMemoFirebase(() => {
+    console.log("useMemo: Creando userDocRef. Deps:", { firestore: !!firestore, user: !!user });
     if (!firestore || !user) return null;
-    console.log("useMemo: Creando userDocRef. Deps:", { firestore, user: !!user });
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
@@ -102,7 +104,11 @@ function OwnerDashboard() {
             setSelectedCurrency(arsCurrency.id);
         }
     }
-  }, [currencies, selectedCurrency]);
+  }, [currencies]);
+
+  // --- 2. Lógica de renderizado y cálculos ---
+
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency || (!!tenantId && !activeTenant);
 
   const filteredExpenses = useMemo(() => {
     console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses: !!allExpenses, date, selectedCategory });
@@ -120,7 +126,7 @@ function OwnerDashboard() {
 
   const processedData = useMemo(() => {
     console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses: !!filteredExpenses, categories: !!categories, currencies: !!currencies, allBudgets: !!allBudgets, allExpenses: !!allExpenses, selectedCurrency });
-    if (!currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
+    if (isLoading || !currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
        console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
       return null;
     }
@@ -195,7 +201,7 @@ function OwnerDashboard() {
     })();
     console.log("useMemo [processedData]: ¡Cálculo Exitoso!");
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
-  }, [filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date]);
+  }, [filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date, isLoading]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -226,12 +232,11 @@ function OwnerDashboard() {
   };
 
 
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency || !processedData;
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
   
   console.log("Estado de carga:", { isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, tenantId, selectedCurrency, processedData: !!processedData });
 
-  if (isLoading) {
+  if (isLoading || !processedData) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -560,3 +565,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
