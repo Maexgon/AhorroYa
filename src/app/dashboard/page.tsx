@@ -27,6 +27,14 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
+const SAFE_DEFAULTS = {
+    barData: [],
+    recentExpenses: [],
+    budgetChartData: [],
+    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+    toCurrencyCode: 'ARS',
+};
+
 function OwnerDashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -67,35 +75,31 @@ function OwnerDashboard() {
   const currenciesQuery = useMemo(() => (firestore ? collection(firestore, 'currencies') : null), [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId;
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies;
+
+  useEffect(() => {
+      if (currencies && !selectedCurrency) {
+          const arsCurrency = currencies.find(c => c.code === 'ARS');
+          if (arsCurrency) {
+              setSelectedCurrency(arsCurrency.id);
+          } else if (currencies.length > 0) {
+              setSelectedCurrency(currencies[0].id);
+          }
+      }
+  }, [currencies, selectedCurrency]);
 
   const processedData = useMemo(() => {
-    // This is the main safeguard. If any required data is not loaded, return a safe, empty structure.
-    if (!currencies || !categories || !allExpenses || !allBudgets) {
-      return {
-        barData: [],
-        recentExpenses: [],
-        budgetChartData: [],
-        formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-        toCurrencyCode: 'ARS',
-        activeCurrency: ''
-      };
+    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets) {
+      return SAFE_DEFAULTS;
     }
 
-    const defaultCurrency = currencies.find(c => c.code === 'ARS');
-    const activeCurrencyId = selectedCurrency || defaultCurrency?.id || '';
+    const defaultCurrencyId = currencies.find(c => c.code === 'ARS')?.id || currencies[0]?.id || '';
+    const activeCurrencyId = selectedCurrency || defaultCurrencyId;
     const toCurrency = currencies.find(c => c.id === activeCurrencyId);
 
-    // If toCurrency is STILL not found (edge case), we can't proceed with currency-dependent calcs.
+    // Absolute guard against race conditions
     if (!toCurrency) {
-       return {
-        barData: [],
-        recentExpenses: [],
-        budgetChartData: [],
-        formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-        toCurrencyCode: 'ARS',
-        activeCurrency: activeCurrencyId
-      };
+      return SAFE_DEFAULTS;
     }
 
     const finalFormatCurrency = (amount: number) => {
@@ -172,7 +176,7 @@ function OwnerDashboard() {
             }).slice(0, 5);
     })();
 
-    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code, activeCurrency: activeCurrencyId };
+    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
   }, [isLoading, allExpenses, allBudgets, categories, currencies, date, selectedCategory, selectedCurrency]);
   
   const handleSeedCategories = async () => {
@@ -297,7 +301,7 @@ function OwnerDashboard() {
                         ))}
                     </SelectContent>
                 </Select>
-                 <Select value={processedData.activeCurrency} onValueChange={setSelectedCurrency}>
+                 <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
                     <SelectTrigger className="w-full">
                          <SelectValue placeholder="Moneda" />
                     </SelectTrigger>
@@ -535,3 +539,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
