@@ -100,7 +100,7 @@ export default function NewExpensePage() {
   
   const currenciesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'currencies'));
+    return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
 
@@ -109,7 +109,7 @@ export default function NewExpensePage() {
     if (currencies) {
         const arsCurrency = currencies.find(c => c.code === 'ARS');
         if (arsCurrency) {
-            setValue('currency', arsCurrency.id);
+            setValue('currency', arsCurrency.code);
         }
     }
   }, [currencies, setValue]);
@@ -265,7 +265,7 @@ export default function NewExpensePage() {
              writes.push({path: newReceiptRef.path, data: receiptData});
         }
         
-        const selectedCurrencyDoc = currencies.find(c => c.id === data.currency);
+        const selectedCurrencyDoc = currencies.find(c => c.code === data.currency);
         const arsCurrencyDoc = currencies.find(c => c.code === 'ARS');
 
         let amountARS = data.amount;
@@ -281,7 +281,7 @@ export default function NewExpensePage() {
             userId: user.uid,
             date: data.date.toISOString(),
             amount: data.amount,
-            currency: data.currency, // Storing the currency document ID
+            currency: data.currency, // Storing the currency CODE
             amountARS: amountARS,
             categoryId: data.categoryId,
             subcategoryId: data.subcategoryId || null,
@@ -429,7 +429,7 @@ export default function NewExpensePage() {
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 {currencies?.map(rate => (
-                                                    <SelectItem key={rate.id} value={rate.id}>{rate.code}</SelectItem>
+                                                    <SelectItem key={rate.id} value={rate.code}>{rate.code}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
@@ -519,3 +519,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    

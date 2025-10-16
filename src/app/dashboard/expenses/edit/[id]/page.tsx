@@ -92,7 +92,7 @@ export default function EditExpensePage() {
   
   const currenciesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'currencies'));
+    return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
 
@@ -112,7 +112,7 @@ export default function EditExpensePage() {
 
     const expenseToUpdateRef = doc(firestore, 'expenses', expenseId);
     
-    const selectedCurrencyDoc = currencies.find(c => c.id === data.currency);
+    const selectedCurrencyDoc = currencies.find(c => c.code === data.currency);
     const arsCurrencyDoc = currencies.find(c => c.code === 'ARS');
 
     let amountARS = data.amount;
@@ -236,7 +236,7 @@ export default function EditExpensePage() {
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 {currencies?.map(rate => (
-                                                    <SelectItem key={rate.id} value={rate.id}>{rate.code}</SelectItem>
+                                                    <SelectItem key={rate.id} value={rate.code}>{rate.code}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
@@ -327,3 +327,5 @@ export default function EditExpensePage() {
     </div>
   );
 }
+
+    
