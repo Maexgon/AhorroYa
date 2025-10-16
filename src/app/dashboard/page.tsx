@@ -41,55 +41,55 @@ function OwnerDashboard() {
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
-
+  
   console.log("Estado actual:", { selectedCategory, selectedCurrency });
 
-  const userDocRef = useMemo(() => {
+  const userDocRef = useMemoFirebase(() => {
     console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
   
-  const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
+  const tenantId = userData?.tenantIds?.[0];
   console.log("Direct tenantId:", tenantId);
   
-  const tenantRef = useMemo(() => {
+  const tenantRef = useMemoFirebase(() => {
     console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
     if (!tenantId) return null;
     return doc(firestore, 'tenants', tenantId);
   }, [tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
-  const licenseQuery = useMemo(() => {
+  const licenseQuery = useMemoFirebase(() => {
     console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
-  const categoriesQuery = useMemo(() => {
+  const categoriesQuery = useMemoFirebase(() => {
     console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
-  const expensesQuery = useMemo(() => {
+  const expensesQuery = useMemoFirebase(() => {
     console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const budgetsQuery = useMemo(() => {
+  const budgetsQuery = useMemoFirebase(() => {
     console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const currenciesQuery = useMemo(() => {
+  const currenciesQuery = useMemoFirebase(() => {
     console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
     if (!firestore) return null;
     return collection(firestore, 'currencies');
@@ -101,7 +101,6 @@ function OwnerDashboard() {
     if (currencies && !selectedCurrency) {
         const arsCurrency = currencies.find(c => c.code === 'ARS');
         if (arsCurrency) {
-            console.log("useEffect [currencies]: Estableciendo ARS por defecto:", arsCurrency.id);
             setSelectedCurrency(arsCurrency.id);
         }
     }
@@ -139,9 +138,8 @@ function OwnerDashboard() {
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
         if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
-          return 0; // Return 0 if conversion is not possible
+          return 0;
         }
-        // Base conversion through USD
         const amountInUSD = amount / fromCurrency.exchangeRate;
         return amountInUSD * toCurrency.exchangeRate;
     };
@@ -597,3 +595,4 @@ export default function DashboardPageContainer() {
   );
 }
 
+    
