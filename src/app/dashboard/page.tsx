@@ -37,66 +37,73 @@ function OwnerDashboard() {
 
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    to: new Date(),
+    to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
-  
-  // Fetch all necessary data
-  const userDocRef = useMemoFirebase(() => {
+
+  console.log("Estado actual:", { selectedCategory, selectedCurrency });
+
+  const userDocRef = useMemo(() => {
+    console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
   
   const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
+  console.log("Direct tenantId:", tenantId);
   
-  const tenantRef = useMemoFirebase(() => {
+  const tenantRef = useMemo(() => {
+    console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
     if (!tenantId) return null;
     return doc(firestore, 'tenants', tenantId);
   }, [tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
-  const licenseQuery = useMemoFirebase(() => {
+  const licenseQuery = useMemo(() => {
+    console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
-  const categoriesQuery = useMemoFirebase(() => {
+  const categoriesQuery = useMemo(() => {
+    console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
-  const expensesQuery = useMemoFirebase(() => {
+  const expensesQuery = useMemo(() => {
+    console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const budgetsQuery = useMemoFirebase(() => {
+  const budgetsQuery = useMemo(() => {
+    console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const currenciesQuery = useMemoFirebase(() => {
+  const currenciesQuery = useMemo(() => {
+    console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
     if (!firestore) return null;
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  // This effect sets the default currency to ARS once currencies are loaded.
-  // It only runs when `currencies` data arrives. It won't cause a loop.
   useEffect(() => {
     console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
-    if (currencies && selectedCurrency === '') {
-      const arsCurrency = currencies.find(c => c.code === 'ARS');
-      if (arsCurrency) {
-        console.log("useEffect [currencies]: Estableciendo ARS por defecto:", arsCurrency.id);
-        setSelectedCurrency(arsCurrency.id);
-      }
+    if (currencies && !selectedCurrency) {
+        const arsCurrency = currencies.find(c => c.code === 'ARS');
+        if (arsCurrency) {
+            console.log("useEffect [currencies]: Estableciendo ARS por defecto:", arsCurrency.id);
+            setSelectedCurrency(arsCurrency.id);
+        }
     }
   }, [currencies]);
 
@@ -134,6 +141,7 @@ function OwnerDashboard() {
         if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
           return 0; // Return 0 if conversion is not possible
         }
+        // Base conversion through USD
         const amountInUSD = amount / fromCurrency.exchangeRate;
         return amountInUSD * toCurrency.exchangeRate;
     };
@@ -589,4 +597,3 @@ export default function DashboardPageContainer() {
   );
 }
 
-    
