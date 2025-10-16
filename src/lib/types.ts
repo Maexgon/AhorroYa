@@ -38,7 +38,6 @@ export type User = {
   isSuperadmin?: boolean; // Indicates if the user has superadmin privileges.
 };
 export type Currency = {
-  id: string; // Unique identifier for the currency document
   code: string; // Currency code (e.g., ARS, USD).
   name: string; // Name of the currency (e.g., Argentine Peso).
   exchangeRate?: number; // Exchange rate to the base currency.

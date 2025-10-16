@@ -83,7 +83,7 @@ function OwnerDashboard() {
     }
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, ready, tenantId]);
-  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!ready || !user) {
@@ -96,7 +96,7 @@ function OwnerDashboard() {
         where('userId', '==', user.uid)
     );
   }, [firestore, ready, tenantId, user]);
-  const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
+  const { data: expenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
     if (!ready) {
@@ -104,7 +104,7 @@ function OwnerDashboard() {
     }
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, ready, tenantId]);
-  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
+  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
   const currenciesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -137,7 +137,7 @@ function OwnerDashboard() {
   }, [expenses, date, selectedCategory]);
 
     const barData = useMemo(() => {
-        if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) {
+        if (!filteredExpenses || !categories || !currencies || !selectedCurrency || currencies.length === 0) {
             return [];
         }
 
@@ -198,6 +198,10 @@ function OwnerDashboard() {
     };
     
     if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) return [];
+    
+    const toCurrency = currencies.find(c => c.id === selectedCurrency);
+    if (!toCurrency) return [];
+
 
     return filteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -205,7 +209,6 @@ function OwnerDashboard() {
         .map(expense => {
             const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
             const fromCurrency = currencies.find(c => c.id === expense.currency);
-            const toCurrency = currencies.find(c => c.id === selectedCurrency);
             
             let convertedAmount = expense.amount;
             if (fromCurrency && toCurrency && fromCurrency.id !== toCurrency.id) {
@@ -656,5 +659,3 @@ export default function DashboardPageContainer() {
   );
 }
 
-
-    
