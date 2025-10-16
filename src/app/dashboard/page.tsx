@@ -74,7 +74,7 @@ function OwnerDashboard() {
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!tenantId) return null;
+    if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
@@ -99,9 +99,10 @@ function OwnerDashboard() {
         setSelectedCurrency(arsCurrency.id);
       }
     }
-  }, [currencies, selectedCurrency]);
+  }, [currencies]);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId || !selectedCurrency;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !activeTenant;
+
 
   const filteredExpenses = useMemo(() => {
     if (isLoading || !allExpenses) return [];
@@ -118,38 +119,37 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory, isLoading]);
 
   const processedData = useMemo(() => {
-    if (isLoading || !filteredExpenses || !categories || !currencies || !selectedCurrency || !allBudgets || !allExpenses) {
+    if (!filteredExpenses || !categories || !currencies || !selectedCurrency || !allBudgets || !allExpenses) {
         const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
         return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
     }
 
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) {
+    const usdCurrency = currencies.find(c => c.code === 'USD');
+
+    if (!toCurrency || !usdCurrency) {
         const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
         return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
     }
 
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-
-        if (!fromCurrency || !toCurrency) {
+        if (!fromCurrency) {
             return amount; 
         }
 
-        if (fromCurrency.code === toCurrency.code) {
-            return amount;
-        }
+        const fromRate = fromCurrency.exchangeRate || 1;
+        const toRate = toCurrency.exchangeRate || 1;
 
-        const amountInBase = amount / (fromCurrency.exchangeRate || 1);
-        const convertedAmount = amountInBase * (toCurrency.exchangeRate || 1);
-        return convertedAmount;
+        // Convert amount to USD first, then to the target currency
+        const amountInUSD = amount / fromRate;
+        return amountInUSD * toRate;
     };
 
     const finalFormatCurrency = (amount: number) => {
-        const currencyCode = toCurrency?.code || 'ARS';
         return new Intl.NumberFormat('es-AR', {
             style: 'currency',
-            currency: currencyCode,
+            currency: toCurrency.code,
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(amount);
@@ -216,7 +216,7 @@ function OwnerDashboard() {
 
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
 
-  }, [isLoading, filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
+  }, [filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
   
   const { barData, recentExpenses, budgetChartData, formatCurrency, toCurrencyCode } = processedData;
   
@@ -593,5 +593,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
