@@ -122,23 +122,6 @@ function OwnerDashboard() {
   }, [currencies]);
 
 
-  const formatCurrency = useMemo(() => {
-      return (amount: number) => {
-          if (!currencies || !selectedCurrency) {
-              return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-          }
-          const currencyInfo = currencies.find(c => c.id === selectedCurrency);
-          const currencyCode = currencyInfo?.code || 'ARS';
-
-          return new Intl.NumberFormat('es-AR', {
-              style: 'currency',
-              currency: currencyCode,
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-          }).format(amount);
-      }
-  }, [currencies, selectedCurrency]);
-
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
     return expenses.filter(expense => {
@@ -149,62 +132,54 @@ function OwnerDashboard() {
         if (fromDate && expenseDate < fromDate) return false;
         if (toDate && expenseDate > toDate) return false;
         if (selectedCategory !== 'all' && expense.categoryId !== selectedCategory) return false;
-        // User filter placeholder
         return true;
     });
   }, [expenses, date, selectedCategory]);
 
+  console.log({ currencies, expenses });
+
   const barData = useMemo(() => {
     if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) {
-      return [];
+        return [];
     }
 
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
-      const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-      
-      console.log('--- Iniciando conversión ---');
+        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+        
+        console.log("--- Iniciando conversión ---");
+        
+        const fromCurrency = currencies.find(c => c.id === expense.currency);
+        const toCurrency = currencies.find(c => c.id === selectedCurrency);
 
-      const fromCurrency = currencies.find(c => c.id === expense.currency);
-      const toCurrency = currencies.find(c => c.id === selectedCurrency);
+        console.log('a. simbolo moneda origen:', fromCurrency?.code);
+        console.log('b. simbolo moneda destino:', toCurrency?.code);
 
-      console.log("a. simbolo moneda origen:", fromCurrency?.code);
-      console.log("b. simbolo moneda destino:", toCurrency?.code);
+        if (!fromCurrency || !toCurrency) {
+            console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+            return acc;
+        }
 
-      if (!fromCurrency || !toCurrency) {
-        console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+        console.log('c. exchangeRate origen:', fromCurrency.exchangeRate);
+        console.log('d. exchangeRate destino:', toCurrency.exchangeRate);
+        console.log('e. valor original:', expense.amount);
+
+        let convertedAmount = expense.amount;
+        if (fromCurrency.id !== toCurrency.id) {
+            const fromRate = fromCurrency.exchangeRate || 1;
+            const toRate = toCurrency.exchangeRate || 1;
+            convertedAmount = (expense.amount / fromRate) * toRate;
+        }
+
+        console.log('f. valor convertido:', convertedAmount);
+
         if (!acc[categoryName]) {
             acc[categoryName] = 0;
         }
-        acc[categoryName] += expense.amount; // Add original amount if conversion fails
+        acc[categoryName] += convertedAmount;
+
         return acc;
-      }
-      
-      console.log("c. exchangeRate origen:", fromCurrency.exchangeRate);
-      console.log("d. exchangeRate destino:", toCurrency.exchangeRate);
-      console.log("e. valor original:", expense.amount);
-
-
-      let convertedAmount = expense.amount;
-      if (fromCurrency.code !== toCurrency.code) {
-        const fromRate = fromCurrency.exchangeRate;
-        const toRate = toCurrency.exchangeRate;
-        
-        if (typeof fromRate === 'number' && typeof toRate === 'number' && fromRate > 0) {
-            const amountInUSD = expense.amount / fromRate;
-            convertedAmount = amountInUSD * toRate;
-        }
-      }
-      
-      console.log("f. valor convertido:", convertedAmount);
-
-      if (!acc[categoryName]) {
-          acc[categoryName] = 0;
-      }
-      acc[categoryName] += convertedAmount;
-
-      return acc;
     }, {} as Record<string, number>);
-  
+
     return Object.entries(expenseByCategory)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total)
@@ -222,22 +197,23 @@ function OwnerDashboard() {
         'Vivienda': Home,
     };
     
-    if (!filteredExpenses || !categories || !currencies || !selectedCurrency) return [];
-
-    const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
+    if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) return [];
 
     return filteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
-            const categoryName = categories?.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+            const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
             const fromCurrency = currencies.find(c => c.id === expense.currency);
+            const toCurrency = currencies.find(c => c.id === selectedCurrency);
+            
             let convertedAmount = expense.amount;
-            if (fromCurrency && toCurrency && fromCurrency.code !== toCurrency.code && fromCurrency.exchangeRate && toCurrency.exchangeRate) {
-                const amountInUSD = expense.amount / fromCurrency.exchangeRate;
-                convertedAmount = amountInUSD * toCurrency.exchangeRate;
+            if (fromCurrency && toCurrency && fromCurrency.id !== toCurrency.id) {
+                const fromRate = fromCurrency.exchangeRate || 1;
+                const toRate = toCurrency.exchangeRate || 1;
+                convertedAmount = (expense.amount / fromRate) * toRate;
             }
+
             return {
                 icon: expenseIcons[categoryName] || expenseIcons.default,
                 entity: expense.entityName || 'N/A',
@@ -248,13 +224,14 @@ function OwnerDashboard() {
   }, [filteredExpenses, categories, selectedCurrency, currencies]);
 
   const budgetChartData = useMemo(() => {
-    if (!allBudgets || !expenses || !categories || !currencies || !selectedCurrency) return [];
+    if (!allBudgets || !expenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) return [];
 
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
-
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
+    const arsCurrency = currencies.find(c => c.code === 'ARS');
+
+    if (!toCurrency || !arsCurrency) return [];
 
     return allBudgets
         .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
@@ -264,18 +241,19 @@ function OwnerDashboard() {
                 .reduce((acc, e) => {
                     const fromCurrency = currencies.find(c => c.id === e.currency);
                     let convertedAmount = e.amount;
-                     if (fromCurrency && toCurrency && fromCurrency.code !== toCurrency.code && fromCurrency.exchangeRate && toCurrency.exchangeRate) {
-                        const amountInUSD = e.amount / fromCurrency.exchangeRate;
-                        convertedAmount = amountInUSD * toCurrency.exchangeRate;
+                    if (fromCurrency && toCurrency && fromCurrency.id !== toCurrency.id) {
+                        const fromRate = fromCurrency.exchangeRate || 1;
+                        const toRate = toCurrency.exchangeRate || 1;
+                        convertedAmount = (e.amount / fromRate) * toRate;
                     }
                   return acc + convertedAmount;
                 }, 0);
             
-            const arsCurrency = currencies.find(c=>c.code === 'ARS');
             let budgetAmountConverted = budget.amountARS;
-            if (arsCurrency && toCurrency && arsCurrency.code !== toCurrency.code && arsCurrency.exchangeRate && toCurrency.exchangeRate) {
-                const amountInUSD = budget.amountARS / arsCurrency.exchangeRate;
-                budgetAmountConverted = amountInUSD * toCurrency.exchangeRate;
+            if (arsCurrency.id !== toCurrency.id) {
+                const fromRate = arsCurrency.exchangeRate || 1;
+                const toRate = toCurrency.exchangeRate || 1;
+                budgetAmountConverted = (budget.amountARS / fromRate) * toRate;
             }
 
             return {
@@ -285,6 +263,23 @@ function OwnerDashboard() {
             };
         }).slice(0, 5);
   }, [allBudgets, expenses, categories, date, selectedCurrency, currencies]);
+
+   const formatCurrency = useMemo(() => {
+      return (amount: number) => {
+          if (!currencies || !selectedCurrency) {
+              return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+          }
+          const currencyInfo = currencies.find(c => c.id === selectedCurrency);
+          const currencyCode = currencyInfo?.code || 'ARS';
+
+          return new Intl.NumberFormat('es-AR', {
+              style: 'currency',
+              currency: currencyCode,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+          }).format(amount);
+      }
+  }, [currencies, selectedCurrency]);
   
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isUserLoading || isLoadingCurrencies;
   const activeLicense = licenses?.[0];
@@ -639,7 +634,6 @@ export default function DashboardPageContainer() {
     return null;
   }
   
-  // TODO: Add logic to differentiate between owner and member dashboard
   const isOwner = true; 
 
   return (
@@ -661,3 +655,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
