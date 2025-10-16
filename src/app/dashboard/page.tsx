@@ -2,7 +2,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
@@ -21,8 +21,6 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-import { Progress } from '@/components/ui/progress';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -77,7 +75,7 @@ function OwnerDashboard() {
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
-  const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
+  const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(allExpensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
     if (!tenantId) return null;
@@ -91,7 +89,6 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  // Set default currency to ARS once currencies are loaded
   useEffect(() => {
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
@@ -101,8 +98,7 @@ function OwnerDashboard() {
     }
   }, [currencies]);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !activeTenant;
-
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !activeTenant || !selectedCurrency;
 
   const filteredExpenses = useMemo(() => {
     if (isLoading || !allExpenses) return [];
@@ -119,7 +115,7 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory, isLoading]);
 
   const processedData = useMemo(() => {
-    if (!filteredExpenses || !categories || !currencies || !selectedCurrency || !allBudgets || !allExpenses) {
+    if (isLoading || !filteredExpenses || !categories || !currencies || !allBudgets || !allExpenses) {
         const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
         return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
     }
@@ -131,17 +127,15 @@ function OwnerDashboard() {
         const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
         return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
     }
-
+    
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        if (!fromCurrency) {
-            return amount; 
-        }
-
+        if (!fromCurrency) return amount;
+        
         const fromRate = fromCurrency.exchangeRate || 1;
         const toRate = toCurrency.exchangeRate || 1;
-
-        // Convert amount to USD first, then to the target currency
+        const usdRate = usdCurrency.exchangeRate || 1;
+        
         const amountInUSD = amount / fromRate;
         return amountInUSD * toRate;
     };
@@ -216,7 +210,7 @@ function OwnerDashboard() {
 
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
 
-  }, [filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
+  }, [isLoading, filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
   
   const { barData, recentExpenses, budgetChartData, formatCurrency, toCurrencyCode } = processedData;
   
@@ -512,7 +506,7 @@ function OwnerDashboard() {
             <CardContent className="flex-1 flex items-center justify-center">
                 <div className="text-center p-4 border-2 border-dashed rounded-lg">
                     <p className="text-sm text-muted-foreground">
-                        Notamos que tus gastos en <span className="text-foreground font-medium">"Ocio"</span> superaron el presupuesto.
+                        Notamos que tus gastos en <span className="text-foreground font-medium">"Vida y Entretenimiento"</span> superaron el presupuesto.
                     </p>
                     <p className="mt-2 font-medium text-foreground">
                         Considera reasignar <span className="text-primary">{formatCurrency(2500)}</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.

@@ -327,5 +327,3 @@ export default function EditExpensePage() {
     </div>
   );
 }
-
-    

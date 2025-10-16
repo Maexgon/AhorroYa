@@ -80,7 +80,7 @@ export type Expense = {
   userId: string; // Reference to User. (Relationship: User 1:N Expense)
   date: string; // Date of the expense.
   amount: number; // Amount of the expense.
-  currency: string; // Currency of the expense. This should be the document ID of a currency.
+  currency: string; // Currency of the expense.
   amountARS: number; // Amount of the expense in ARS.
   categoryId: string; // Reference to Category. (Relationship: Category 1:N Expense)
   subcategoryId?: string; // Reference to Subcategory. (Relationship: Subcategory 1:N Expense)

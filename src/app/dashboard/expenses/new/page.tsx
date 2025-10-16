@@ -281,7 +281,7 @@ export default function NewExpensePage() {
             userId: user.uid,
             date: data.date.toISOString(),
             amount: data.amount,
-            currency: data.currency, // Storing the currency CODE
+            currency: data.currency,
             amountARS: amountARS,
             categoryId: data.categoryId,
             subcategoryId: data.subcategoryId || null,
