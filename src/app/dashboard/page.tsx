@@ -28,7 +28,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 function OwnerDashboard() {
-  console.log("--- RENDER START ---");
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -41,105 +40,83 @@ function OwnerDashboard() {
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
-  
-  console.log("Estado actual:", { selectedCategory, selectedCurrency });
 
+  // --- 1. DATA FETCHING ---
+  
+  // Fetch user data to get tenantId
   const userDocRef = useMemoFirebase(() => {
-    console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
   
-  const tenantId = userData?.tenantIds?.[0];
-  console.log("Direct tenantId:", tenantId);
-  
-  const tenantRef = useMemoFirebase(() => {
-    console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
-    if (!tenantId) return null;
-    return doc(firestore, 'tenants', tenantId);
-  }, [tenantId]);
+  const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
+
+  // Fetch all other data that depends on tenantId
+  const tenantRef = useMemoFirebase(() => tenantId ? doc(firestore, 'tenants', tenantId) : null, [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
-  const licenseQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
+  const licenseQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
-  const categoriesQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
+  const categoriesQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
-  const expensesQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
-  }, [firestore, tenantId]);
+  const expensesQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const budgetsQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
+  const budgetsQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const currenciesQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
-    if (!firestore) return null;
-    return collection(firestore, 'currencies');
-  }, [firestore]);
+  // Fetch currencies (independent of tenant)
+  const currenciesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'currencies') : null, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
+  // --- 2. STATE AND EFFECT MANAGEMENT ---
+
+  // Set default currency to ARS once currencies are loaded
   useEffect(() => {
-    console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
     if (currencies && !selectedCurrency) {
         const arsCurrency = currencies.find(c => c.code === 'ARS');
         if (arsCurrency) {
             setSelectedCurrency(arsCurrency.id);
         }
     }
-  }, [currencies]);
+  }, [currencies]); // Depends ONLY on currencies
 
+  // --- 3. DERIVED STATE & MEMOIZED CALCULATIONS ---
 
   const filteredExpenses = useMemo(() => {
-    console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses, date, selectedCategory });
-    if (!allExpenses) return [];
+    if (!allExpenses || !date?.from) return [];
     return allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
-        const fromDate = date?.from ? new Date(date.from.setHours(0, 0, 0, 0)) : null;
-        const toDate = date?.to ? new Date(date.to.setHours(23, 59, 59, 999)) : null;
+        const fromDate = new Date(date.from!.setHours(0, 0, 0, 0));
+        const toDate = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : new Date(date.from!.setHours(23, 59, 59, 999));
 
-        if (fromDate && expenseDate < fromDate) return false;
-        if (toDate && expenseDate > toDate) return false;
+        if (expenseDate < fromDate || expenseDate > toDate) return false;
         if (selectedCategory !== 'all' && expense.categoryId !== selectedCategory) return false;
         return true;
     });
   }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
-    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date });
+    // This calculation only runs when all its dependencies are resolved.
     if (!currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
-      console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
-      return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
+      return null; // Return null if data is not ready
     }
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) {
-      console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda de destino.");
-      return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
-    }
-    
+    if (!toCurrency) return null; // Should not happen if selectedCurrency is set correctly
+
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
-          return 0;
+        if (!fromCurrency || fromCurrency.id === toCurrency.id) {
+          return amount;
         }
+        if (!fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
+          return 0; // Or handle as an error
+        }
+        // Base conversion through USD
         const amountInUSD = amount / fromCurrency.exchangeRate;
         return amountInUSD * toCurrency.exchangeRate;
     };
@@ -156,9 +133,7 @@ function OwnerDashboard() {
     const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         const convertedAmount = convertAmount(expense.amount, expense.currency);
-        if (!acc[categoryName]) {
-            acc[categoryName] = 0;
-        }
+        if (!acc[categoryName]) acc[categoryName] = 0;
         acc[categoryName] += convertedAmount;
         return acc;
     }, {} as Record<string, number>))
@@ -166,14 +141,8 @@ function OwnerDashboard() {
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-
     const expenseIcons: { [key: string]: React.ElementType } = {
-        default: Sparkles,
-        'Comestibles': Utensils,
-        'Ropa y Accesorios': ShoppingCart,
-        'Mobilidad': Bus,
-        'Vida y Entretenimiento': Film,
-        'Vivienda': Home,
+        default: Sparkles, 'Comestibles': Utensils, 'Ropa y Accesorios': ShoppingCart, 'Mobilidad': Bus, 'Vida y Entretenimiento': Film, 'Vivienda': Home,
     };
 
     const recentExpenses = filteredExpenses
@@ -182,43 +151,30 @@ function OwnerDashboard() {
         .map(expense => {
             const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
             return {
-                ...expense,
-                icon: expenseIcons[categoryName] || expenseIcons.default,
-                entity: expense.entityName || 'N/A',
-                category: categoryName,
-                amountConverted: convertAmount(expense.amount, expense.currency),
+                ...expense, icon: expenseIcons[categoryName] || expenseIcons.default, entity: expense.entityName || 'N/A', category: categoryName, amountConverted: convertAmount(expense.amount, expense.currency),
             }
         });
 
     const budgetChartData = (() => {
         const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
         const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
-    
         return allBudgets
             .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
             .map(budget => {
                 const spentInARS = allExpenses
                     .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                     .reduce((acc, e) => acc + e.amountARS, 0);
-                
                 const spentConverted = convertAmount(spentInARS, 'ARS');
                 const budgetAmountConverted = convertAmount(budget.amountARS, 'ARS');
-    
                 return {
-                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A',
-                    Presupuestado: budgetAmountConverted,
-                    Gastado: spentConverted,
+                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budgetAmountConverted, Gastado: spentConverted,
                 };
             }).slice(0, 5);
     })();
 
-    console.log("useMemo [processedData]: Datos calculados:", { barData, recentExpenses, budgetChartData });
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
-
   }, [filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
   
-  const activeLicense = licenses?.[0];
-
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el tenant activo.' });
@@ -227,31 +183,16 @@ function OwnerDashboard() {
     setIsSeeding(true);
     try {
         const batch = writeBatch(firestore);
-
         defaultCategories.forEach((category, catIndex) => {
             const categoryId = crypto.randomUUID();
             const categoryRef = doc(firestore, "categories", categoryId);
-            batch.set(categoryRef, {
-                id: categoryId,
-                tenantId: activeTenant.id,
-                name: category.name,
-                color: category.color,
-                order: catIndex
-            });
-
+            batch.set(categoryRef, { id: categoryId, tenantId: activeTenant.id, name: category.name, color: category.color, order: catIndex });
             category.subcategories.forEach((subcategoryName, subCatIndex) => {
                 const subcategoryId = crypto.randomUUID();
                 const subcategoryRef = doc(firestore, "subcategories", subcategoryId);
-                batch.set(subcategoryRef, {
-                    id: subcategoryId,
-                    tenantId: activeTenant.id,
-                    categoryId: categoryId,
-                    name: subcategoryName,
-                    order: subCatIndex
-                });
+                batch.set(subcategoryRef, { id: subcategoryId, tenantId: activeTenant.id, categoryId: categoryId, name: subcategoryName, order: subCatIndex });
             });
         });
-
         await batch.commit();
         toast({ title: '¡Éxito!', description: 'Las categorías por defecto han sido creadas. La página se refrescará.' });
     } catch (error) {
@@ -261,10 +202,10 @@ function OwnerDashboard() {
         setIsSeeding(false);
     }
   };
-  
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
 
-  console.log("Estado de carga:", {isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, selectedCurrency, tenantId});
+  // --- 4. RENDER LOGIC ---
+
+  const isLoading = isUserDocLoading || !tenantId || !processedData || isLoadingCurrencies || isLoadingExpenses || isLoadingCategories || isLoadingBudgets || isLoadingLicenses || isLoadingTenant;
 
   if (isLoading) {
     return (
@@ -274,7 +215,8 @@ function OwnerDashboard() {
     );
   }
 
-  const showSeedButton = !isLoading && (!categories || categories.length === 0) && !!activeTenant;
+  const showSeedButton = !isLoadingCategories && (!categories || categories.length === 0) && !!activeTenant;
+  const activeLicense = licenses?.[0];
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -594,5 +536,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
