@@ -91,9 +91,7 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  console.log('CONSULTA DE GASTOS:', expensesQuery?.toString());
-  console.log('CONSULTA DE MONEDAS:', currenciesQuery?.toString());
-
+  // Set default currency to ARS once currencies are loaded
   useEffect(() => {
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
@@ -103,7 +101,7 @@ function OwnerDashboard() {
     }
   }, [currencies, selectedCurrency]);
 
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId || !selectedCurrency;
 
   const filteredExpenses = useMemo(() => {
     if (isLoading || !allExpenses) return [];
@@ -119,16 +117,33 @@ function OwnerDashboard() {
     });
   }, [allExpenses, date, selectedCategory, isLoading]);
 
-  const { barData, recentExpenses, budgetChartData, formatCurrency } = useMemo(() => {
+  const processedData = useMemo(() => {
     if (isLoading || !filteredExpenses || !categories || !currencies || !selectedCurrency || !allBudgets || !allExpenses) {
         const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat };
+        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
     }
-    
-    console.log('DATOS RECIBIDOS:', { expenses: allExpenses, currencies });
 
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    const arsCurrency = currencies.find(c => c.code === 'ARS');
+    if (!toCurrency) {
+        const loadingFormat = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: loadingFormat, toCurrencyCode: 'ARS' };
+    }
+
+    const convertAmount = (amount: number, fromCurrencyCode: string) => {
+        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+
+        if (!fromCurrency || !toCurrency) {
+            return amount; 
+        }
+
+        if (fromCurrency.code === toCurrency.code) {
+            return amount;
+        }
+
+        const amountInBase = amount / (fromCurrency.exchangeRate || 1);
+        const convertedAmount = amountInBase * (toCurrency.exchangeRate || 1);
+        return convertedAmount;
+    };
 
     const finalFormatCurrency = (amount: number) => {
         const currencyCode = toCurrency?.code || 'ARS';
@@ -140,39 +155,7 @@ function OwnerDashboard() {
         }).format(amount);
     };
 
-    const convertAmount = (amount: number, fromCurrencyCode: string) => {
-        console.log("--- Iniciando conversión ---");
-        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        
-        console.log("a. simbolo moneda origen:", fromCurrency?.code);
-        console.log("b. simbolo moneda destino:", toCurrency?.code);
-
-        if (!fromCurrency || !toCurrency) {
-            console.log("Salida temprana, no se encontró la moneda de origen o destino.");
-            return amount; 
-        }
-
-        const fromRate = fromCurrency.exchangeRate || 1;
-        const toRate = toCurrency.exchangeRate || 1;
-
-        console.log("c. exchangeRate origen:", fromRate);
-        console.log("d. exchangeRate destino:", toRate);
-        console.log("e. valor original:", amount);
-
-        if (fromCurrency.code === toCurrency.code) {
-            console.log("Salida temprana, no se necesita conversion.");
-            return amount;
-        }
-
-        const amountInBase = amount / fromRate;
-        const convertedAmount = amountInBase * toRate;
-        console.log("f. valor convertido:", convertedAmount);
-
-        return convertedAmount;
-    };
-
-
-    const newBarData = Object.entries(filteredExpenses.reduce((acc, expense) => {
+    const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         const convertedAmount = convertAmount(expense.amount, expense.currency);
         if (!acc[categoryName]) {
@@ -195,7 +178,7 @@ function OwnerDashboard() {
         'Vivienda': Home,
     };
 
-    const newRecentExpenses = filteredExpenses
+    const recentExpenses = filteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
@@ -208,10 +191,9 @@ function OwnerDashboard() {
             }
         });
 
-    const newBudgetChartData = (() => {
+    const budgetChartData = (() => {
         const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
         const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
-        if (!arsCurrency || !toCurrency) return [];
     
         return allBudgets
             .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
@@ -219,7 +201,7 @@ function OwnerDashboard() {
                 const spentInARS = allExpenses
                     .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                     .reduce((acc, e) => acc + e.amountARS, 0);
-
+                
                 const spentConverted = convertAmount(spentInARS, 'ARS');
                 const budgetAmountConverted = convertAmount(budget.amountARS, 'ARS');
     
@@ -232,10 +214,11 @@ function OwnerDashboard() {
     })();
 
 
-    return { barData: newBarData, recentExpenses: newRecentExpenses, budgetChartData: newBudgetChartData, formatCurrency: finalFormatCurrency };
+    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
 
   }, [isLoading, filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
-
+  
+  const { barData, recentExpenses, budgetChartData, formatCurrency, toCurrencyCode } = processedData;
   
   const activeLicense = licenses?.[0];
 
@@ -425,7 +408,7 @@ function OwnerDashboard() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Análisis de Gastos</CardTitle>
-                 <CardDescription>Resumen por categoría del período seleccionado en {currencies?.find(c => c.id === selectedCurrency)?.code}.</CardDescription>
+                 <CardDescription>Resumen por categoría del período seleccionado en {toCurrencyCode}.</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
@@ -450,7 +433,7 @@ function OwnerDashboard() {
             <Card className="lg:col-span-3">
               <CardHeader>
                 <CardTitle>Presupuestos</CardTitle>
-                <CardDescription>Tu progreso de gastos del mes en {currencies?.find(c => c.id === selectedCurrency)?.code}.</CardDescription>
+                <CardDescription>Tu progreso de gastos del mes en {toCurrencyCode}.</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -464,8 +447,8 @@ function OwnerDashboard() {
                                 return (
                                     <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
                                         <p className="font-bold">{payload[0].payload.name}</p>
-                                        <p>Gastado: {formatCurrency(payload[0].value as number)}</p>
-                                        <p>Presupuestado: {formatCurrency(payload[1].value as number)}</p>
+                                        <p>Gastado: {formatCurrency(payload[1].value as number)}</p>
+                                        <p>Presupuestado: {formatCurrency(payload[0].value as number)}</p>
                                     </div>
                                 );
                                 }
@@ -473,8 +456,8 @@ function OwnerDashboard() {
                             }}
                         />
                         <Legend />
-                        <Bar dataKey="Gastado" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                         <Bar dataKey="Presupuestado" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="Gastado" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
               </CardContent>
