@@ -118,7 +118,7 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
-    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency });
+    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date });
     if (!currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
        console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
       return null;
@@ -229,7 +229,7 @@ function OwnerDashboard() {
   // --- RENDER LOGIC ---
 
   // Master loading state. Render loader until all initial data is ready.
-  const isLoading = isUserDocLoading || !userData || !tenantId || isLoadingTenant || !activeTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency || !processedData;
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency || !processedData;
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
   
   console.log("Estado de carga:", { isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, tenantId, selectedCurrency, processedData: !!processedData });
