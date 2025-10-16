@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Category, User as UserType } from '@/lib/types';
+import { Combobox } from '@/components/ui/combobox';
 
 const budgetFormSchema = z.object({
   year: z.coerce.number().min(new Date().getFullYear(), "El año no puede ser anterior al actual."),
@@ -127,6 +128,11 @@ export default function NewBudgetPage() {
   const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 5}, (_, i) => currentYear + i);
+  
+  const categoryOptions = React.useMemo(() => {
+    if (!categories) return [];
+    return categories.map(c => ({ label: c.name, value: c.id }));
+  }, [categories]);
 
   if (!ready || isLoadingCategories) {
     return (
@@ -201,18 +207,14 @@ export default function NewBudgetPage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecciona una categoría" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {categories?.map((cat) => (
-                                                <SelectItem key={cat.id} value={cat.id}>
-                                                    {cat.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Combobox
+                                        options={categoryOptions}
+                                        value={field.value}
+                                        onSelect={field.onChange}
+                                        placeholder="Seleccionar categoría"
+                                        searchPlaceholder="Buscar categoría..."
+                                        emptyPlaceholder="No se encontró la categoría."
+                                    />
                                 )}
                             />
                             {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
