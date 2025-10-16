@@ -1,3 +1,4 @@
+
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -27,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 function OwnerDashboard() {
+  console.log("--- RENDER START ---");
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -41,64 +43,80 @@ function OwnerDashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
 
+  console.log("Estado actual:", { tenantId, selectedCategory, selectedCurrency });
+
   const userDocRef = useMemoFirebase(() => {
+    console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
   useEffect(() => {
+    console.log("useEffect [userData]: Se ejecuta. userData:", userData);
     if (userData?.tenantIds && userData.tenantIds.length > 0) {
-      setTenantId(userData.tenantIds[0]);
+      if(tenantId !== userData.tenantIds[0]) {
+        console.log("useEffect [userData]: Cambiando tenantId a:", userData.tenantIds[0]);
+        setTenantId(userData.tenantIds[0]);
+      }
     }
-  }, [userData]);
+  }, [userData, tenantId]);
 
   const tenantRef = useMemoFirebase(() => {
+    console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
     if (!tenantId) return null;
     return doc(firestore, 'tenants', tenantId);
   }, [tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
   const licenseQuery = useMemoFirebase(() => {
-    if (!tenantId) return null;
+    console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
+    if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!tenantId) return null;
+    console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
+    if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!tenantId) return null;
+    console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
+    if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
-    if (!tenantId) return null;
+    console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
+    if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
   const currenciesQuery = useMemoFirebase(() => {
+    console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
     if (!firestore) return null;
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
   useEffect(() => {
+    console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
       if (arsCurrency) {
+        console.log("useEffect [currencies]: Estableciendo selectedCurrency a ARS:", arsCurrency.id);
         setSelectedCurrency(arsCurrency.id);
       }
     }
-  }, [currencies, selectedCurrency]);
+  }, [currencies]);
 
   const filteredExpenses = useMemo(() => {
+    console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses, date, selectedCategory });
     if (!allExpenses) return [];
     return allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
@@ -113,27 +131,30 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
-    if (!filteredExpenses || !categories || !currencies || !allBudgets || !allExpenses || !selectedCurrency) {
-        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
-    }
+    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date });
     
-    const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) {
+    if (!currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
+      console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
       return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
     
+    const toCurrency = currencies.find(c => c.id === selectedCurrency);
     const usdCurrency = currencies.find(c => c.code === 'USD');
-    if (!usdCurrency) {
-      console.error("USD currency for reference not found.");
+
+    if (!toCurrency || !usdCurrency) {
+      console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda de destino o USD.");
       return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
     
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
-        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) return 0;
-        
-        const amountInUSD = amount / fromCurrency.exchangeRate;
-        return amountInUSD * toCurrency.exchangeRate;
+      const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+      if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
+        console.log(`Fallo en conversión: from ${fromCurrencyCode}, to ${toCurrency.code}`);
+        return 0;
+      };
+      
+      const amountInUSD = amount / fromCurrency.exchangeRate;
+      return amountInUSD * toCurrency.exchangeRate;
     };
 
     const finalFormatCurrency = (amount: number) => {
@@ -203,7 +224,7 @@ function OwnerDashboard() {
             }).slice(0, 5);
     })();
 
-
+    console.log("useMemo [processedData]: Datos calculados:", { barData, recentExpenses, budgetChartData });
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
 
   }, [filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
@@ -256,6 +277,8 @@ function OwnerDashboard() {
   };
   
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
+
+  console.log("Estado de carga:", {isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, selectedCurrency});
 
   if (isLoading) {
     return (
@@ -585,3 +608,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
