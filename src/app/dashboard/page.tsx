@@ -136,54 +136,54 @@ function OwnerDashboard() {
     });
   }, [expenses, date, selectedCategory]);
 
-  console.log({ currencies, expenses });
-
-  const barData = useMemo(() => {
-    if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) {
-        return [];
-    }
-
-    const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
-        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-        
-        console.log("--- Iniciando conversión ---");
-        
-        const fromCurrency = currencies.find(c => c.id === expense.currency);
-        const toCurrency = currencies.find(c => c.id === selectedCurrency);
-
-        console.log('a. simbolo moneda origen:', fromCurrency?.code);
-        console.log('b. simbolo moneda destino:', toCurrency?.code);
-
-        if (!fromCurrency || !toCurrency) {
-            console.log("Salida temprana, no se encontró la moneda de origen o destino.");
-            return acc;
+    const barData = useMemo(() => {
+        if (!filteredExpenses || !categories || !currencies || currencies.length === 0 || !selectedCurrency) {
+            return [];
         }
 
-        console.log('c. exchangeRate origen:', fromCurrency.exchangeRate);
-        console.log('d. exchangeRate destino:', toCurrency.exchangeRate);
-        console.log('e. valor original:', expense.amount);
+        const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
+            const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+            
+            console.log("--- Iniciando conversión ---");
 
-        let convertedAmount = expense.amount;
-        if (fromCurrency.id !== toCurrency.id) {
+            const fromCurrency = currencies.find(c => c.id === expense.currency);
+            const toCurrency = currencies.find(c => c.id === selectedCurrency);
+            
+            console.log("a. simbolo moneda origen:", fromCurrency?.code);
+            console.log("b. simbolo moneda destino:", toCurrency?.code);
+
+            if (!fromCurrency || !toCurrency) {
+                 console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+                return acc;
+            }
+            
             const fromRate = fromCurrency.exchangeRate || 1;
             const toRate = toCurrency.exchangeRate || 1;
-            convertedAmount = (expense.amount / fromRate) * toRate;
-        }
+            
+            console.log("c. exchangeRate origen:", fromRate);
+            console.log("d. exchangeRate destino:", toRate);
+            console.log("e. valor original:", expense.amount);
 
-        console.log('f. valor convertido:', convertedAmount);
 
-        if (!acc[categoryName]) {
-            acc[categoryName] = 0;
-        }
-        acc[categoryName] += convertedAmount;
+            let convertedAmount = expense.amount;
+            if (fromCurrency.id !== toCurrency.id) {
+                convertedAmount = (expense.amount / fromRate) * toRate;
+            }
+            
+            console.log("f. valor convertido:", convertedAmount);
 
-        return acc;
-    }, {} as Record<string, number>);
+            if (!acc[categoryName]) {
+                acc[categoryName] = 0;
+            }
+            acc[categoryName] += convertedAmount;
 
-    return Object.entries(expenseByCategory)
-      .map(([name, total]) => ({ name, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
+            return acc;
+        }, {} as Record<string, number>);
+
+        return Object.entries(expenseByCategory)
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
   }, [filteredExpenses, categories, selectedCurrency, currencies]);
 
 
@@ -655,5 +655,6 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
 
     
