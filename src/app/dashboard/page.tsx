@@ -64,15 +64,17 @@ function OwnerDashboard() {
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
   useEffect(() => {
-    if (currencies && selectedCurrency === '') {
+    // This effect ensures the default currency is set once `currencies` are loaded.
+    if (currencies && currencies.length > 0 && selectedCurrency === '') {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
       if (arsCurrency) {
         setSelectedCurrency(arsCurrency.id);
-      } else if (currencies.length > 0) {
+      } else {
+        // Fallback to the first currency if ARS is not found for some reason
         setSelectedCurrency(currencies[0].id);
       }
     }
-  }, [currencies, selectedCurrency]);
+  }, [currencies]); // Depends only on currencies
 
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId || !selectedCurrency;
 
