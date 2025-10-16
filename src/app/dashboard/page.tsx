@@ -40,91 +40,86 @@ function OwnerDashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
 
+  // --- Data Fetching ---
   const userDocRef = useMemo(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-  
+
   const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
 
   const tenantRef = useMemo(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
-  const licenseQuery = useMemo(() => (tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const licenseQuery = useMemo(() => (tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
   
-  const categoriesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const categoriesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
   
-  const expensesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+  const expensesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const budgetsQuery = useMemo(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const budgetsQuery = useMemo(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
 
   const currenciesQuery = useMemo(() => (firestore ? collection(firestore, 'currencies') : null), [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
+  // Effect to set default currency once data is available
   useEffect(() => {
     if (currencies && selectedCurrency === '') {
-      const arsCurrency = currencies.find(c => c.code === 'ARS');
-      if (arsCurrency) {
-        setSelectedCurrency(arsCurrency.id);
-      } else if (currencies.length > 0) {
-        // Fallback to the first currency if ARS is not found
-        setSelectedCurrency(currencies[0].id);
-      }
+        const arsCurrency = currencies.find(c => c.code === 'ARS');
+        if (arsCurrency) {
+            setSelectedCurrency(arsCurrency.id);
+        } else if (currencies.length > 0) {
+            setSelectedCurrency(currencies[0].id);
+        }
     }
   }, [currencies, selectedCurrency]);
 
+  // Master loading state.
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !tenantId || !selectedCurrency;
 
   const processedData = useMemo(() => {
-    const safeData = {
+    // This calculation will only run when isLoading is false, guaranteeing all data is available.
+    if (isLoading) {
+      return {
         barData: [],
         recentExpenses: [],
         budgetChartData: [],
-        formatCurrency: (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount),
-        toCurrencyCode: 'ARS',
-    };
-
-    if (isLoading || !currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
-      return safeData;
+        formatCurrency: (amount: number) => amount.toString(),
+        toCurrencyCode: '',
+      };
     }
-    
-    const toCurrency = currencies.find(c => c.id === selectedCurrency);
 
-    if (!toCurrency) {
-        return safeData;
-    };
+    const toCurrency = currencies?.find(c => c.id === selectedCurrency);
+    
+    // Fallback to prevent crash if toCurrency is somehow not found even after loading.
+    const safeToCurrencyCode = toCurrency?.code ?? 'ARS';
 
     const finalFormatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
             style: 'currency',
-            currency: toCurrency.code,
+            currency: safeToCurrencyCode,
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(amount);
     };
 
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
-        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        if (!fromCurrency || fromCurrency.id === toCurrency.id) {
+        const fromCurrency = currencies!.find(c => c.code === fromCurrencyCode);
+        if (!fromCurrency || !toCurrency || fromCurrency.id === toCurrency.id) {
           return amount;
         }
-        // This is a simplified conversion, assuming a base currency or direct rates are available
-        // A more robust solution would handle various conversion paths.
         const fromRate = fromCurrency.exchangeRate || 1;
         const toRate = toCurrency.exchangeRate || 1;
-        
-        // Example assumes exchangeRate is relative to a base currency (like USD)
-        // Convert amount to base currency, then to target currency.
         const amountInBase = amount / fromRate;
         return amountInBase * toRate;
     };
 
-    const filteredExpenses = allExpenses.filter(expense => {
+    const filteredExpenses = allExpenses!.filter(expense => {
         if (!date?.from) return false;
         const expenseDate = new Date(expense.date);
         const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
@@ -135,7 +130,7 @@ function OwnerDashboard() {
     });
 
     const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
-        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+        const categoryName = categories!.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         const convertedAmount = convertAmount(expense.amount, expense.currency);
         if (!acc[categoryName]) acc[categoryName] = 0;
         acc[categoryName] += convertedAmount;
@@ -153,7 +148,7 @@ function OwnerDashboard() {
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
-            const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+            const categoryName = categories!.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
             return {
                 ...expense, icon: expenseIcons[categoryName] || expenseIcons.default, entity: expense.entityName || 'N/A', category: categoryName, amountConverted: convertAmount(expense.amount, expense.currency),
             }
@@ -162,10 +157,10 @@ function OwnerDashboard() {
     const budgetChartData = (() => {
         const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
         const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
-        return allBudgets
+        return allBudgets!
             .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
             .map(budget => {
-                const spentInARS = allExpenses
+                const spentInARS = allExpenses!
                     .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                     .reduce((acc, e) => acc + e.amountARS, 0);
                 
@@ -173,12 +168,13 @@ function OwnerDashboard() {
                 const budgetAmountConverted = convertAmount(budget.amountARS, 'ARS');
 
                 return {
-                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budgetAmountConverted, Gastado: spentConverted,
+                    name: categories!.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budgetAmountConverted, Gastado: spentConverted,
                 };
             }).slice(0, 5);
     })();
-    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
-  }, [allExpenses, allBudgets, categories, currencies, date, selectedCategory, selectedCurrency, isLoading]);
+
+    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: safeToCurrencyCode };
+  }, [isLoading, allExpenses, allBudgets, categories, currencies, date, selectedCategory, selectedCurrency]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -219,6 +215,7 @@ function OwnerDashboard() {
     );
   }
 
+  // At this point, isLoading is false, so all data is guaranteed to be loaded.
   const showSeedButton = !isLoadingCategories && (!categories || categories.length === 0) && !!activeTenant;
   const activeLicense = licenses?.[0];
 
@@ -540,3 +537,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
