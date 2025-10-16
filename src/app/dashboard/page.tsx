@@ -84,7 +84,7 @@ function OwnerDashboard() {
   }, [firestore, ready, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
-  const expensesQuery = useMemoFirebase(() => {
+ const expensesQuery = useMemoFirebase(() => {
     if (!ready) {
         return null;
     }
@@ -113,6 +113,8 @@ function OwnerDashboard() {
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   console.log('CONSULTA DE MONEDAS:', currenciesQuery?.toString());
 
+  console.log('DATOS RECIBIDOS:', { expenses, currencies });
+
   useEffect(() => {
     if (currencies && !selectedCurrency) {
       const arsCurrency = currencies.find(c => c.code === 'ARS');
@@ -122,12 +124,11 @@ function OwnerDashboard() {
     }
   }, [currencies, selectedCurrency]);
 
-  const currencyConverter = useCallback((amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
+  const currencyConverter = (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => {
       console.log("--- Iniciando conversión ---");
-
-      if (!currencies || currencies.length === 0) {
-          console.log("Salida temprana, el array de monedas no está listo.");
-          return amount;
+      if (!currencies) {
+        console.log("Salida temprana, el array de monedas no está listo.");
+        return amount;
       }
       
       const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
@@ -137,10 +138,10 @@ function OwnerDashboard() {
       console.log("b. simbolo moneda destino:", toCurrency?.code);
 
       if (!fromCurrency || !toCurrency) {
-          console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+          console.log("Salida temprana, no se encontraron las monedas.");
           return amount; // Devuelve el monto original si no se puede convertir
       }
-
+      
       const fromRate = fromCurrency.exchangeRate || 1;
       const toRate = toCurrency.exchangeRate || 1;
       
@@ -159,7 +160,7 @@ function OwnerDashboard() {
       console.log("f. valor convertido:", convertedAmount);
 
       return convertedAmount;
-  }, [currencies]);
+  };
 
 
   const filteredExpenses = useMemo(() => {
@@ -176,33 +177,30 @@ function OwnerDashboard() {
     });
   }, [expenses, date, selectedCategory]);
 
-  console.log('DATOS RECIBIDOS:', { expenses, currencies });
   const barData = useMemo(() => {
-    if (!filteredExpenses || filteredExpenses.length === 0 || !categories || !currencies || !selectedCurrency) {
+    if (!filteredExpenses || !categories || !currencies || !selectedCurrency) {
         return [];
     }
+    
+    const toCurrency = currencies.find(c => c.id === selectedCurrency);
+    if (!toCurrency) return [];
 
     const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-        const fromCurrency = currencies.find(c => c.id === expense.currency);
-        const toCurrency = currencies.find(c => c.id === selectedCurrency);
+        const fromCurrency = currencies.find(c => c.code === expense.currency);
         
         console.log("--- Iniciando conversión ---");
         console.log("a. simbolo moneda origen:", fromCurrency?.code);
-        console.log("b. simbolo moneda destino:", toCurrency?.code);
-
+        console.log("b. simbolo moneda destino:", toCurrency.code);
+        
         if (!fromCurrency) {
-            console.log("Salida temprana, no se encontró la moneda de origen.");
-            return acc;
-        }
-        if (!toCurrency) {
-            console.log("Salida temprana, no se encontró la moneda de destino.");
-            return acc;
+          console.log("Salida temprana, no se encontró la moneda de origen.");
+          return acc;
         }
 
         const fromRate = fromCurrency.exchangeRate || 1;
         const toRate = toCurrency.exchangeRate || 1;
-
+        
         console.log("c. exchangeRate origen:", fromRate);
         console.log("d. exchangeRate destino:", toRate);
         console.log("e. valor original:", expense.amount);
@@ -242,17 +240,18 @@ function OwnerDashboard() {
     
     if (!filteredExpenses || !categories || !currencies || !selectedCurrency) return [];
     
+    const toCurrency = currencies.find(c => c.id === selectedCurrency);
+    if (!toCurrency) return [];
+
     return filteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
             const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-            
-            const fromCurrency = currencies.find(c => c.id === expense.currency);
-            const toCurrency = currencies.find(c => c.id === selectedCurrency);
+            const fromCurrency = currencies.find(c => c.code === expense.currency);
             
             let convertedAmount = expense.amount;
-            if (fromCurrency && toCurrency && fromCurrency.id !== toCurrency.id) {
+            if (fromCurrency && fromCurrency.id !== toCurrency.id) {
                 const fromRate = fromCurrency.exchangeRate || 1;
                 const toRate = toCurrency.exchangeRate || 1;
                 convertedAmount = (expense.amount / fromRate) * toRate;
@@ -283,9 +282,9 @@ function OwnerDashboard() {
             const spent = expenses
                 .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                 .reduce((acc, e) => {
-                    const fromCurrency = currencies.find(c => c.id === e.currency);
+                    const fromCurrency = currencies.find(c => c.code === e.currency);
                     let convertedAmount = e.amount;
-                    if (fromCurrency && toCurrency && fromCurrency.id !== toCurrency.id) {
+                    if (fromCurrency && fromCurrency.id !== toCurrency.id) {
                         const fromRate = fromCurrency.exchangeRate || 1;
                         const toRate = toCurrency.exchangeRate || 1;
                         convertedAmount = (e.amount / fromRate) * toRate;
@@ -699,3 +698,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
