@@ -76,20 +76,23 @@ function OwnerDashboard() {
   
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies;
   
-  const defaultCurrencyId = useMemo(() => {
-    if (!currencies) return '';
-    return currencies.find(c => c.code === 'ARS')?.id || '';
-  }, [currencies]);
-  
-  const activeCurrencyId = selectedCurrencyId || defaultCurrencyId;
-  
+   const activeCurrencyId = useMemo(() => {
+    if (selectedCurrencyId) return selectedCurrencyId;
+    if (currencies) {
+      return currencies.find(c => c.code === 'ARS')?.id || '';
+    }
+    return '';
+  }, [selectedCurrencyId, currencies]);
+
   const processedData = useMemo(() => {
-    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets || !activeCurrencyId) {
+    if (isLoading || !activeCurrencyId || !currencies || !categories || !allExpenses || !allBudgets) {
       return SAFE_DEFAULTS;
     }
 
     const toCurrency = currencies.find(c => c.id === activeCurrencyId);
-    if (!toCurrency) return SAFE_DEFAULTS;
+    if (!toCurrency) {
+        return SAFE_DEFAULTS;
+    }
 
     const finalFormatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
