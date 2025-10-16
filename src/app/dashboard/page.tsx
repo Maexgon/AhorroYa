@@ -28,65 +28,83 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 function OwnerDashboard() {
+  console.log("--- RENDER START ---");
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [isSeeding, setIsSeeding] = useState(false);
-  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
+  // --- STATE MANAGEMENT ---
+  const [isSeeding, setIsSeeding] = useState(false);
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
-
-  // --- 1. DATA FETCHING ---
   
-  // Fetch user data to get tenantId
+  console.log("Estado actual:", { selectedCategory, selectedCurrency });
+
+  // --- DATA FETCHING (SEQUENTIAL & CONTROLLED) ---
+
+  // 1. Fetch user data
+  console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-  
-  const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
 
-  // Fetch all other data that depends on tenantId
+  // 2. Derive tenantId directly from userData
+  const tenantId = useMemo(() => {
+    const id = userData?.tenantIds?.[0];
+    console.log(`useMemo [tenantId]: Derivando tenantId. Resultado: ${id}`);
+    return id;
+  }, [userData]);
+
+
+  // 3. Fetch all tenant-dependent data only when tenantId is available
+  console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
   const tenantRef = useMemoFirebase(() => tenantId ? doc(firestore, 'tenants', tenantId) : null, [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
+  console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
   const licenseQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
+  console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
   const categoriesQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
+  console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
   const expensesQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
+  console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
   const budgetsQuery = useMemoFirebase(() => tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  // Fetch currencies (independent of tenant)
+  // 4. Fetch currencies (independent)
+  console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
   const currenciesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'currencies') : null, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  // --- 2. STATE AND EFFECT MANAGEMENT ---
-
-  // Set default currency to ARS once currencies are loaded
+  // --- EFFECT FOR DEFAULT CURRENCY ---
+  // This effect runs ONLY when currencies are loaded or change. It won't cause a loop.
   useEffect(() => {
+    console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
     if (currencies && !selectedCurrency) {
-        const arsCurrency = currencies.find(c => c.code === 'ARS');
-        if (arsCurrency) {
-            setSelectedCurrency(arsCurrency.id);
-        }
+      const arsCurrency = currencies.find(c => c.code === 'ARS');
+      if (arsCurrency) {
+        console.log("useEffect [currencies]: Estableciendo moneda por defecto a ARS:", arsCurrency.id);
+        setSelectedCurrency(arsCurrency.id);
+      }
     }
-  }, [currencies]); // Depends ONLY on currencies
+  }, [currencies]);
 
-  // --- 3. DERIVED STATE & MEMOIZED CALCULATIONS ---
+  // --- DERIVED STATE & MEMOIZED CALCULATIONS ---
 
   const filteredExpenses = useMemo(() => {
+     console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses, date, selectedCategory });
     if (!allExpenses || !date?.from) return [];
     return allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
@@ -100,13 +118,17 @@ function OwnerDashboard() {
   }, [allExpenses, date, selectedCategory]);
 
   const processedData = useMemo(() => {
-    // This calculation only runs when all its dependencies are resolved.
+    console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency });
     if (!currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
-      return null; // Return null if data is not ready
+       console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
+      return null;
     }
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return null; // Should not happen if selectedCurrency is set correctly
+    if (!toCurrency) {
+      console.log("useMemo [processedData]: Salida temprana, moneda seleccionada no encontrada.");
+      return null;
+    };
 
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
@@ -116,9 +138,9 @@ function OwnerDashboard() {
         if (!fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
           return 0; // Or handle as an error
         }
-        // Base conversion through USD
-        const amountInUSD = amount / fromCurrency.exchangeRate;
-        return amountInUSD * toCurrency.exchangeRate;
+        // Base conversion through USD as the common denominator
+        const amountInBase = amount / fromCurrency.exchangeRate;
+        return amountInBase * toCurrency.exchangeRate;
     };
 
     const finalFormatCurrency = (amount: number) => {
@@ -171,10 +193,11 @@ function OwnerDashboard() {
                 };
             }).slice(0, 5);
     })();
-
+    console.log("useMemo [processedData]: ¡Cálculo Exitoso!");
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
-  }, [filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
+  }, [filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date]);
   
+  // --- SEEDING LOGIC ---
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el tenant activo.' });
@@ -203,9 +226,13 @@ function OwnerDashboard() {
     }
   };
 
-  // --- 4. RENDER LOGIC ---
+  // --- RENDER LOGIC ---
 
-  const isLoading = isUserDocLoading || !tenantId || !processedData || isLoadingCurrencies || isLoadingExpenses || isLoadingCategories || isLoadingBudgets || isLoadingLicenses || isLoadingTenant;
+  // Master loading state. Render loader until all initial data is ready.
+  const isLoading = isUserDocLoading || !userData || !tenantId || isLoadingTenant || !activeTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency || !processedData;
+  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+  
+  console.log("Estado de carga:", { isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, tenantId, selectedCurrency, processedData: !!processedData });
 
   if (isLoading) {
     return (
