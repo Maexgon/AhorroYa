@@ -42,68 +42,61 @@ function OwnerDashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
   
-  console.log("Estado actual:", { selectedCategory, selectedCurrency });
-
+  // Fetch all necessary data
   const userDocRef = useMemoFirebase(() => {
-    console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-
-  // Get tenantId directly from userData.
-  const tenantId = userData?.tenantIds?.[0];
-  console.log("Direct tenantId:", tenantId);
-
+  
+  const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
+  
   const tenantRef = useMemoFirebase(() => {
-    console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
     if (!tenantId) return null;
     return doc(firestore, 'tenants', tenantId);
   }, [tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
   const licenseQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
   const categoriesQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
   const expensesQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
   }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
   const budgetsQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
   const currenciesQuery = useMemoFirebase(() => {
-    console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
     if (!firestore) return null;
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
+  // This effect sets the default currency to ARS once currencies are loaded.
+  // It only runs when `currencies` data arrives. It won't cause a loop.
   useEffect(() => {
     console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
-    if (currencies && !selectedCurrency) {
-        const arsCurrency = currencies.find(c => c.code === 'ARS');
-        if (arsCurrency) {
-            setSelectedCurrency(arsCurrency.id);
-        }
+    if (currencies && selectedCurrency === '') {
+      const arsCurrency = currencies.find(c => c.code === 'ARS');
+      if (arsCurrency) {
+        console.log("useEffect [currencies]: Estableciendo ARS por defecto:", arsCurrency.id);
+        setSelectedCurrency(arsCurrency.id);
+      }
     }
   }, [currencies]);
 
@@ -131,30 +124,16 @@ function OwnerDashboard() {
     }
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    
     if (!toCurrency) {
       console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda de destino.");
       return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
-
-    const usdCurrency = currencies.find(c => c.code === 'USD');
-    if (!usdCurrency) {
-        console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda USD para conversión.");
-        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: toCurrency.code };
-    }
     
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
-        console.log("--- Iniciando conversión ---");
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        console.log("a. moneda origen:", fromCurrency);
-        console.log("b. moneda destino:", toCurrency);
-
         if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
-          console.log("Salida temprana, no se encontró la moneda de origen o destino.");
           return 0; // Return 0 if conversion is not possible
         }
-        
-        // Convert amount to USD first, then to the target currency
         const amountInUSD = amount / fromCurrency.exchangeRate;
         return amountInUSD * toCurrency.exchangeRate;
     };
@@ -277,7 +256,7 @@ function OwnerDashboard() {
     }
   };
   
-  const isLoading = isUserDocLoading || !tenantId || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
 
   console.log("Estado de carga:", {isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, selectedCurrency, tenantId});
 
