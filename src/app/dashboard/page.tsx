@@ -47,8 +47,7 @@ function OwnerDashboard() {
     to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedCurrencyId, setSelectedCurrencyId] = useState<string>('');
-
+  
   // --- Data Fetching ---
   const userDocRef = useMemo(() => {
     if (!firestore || !user) return null;
@@ -72,48 +71,21 @@ function OwnerDashboard() {
 
   const budgetsQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
-
-  const currenciesQuery = useMemo(() => (firestore ? collection(firestore, 'currencies') : null), [firestore]);
-  const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies;
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets;
   
-  const activeCurrencyId = useMemo(() => {
-    if (selectedCurrencyId) return selectedCurrencyId;
-    if (currencies) {
-      return currencies.find(c => c.code === 'ARS')?.id || '';
-    }
-    return '';
-  }, [selectedCurrencyId, currencies]);
-
  const processedData = useMemo(() => {
-    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets || !activeCurrencyId) {
+    if (isLoading || !categories || !allExpenses || !allBudgets) {
       return SAFE_DEFAULTS;
-    }
-
-    const toCurrency = currencies.find(c => c.id === activeCurrencyId);
-    if (!toCurrency) {
-        return SAFE_DEFAULTS;
     }
 
     const finalFormatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
             style: 'currency',
-            currency: toCurrency.code,
+            currency: 'ARS',
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(amount);
-    };
-
-    const convertAmount = (amount: number, fromCurrencyCode: string) => {
-        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        if (!fromCurrency || fromCurrency.id === toCurrency.id) {
-          return amount;
-        }
-        const fromRate = fromCurrency.exchangeRate || 1;
-        const toRate = toCurrency.exchangeRate || 1;
-        const amountInBase = amount / fromRate;
-        return amountInBase * toRate;
     };
 
     const filteredExpenses = allExpenses.filter(expense => {
@@ -128,9 +100,8 @@ function OwnerDashboard() {
 
     const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-        const convertedAmount = convertAmount(expense.amount, expense.currency);
         if (!acc[categoryName]) acc[categoryName] = 0;
-        acc[categoryName] += convertedAmount;
+        acc[categoryName] += expense.amountARS;
         return acc;
     }, {} as Record<string, number>))
     .map(([name, total]) => ({ name, total }))
@@ -147,7 +118,7 @@ function OwnerDashboard() {
         .map(expense => {
             const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
             return {
-                ...expense, icon: expenseIcons[categoryName] || expenseIcons.default, entity: expense.entityName || 'N/A', category: categoryName, amountConverted: convertAmount(expense.amount, expense.currency),
+                ...expense, icon: expenseIcons[categoryName] || expenseIcons.default, entity: expense.entityName || 'N/A', category: categoryName, amountConverted: expense.amountARS,
             }
         });
 
@@ -160,18 +131,15 @@ function OwnerDashboard() {
                 const spentInARS = allExpenses
                     .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                     .reduce((acc, e) => acc + e.amountARS, 0);
-                
-                const spentConverted = convertAmount(spentInARS, 'ARS');
-                const budgetAmountConverted = convertAmount(budget.amountARS, 'ARS');
 
                 return {
-                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budgetAmountConverted, Gastado: spentConverted,
+                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budget.amountARS, Gastado: spentInARS,
                 };
             }).slice(0, 5);
     })();
 
-    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
-  }, [isLoading, allExpenses, allBudgets, categories, currencies, date, selectedCategory, activeCurrencyId]);
+    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS' };
+  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategory]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -295,19 +263,7 @@ function OwnerDashboard() {
                         ))}
                     </SelectContent>
                 </Select>
-                 <Select value={activeCurrencyId} onValueChange={setSelectedCurrencyId}>
-                    <SelectTrigger className="w-full">
-                         <SelectValue placeholder="Moneda" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {currencies?.map(c => (
-                            <SelectItem key={c.id} value={c.id}>
-                                {c.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-
+                 
                 <Popover>
                     <PopoverTrigger asChild>
                         <Button
@@ -533,5 +489,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
