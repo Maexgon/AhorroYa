@@ -1,3 +1,4 @@
+
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -34,6 +35,7 @@ const SAFE_DEFAULTS = {
     toCurrencyCode: 'ARS',
 };
 
+
 function OwnerDashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -56,19 +58,19 @@ function OwnerDashboard() {
 
   const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
 
-  const tenantRef = useMemo(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [tenantId]);
+  const tenantRef = useMemo(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [tenantId, firestore]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
-  const licenseQuery = useMemo(() => (tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [tenantId]);
+  const licenseQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
   
-  const categoriesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [tenantId]);
+  const categoriesQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
   
-  const expensesQuery = useMemo(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [tenantId]);
+  const expensesQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [tenantId, firestore]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const budgetsQuery = useMemo(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [tenantId]);
+  const budgetsQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
 
   const currenciesQuery = useMemo(() => (firestore ? collection(firestore, 'currencies') : null), [firestore]);
@@ -76,7 +78,7 @@ function OwnerDashboard() {
   
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies;
   
-   const activeCurrencyId = useMemo(() => {
+  const activeCurrencyId = useMemo(() => {
     if (selectedCurrencyId) return selectedCurrencyId;
     if (currencies) {
       return currencies.find(c => c.code === 'ARS')?.id || '';
@@ -84,8 +86,8 @@ function OwnerDashboard() {
     return '';
   }, [selectedCurrencyId, currencies]);
 
-  const processedData = useMemo(() => {
-    if (isLoading || !activeCurrencyId || !currencies || !categories || !allExpenses || !allBudgets) {
+ const processedData = useMemo(() => {
+    if (isLoading || !currencies || !categories || !allExpenses || !allBudgets || !activeCurrencyId) {
       return SAFE_DEFAULTS;
     }
 
@@ -531,3 +533,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
