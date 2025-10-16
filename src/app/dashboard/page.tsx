@@ -45,7 +45,7 @@ function OwnerDashboard() {
 
   // --- 1. Carga de datos secuencial y controlada ---
 
-  const userDocRef = useMemoFirebase(() => {
+  const userDocRef = useMemo(() => {
     console.log("useMemo: Creando userDocRef. Deps:", { firestore: !!firestore, user: !!user });
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
@@ -59,52 +59,62 @@ function OwnerDashboard() {
   }, [userData]);
 
 
-  const tenantRef = useMemoFirebase(() => {
+  const tenantRef = useMemo(() => {
     console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
     return tenantId ? doc(firestore, 'tenants', tenantId) : null;
   }, [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
 
-  const licenseQuery = useMemoFirebase(() => {
+  const licenseQuery = useMemo(() => {
      console.log("useMemo: Creando licenseQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null
   }, [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
-  const categoriesQuery = useMemoFirebase(() => {
+  const categoriesQuery = useMemo(() => {
      console.log("useMemo: Creando categoriesQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null
   }, [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
-  const expensesQuery = useMemoFirebase(() => {
+  const expensesQuery = useMemo(() => {
      console.log("useMemo: Creando expensesQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null
   }, [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const budgetsQuery = useMemoFirebase(() => {
+  const budgetsQuery = useMemo(() => {
     console.log("useMemo: Creando budgetsQuery. Deps:", { firestore, tenantId });
     return tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null
   }, [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const currenciesQuery = useMemoFirebase(() => {
+  const currenciesQuery = useMemo(() => {
     console.log("useMemo: Creando currenciesQuery. Deps:", { firestore });
     return firestore ? collection(firestore, 'currencies') : null
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
   useEffect(() => {
-    console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
-    if (currencies && !selectedCurrency) {
-        const arsCurrency = currencies.find(c => c.code === 'ARS');
-        if (arsCurrency) {
-            console.log("useEffect [currencies]: Estableciendo moneda por defecto a ARS:", arsCurrency.id);
-            setSelectedCurrency(arsCurrency.id);
-        }
+    console.log("useEffect [currencies]: Se ejecuta.", { 
+      currencies: currencies?.length, 
+      selectedCurrency,
+      isEmpty: selectedCurrency === ''
+    });
+    
+    if (currencies && currencies.length > 0 && selectedCurrency === '') {
+      const arsCurrency = currencies.find(c => c.code === 'ARS');
+      console.log("useEffect [currencies]: Buscando ARS. Encontrado:", arsCurrency);
+      
+      if (arsCurrency) {
+        console.log("useEffect [currencies]: ✅ Estableciendo moneda por defecto a ARS:", arsCurrency.id);
+        setSelectedCurrency(arsCurrency.id);
+      } else {
+        console.log("useEffect [currencies]: ⚠️ No se encontró ARS. Usando primera moneda:", currencies[0]);
+        setSelectedCurrency(currencies[0].id);
+      }
     }
-  }, [currencies]);
+  }, [currencies, selectedCurrency]);
 
   // --- 2. Lógica de renderizado y cálculos ---
 
@@ -565,5 +575,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
