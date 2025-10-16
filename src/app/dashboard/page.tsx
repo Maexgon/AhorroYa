@@ -2,7 +2,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
@@ -33,7 +33,6 @@ function OwnerDashboard() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
-  const [tenantId, setTenantId] = useState<string | null>(null);
   const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -42,8 +41,8 @@ function OwnerDashboard() {
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
-
-  console.log("Estado actual:", { tenantId, selectedCategory, selectedCurrency });
+  
+  console.log("Estado actual:", { selectedCategory, selectedCurrency });
 
   const userDocRef = useMemoFirebase(() => {
     console.log("useMemo: Creando userDocRef. Deps:", { firestore, user });
@@ -52,15 +51,9 @@ function OwnerDashboard() {
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-  useEffect(() => {
-    console.log("useEffect [userData]: Se ejecuta. userData:", userData);
-    if (userData?.tenantIds && userData.tenantIds.length > 0) {
-      if(tenantId !== userData.tenantIds[0]) {
-        console.log("useEffect [userData]: Cambiando tenantId a:", userData.tenantIds[0]);
-        setTenantId(userData.tenantIds[0]);
-      }
-    }
-  }, [userData, tenantId]);
+  // Get tenantId directly from userData. No useEffect needed.
+  const tenantId = userData?.tenantIds?.[0];
+  console.log("Direct tenantId:", tenantId);
 
   const tenantRef = useMemoFirebase(() => {
     console.log("useMemo: Creando tenantRef. Deps:", { tenantId });
@@ -104,16 +97,17 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
+  // This effect sets the default currency ONLY when currencies are loaded for the first time.
   useEffect(() => {
     console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
     if (currencies && !selectedCurrency) {
-      const arsCurrency = currencies.find(c => c.code === 'ARS');
-      if (arsCurrency) {
-        console.log("useEffect [currencies]: Estableciendo selectedCurrency a ARS:", arsCurrency.id);
-        setSelectedCurrency(arsCurrency.id);
-      }
+        const arsCurrency = currencies.find(c => c.code === 'ARS');
+        if (arsCurrency) {
+            console.log("useEffect [currencies]: Estableciendo selectedCurrency a ARS:", arsCurrency.id);
+            setSelectedCurrency(arsCurrency.id);
+        }
     }
-  }, [currencies]);
+  }, [currencies]); // Depends ONLY on currencies
 
   const filteredExpenses = useMemo(() => {
     console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses, date, selectedCategory });
@@ -132,7 +126,6 @@ function OwnerDashboard() {
 
   const processedData = useMemo(() => {
     console.log("useMemo: Calculando processedData. Deps:", { filteredExpenses, categories, currencies, allBudgets, allExpenses, selectedCurrency, date });
-    
     if (!currencies || !allExpenses || !categories || !allBudgets || !selectedCurrency) {
       console.log("useMemo [processedData]: Salida temprana, datos incompletos.");
       return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
@@ -141,20 +134,20 @@ function OwnerDashboard() {
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
     const usdCurrency = currencies.find(c => c.code === 'USD');
 
-    if (!toCurrency || !usdCurrency) {
+    if (!toCurrency || !usdCurrency?.exchangeRate) {
       console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda de destino o USD.");
       return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
     }
     
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
-      const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-      if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
-        console.log(`Fallo en conversión: from ${fromCurrencyCode}, to ${toCurrency.code}`);
-        return 0;
-      };
-      
-      const amountInUSD = amount / fromCurrency.exchangeRate;
-      return amountInUSD * toCurrency.exchangeRate;
+        const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
+        if (!fromCurrency || !fromCurrency.exchangeRate) {
+          console.log(`Fallo en conversión: from ${fromCurrencyCode}, to ${toCurrency.code}`);
+          return 0;
+        }
+        // (monto / tasa_origen_a_usd) * tasa_destino_a_usd
+        const amountInUSD = amount / fromCurrency.exchangeRate;
+        return amountInUSD * toCurrency.exchangeRate;
     };
 
     const finalFormatCurrency = (amount: number) => {
@@ -195,10 +188,11 @@ function OwnerDashboard() {
         .map(expense => {
             const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
             return {
+                ...expense,
                 icon: expenseIcons[categoryName] || expenseIcons.default,
                 entity: expense.entityName || 'N/A',
                 category: categoryName,
-                amount: convertAmount(expense.amount, expense.currency),
+                amountConverted: convertAmount(expense.amount, expense.currency),
             }
         });
 
@@ -228,8 +222,6 @@ function OwnerDashboard() {
     return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: toCurrency.code };
 
   }, [filteredExpenses, categories, currencies, selectedCurrency, allBudgets, allExpenses, date]);
-  
-  const { barData, recentExpenses, budgetChartData, formatCurrency, toCurrencyCode } = processedData;
   
   const activeLicense = licenses?.[0];
 
@@ -276,9 +268,9 @@ function OwnerDashboard() {
     }
   };
   
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
+  const isLoading = isUserDocLoading || !tenantId || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingCurrencies || !selectedCurrency;
 
-  console.log("Estado de carga:", {isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, selectedCurrency});
+  console.log("Estado de carga:", {isLoading, isUserDocLoading, isLoadingTenant, isLoadingLicenses, isLoadingCategories, isLoadingExpenses, isLoadingBudgets, isLoadingCurrencies, selectedCurrency, tenantId});
 
   if (isLoading) {
     return (
@@ -423,11 +415,11 @@ function OwnerDashboard() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Análisis de Gastos</CardTitle>
-                 <CardDescription>Resumen por categoría del período seleccionado en {toCurrencyCode}.</CardDescription>
+                 <CardDescription>Resumen por categoría del período seleccionado en {processedData.toCurrencyCode}.</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={barData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
+                  <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
                         <LabelList
                             dataKey="total"
@@ -435,9 +427,9 @@ function OwnerDashboard() {
                             offset={8}
                             className="fill-foreground"
                             fontSize={12}
-                            formatter={(value: number) => formatCurrency(value)}
+                            formatter={(value: number) => processedData.formatCurrency(value)}
                         />
-                      {barData.map((entry, index) => (
+                      {processedData.barData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Bar>
@@ -448,11 +440,11 @@ function OwnerDashboard() {
             <Card className="lg:col-span-3">
               <CardHeader>
                 <CardTitle>Presupuestos</CardTitle>
-                <CardDescription>Tu progreso de gastos del mes en {toCurrencyCode}.</CardDescription>
+                <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={budgetChartData} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
+                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
                         <XAxis type="number" hide />
                         <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false}/>
                         <Tooltip
@@ -462,8 +454,8 @@ function OwnerDashboard() {
                                 return (
                                     <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
                                         <p className="font-bold">{payload[0].payload.name}</p>
-                                        <p>Gastado: {formatCurrency(payload[1].value as number)}</p>
-                                        <p>Presupuestado: {formatCurrency(payload[0].value as number)}</p>
+                                        <p>Gastado: {processedData.formatCurrency(payload[1].value as number)}</p>
+                                        <p>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p>
                                     </div>
                                 );
                                 }
@@ -496,7 +488,7 @@ function OwnerDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentExpenses.map((expense, i) => (
+                  {processedData.recentExpenses.map((expense, i) => (
                     <TableRow key={i}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -508,7 +500,7 @@ function OwnerDashboard() {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">{expense.category}</TableCell>
                       <TableCell className="text-right font-mono">
-                        {formatCurrency(expense.amount)}
+                        {processedData.formatCurrency(expense.amountConverted)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -530,7 +522,7 @@ function OwnerDashboard() {
                         Notamos que tus gastos en <span className="text-foreground font-medium">"Vida y Entretenimiento"</span> superaron el presupuesto.
                     </p>
                     <p className="mt-2 font-medium text-foreground">
-                        Considera reasignar <span className="text-primary">{formatCurrency(2500)}</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
+                        Considera reasignar <span className="text-primary">{processedData.formatCurrency(2500)}</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
                     </p>
                 </div>
             </CardContent>
@@ -608,5 +600,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
