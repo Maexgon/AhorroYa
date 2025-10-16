@@ -51,7 +51,7 @@ function OwnerDashboard() {
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-  // Get tenantId directly from userData. No useEffect needed.
+  // Get tenantId directly from userData.
   const tenantId = userData?.tenantIds?.[0];
   console.log("Direct tenantId:", tenantId);
 
@@ -97,17 +97,16 @@ function OwnerDashboard() {
   }, [firestore]);
   const { data: currencies, isLoading: isLoadingCurrencies } = useCollection<WithId<Currency>>(currenciesQuery);
   
-  // This effect sets the default currency ONLY when currencies are loaded for the first time.
   useEffect(() => {
     console.log("useEffect [currencies]: Se ejecuta. currencies:", currencies);
     if (currencies && !selectedCurrency) {
         const arsCurrency = currencies.find(c => c.code === 'ARS');
         if (arsCurrency) {
-            console.log("useEffect [currencies]: Estableciendo selectedCurrency a ARS:", arsCurrency.id);
             setSelectedCurrency(arsCurrency.id);
         }
     }
-  }, [currencies]); // Depends ONLY on currencies
+  }, [currencies]);
+
 
   const filteredExpenses = useMemo(() => {
     console.log("useMemo: Calculando filteredExpenses. Deps:", { allExpenses, date, selectedCategory });
@@ -132,20 +131,30 @@ function OwnerDashboard() {
     }
     
     const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    const usdCurrency = currencies.find(c => c.code === 'USD');
-
-    if (!toCurrency || !usdCurrency?.exchangeRate) {
-      console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda de destino o USD.");
+    
+    if (!toCurrency) {
+      console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda de destino.");
       return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: '' };
+    }
+
+    const usdCurrency = currencies.find(c => c.code === 'USD');
+    if (!usdCurrency) {
+        console.log("useMemo [processedData]: Salida temprana, no se encontró la moneda USD para conversión.");
+        return { barData: [], recentExpenses: [], budgetChartData: [], formatCurrency: (amount: number) => `$${amount.toFixed(2)}`, toCurrencyCode: toCurrency.code };
     }
     
     const convertAmount = (amount: number, fromCurrencyCode: string) => {
+        console.log("--- Iniciando conversión ---");
         const fromCurrency = currencies.find(c => c.code === fromCurrencyCode);
-        if (!fromCurrency || !fromCurrency.exchangeRate) {
-          console.log(`Fallo en conversión: from ${fromCurrencyCode}, to ${toCurrency.code}`);
-          return 0;
+        console.log("a. moneda origen:", fromCurrency);
+        console.log("b. moneda destino:", toCurrency);
+
+        if (!fromCurrency || !fromCurrency.exchangeRate || !toCurrency.exchangeRate) {
+          console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+          return 0; // Return 0 if conversion is not possible
         }
-        // (monto / tasa_origen_a_usd) * tasa_destino_a_usd
+        
+        // Convert amount to USD first, then to the target currency
         const amountInUSD = amount / fromCurrency.exchangeRate;
         return amountInUSD * toCurrency.exchangeRate;
     };
@@ -600,3 +609,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
