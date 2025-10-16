@@ -1,7 +1,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
@@ -117,7 +117,7 @@ function OwnerDashboard() {
         setSelectedCurrency(arsCurrency.id);
       }
     }
-  }, [currencies]);
+  }, [currencies, selectedCurrency]);
 
 
   const filteredExpenses = useMemo(() => {
@@ -134,58 +134,51 @@ function OwnerDashboard() {
     });
   }, [expenses, date, selectedCategory]);
 
-    const barData = useMemo(() => {
-        if (!filteredExpenses || !categories || !currencies || !selectedCurrency) {
-            return [];
+  const barData = useMemo(() => {
+    if (!filteredExpenses || !categories || !currencies || !selectedCurrency) {
+        return [];
+    }
+
+    const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
+        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+        
+        console.log("--- Iniciando conversión ---");
+        const fromCurrency = currencies.find(c => c.id === expense.currency);
+        const toCurrency = currencies.find(c => c.id === selectedCurrency);
+        
+        console.log("a. simbolo moneda origen:", fromCurrency?.code);
+        console.log("b. simbolo moneda destino:", toCurrency?.code);
+        
+        if (!fromCurrency || !toCurrency) {
+             console.log("Salida temprana, no se encontró la moneda de origen o destino.");
+             return acc;
+        }
+        
+        const fromRate = fromCurrency.exchangeRate || 1;
+        const toRate = toCurrency.exchangeRate || 1;
+        
+        let convertedAmount = expense.amount;
+        if (fromCurrency.id !== toCurrency.id) {
+            convertedAmount = (expense.amount / fromRate) * toRate;
         }
 
-        const toCurrency = currencies.find(c => c.id === selectedCurrency);
-        if (!toCurrency) return [];
+        console.log("c. exchangeRate origen:", fromRate);
+        console.log("d. exchangeRate destino:", toRate);
+        console.log("e. valor original:", expense.amount);
+        console.log("f. valor convertido:", convertedAmount);
 
-        const expenseByCategory = filteredExpenses.reduce((acc, expense) => {
-            const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-            
-            console.log("--- Iniciando conversión ---");
+        if (!acc[categoryName]) {
+            acc[categoryName] = 0;
+        }
+        acc[categoryName] += convertedAmount;
 
-            const fromCurrency = currencies.find(c => c.code === expense.currency);
-            
-            console.log("a. simbolo moneda origen:", fromCurrency?.code);
-            console.log("b. simbolo moneda destino:", toCurrency.code);
+        return acc;
+    }, {} as Record<string, number>);
 
-            if (!fromCurrency) {
-                console.log("Salida temprana, no se encontró la moneda de origen.");
-                if (!acc[categoryName]) {
-                    acc[categoryName] = 0;
-                }
-                acc[categoryName] += expense.amount; // Add original amount if conversion fails
-                return acc;
-            }
-
-            const fromRate = fromCurrency.exchangeRate || 1;
-            const toRate = toCurrency.exchangeRate || 1;
-            console.log("c. exchangeRate origen:", fromRate);
-            console.log("d. exchangeRate destino:", toRate);
-            console.log("e. valor original:", expense.amount);
-
-
-            let convertedAmount = expense.amount;
-            if (fromCurrency.code !== toCurrency.code) {
-                convertedAmount = (expense.amount / fromRate) * toRate;
-            }
-            console.log("f. valor convertido:", convertedAmount);
-
-            if (!acc[categoryName]) {
-                acc[categoryName] = 0;
-            }
-            acc[categoryName] += convertedAmount;
-
-            return acc;
-        }, {} as Record<string, number>);
-
-        return Object.entries(expenseByCategory)
-        .map(([name, total]) => ({ name, total }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 5);
+    return Object.entries(expenseByCategory)
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
   }, [filteredExpenses, categories, selectedCurrency, currencies]);
 
 
@@ -201,19 +194,17 @@ function OwnerDashboard() {
     
     if (!filteredExpenses || !categories || !currencies || !selectedCurrency) return [];
     
-    const toCurrency = currencies.find(c => c.id === selectedCurrency);
-    if (!toCurrency) return [];
-
-
     return filteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
             const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
-            const fromCurrency = currencies.find(c => c.code === expense.currency);
+            
+            const fromCurrency = currencies.find(c => c.id === expense.currency);
+            const toCurrency = currencies.find(c => c.id === selectedCurrency);
             
             let convertedAmount = expense.amount;
-            if (fromCurrency && toCurrency && fromCurrency.code !== toCurrency.code) {
+            if (fromCurrency && toCurrency && fromCurrency.id !== toCurrency.id) {
                 const fromRate = fromCurrency.exchangeRate || 1;
                 const toRate = toCurrency.exchangeRate || 1;
                 convertedAmount = (expense.amount / fromRate) * toRate;
@@ -244,9 +235,9 @@ function OwnerDashboard() {
             const spent = expenses
                 .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                 .reduce((acc, e) => {
-                    const fromCurrency = currencies.find(c => c.code === e.currency);
+                    const fromCurrency = currencies.find(c => c.id === e.currency);
                     let convertedAmount = e.amount;
-                    if (fromCurrency && toCurrency && fromCurrency.code !== toCurrency.code) {
+                    if (fromCurrency && toCurrency && fromCurrency.id !== toCurrency.id) {
                         const fromRate = fromCurrency.exchangeRate || 1;
                         const toRate = toCurrency.exchangeRate || 1;
                         convertedAmount = (e.amount / fromRate) * toRate;
@@ -660,5 +651,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
