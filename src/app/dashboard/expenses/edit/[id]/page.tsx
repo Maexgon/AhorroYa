@@ -236,7 +236,7 @@ export default function EditExpensePage() {
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 {currencies?.map(rate => (
-                                                    <SelectItem key={rate.id} value={rate.code}>{rate.code}</SelectItem>
+                                                    <SelectItem key={rate.code} value={rate.code}>{rate.code}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
@@ -327,3 +327,5 @@ export default function EditExpensePage() {
     </div>
   );
 }
+
+    
