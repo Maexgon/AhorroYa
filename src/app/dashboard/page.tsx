@@ -399,9 +399,17 @@ function OwnerDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 60, left: 20, bottom: 5 }} barCategoryGap="20%">
+                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barCategoryGap="20%">
                         <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} width={80}/>
+                        <YAxis 
+                            type="category" 
+                            dataKey="name" 
+                            stroke="hsl(var(--foreground))" 
+                            fontSize={12} 
+                            tickLine={false} 
+                            axisLine={false} 
+                            width={100}
+                        />
                         <Tooltip
                             cursor={{ fill: 'hsl(var(--secondary))' }}
                             content={({ active, payload }) => {
@@ -418,22 +426,24 @@ function OwnerDashboard() {
                                 return null;
                             }}
                         />
-                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3) / 0.2)" radius={[0, 4, 4, 0]}>
+                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3) / 0.2)" radius={[0, 8, 8, 0]} barSize={40}>
                             <LabelList 
                                 dataKey="Presupuestado" 
                                 position="insideLeft" 
-                                offset={10}
-                                className="fill-foreground font-semibold"
-                                fontSize={12}
+                                offset={15}
+                                style={{ fill: 'hsl(var(--foreground))' }}
+                                fontSize={13}
+                                fontWeight="600"
                                 formatter={(value: number) => processedData.formatCurrency(value)}
                             />
                         </Bar>
-                        <Bar dataKey="Gastado" fill="hsl(var(--chart-3))" radius={[0, 4, 4, 0]}>
+                        <Bar dataKey="Gastado" fill="hsl(var(--chart-3))" radius={[0, 8, 8, 0]} barSize={40}>
                             <LabelList
                                 dataKey="percentage"
                                 position="center"
-                                className="fill-primary-foreground font-semibold"
-                                fontSize={12}
+                                style={{ fill: 'white' }}
+                                fontSize={13}
+                                fontWeight="700"
                                 formatter={(value: number) => `${value}%`}
                             />
                         </Bar>
