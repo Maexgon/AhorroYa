@@ -362,7 +362,7 @@ function OwnerDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 50, left: 40, bottom: 5 }}>
+                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 50, left: 40, bottom: 5 }} barCategoryGap="20%">
                         <XAxis type="number" hide />
                         <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} width={80}/>
                         <Tooltip
@@ -381,20 +381,22 @@ function OwnerDashboard() {
                                 return null;
                             }}
                         />
-                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-3) / 0.4)" radius={[0, 4, 4, 0]} >
-                             <LabelList 
+                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-3) / 0.2)" radius={[4, 4, 4, 4]}>
+                            <LabelList 
                                 dataKey="Presupuestado" 
                                 position="right" 
                                 offset={10}
-                                className="fill-foreground font-bold"
+                                className="fill-foreground font-semibold"
+                                fontSize={12}
                                 formatter={(value: number) => processedData.formatCurrency(value)}
                             />
                         </Bar>
-                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--chart-3))" radius={[4, 0, 0, 4]}>
+                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--chart-3))" radius={[4, 4, 4, 4]}>
                             <LabelList
                                 dataKey="percentage"
                                 position="center"
-                                className="fill-primary-foreground"
+                                className="fill-primary-foreground font-semibold"
+                                fontSize={12}
                                 formatter={(value: number) => `${value}%`}
                             />
                         </Bar>
