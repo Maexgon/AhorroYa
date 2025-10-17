@@ -362,7 +362,7 @@ function OwnerDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 50, left: 40, bottom: 5 }} barCategoryGap="20%">
+                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 50, left: 20, bottom: 5 }} barCategoryGap="20%">
                         <XAxis type="number" hide />
                         <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} width={80}/>
                         <Tooltip
@@ -391,7 +391,7 @@ function OwnerDashboard() {
                                 formatter={(value: number) => processedData.formatCurrency(value)}
                             />
                         </Bar>
-                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--chart-3))" radius={[4, 4, 4, 4]}>
+                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--chart-3))" radius={[4, 0, 0, 4]}>
                             <LabelList
                                 dataKey="percentage"
                                 position="center"
