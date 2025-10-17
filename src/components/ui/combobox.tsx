@@ -4,12 +4,10 @@ import * as React from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
@@ -56,20 +54,27 @@ export function Combobox({
     setOpen(false);
     setSearch("");
   }
+  
+  const filteredOptions = React.useMemo(() => {
+    if (!search || search.length < 5) return [];
+    return options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase()));
+  }, [search, options]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
     setSearch(newValue); // Update search term as user types
     onSelect(newValue); // Allow free text entry by updating form state
-    if (!open) setOpen(true);
+
+    if (newValue.length >= 5) {
+        const matchingOptions = options.filter(opt => opt.label.toLowerCase().includes(newValue.toLowerCase()));
+        setOpen(matchingOptions.length > 0);
+    } else {
+        setOpen(false);
+    }
   }
   
-  const filteredOptions = React.useMemo(() => {
-    if (!search) return options;
-    return options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase()));
-  }, [search, options]);
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -78,9 +83,13 @@ export function Combobox({
                 placeholder={placeholder}
                 value={inputValue}
                 onChange={handleInputChange}
-                onFocus={() => {
-                  setOpen(true);
-                  setSearch(inputValue);
+                onBlur={() => setOpen(false)} // Close popover on blur
+                onFocus={(e) => {
+                    const value = e.target.value;
+                    if(value.length >= 5) {
+                        const matchingOptions = options.filter(opt => opt.label.toLowerCase().includes(value.toLowerCase()));
+                        setOpen(matchingOptions.length > 0);
+                    }
                 }}
                 className={cn("w-full justify-between", className)}
             />
@@ -93,7 +102,7 @@ export function Combobox({
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
             <CommandList>
-                {filteredOptions.length === 0 && search.length > 0 ? (
+                {filteredOptions.length === 0 ? (
                   <div className="py-6 text-center text-sm">{emptyPlaceholder}</div>
                 ) : (
                   <CommandGroup>
