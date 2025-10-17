@@ -1,17 +1,15 @@
 
 'use server';
 
-import { getFirestore, doc, collection, writeBatch, getDocs, query, where } from 'firebase/firestore';
-import type { License, Membership } from '@/lib/types';
+import type { License, Membership, User } from '@/lib/types';
+import { getFirestore, doc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase/config';
 
 interface InviteUserParams {
     tenantId: string;
-    currentUserUid: string;
     email: string;
     firstName: string;
     lastName: string;
-    phone: string;
     password: string;
     license: License | null;
     currentMemberCount: number;
@@ -74,12 +72,13 @@ export async function inviteUserAction(params: InviteUserParams): Promise<{ succ
         const batch = writeBatch(firestore);
 
         const userRef = doc(firestore, 'users', newUserUid);
-        const userData = {
+        // CRITICAL FIX: Add tenantIds to the user object to comply with security rules
+        const userData: User = {
             uid: newUserUid,
             displayName: `${firstName} ${lastName}`,
             email: email,
             photoURL: '',
-            tenantIds: [tenantId],
+            tenantIds: [tenantId], // This is the key change
             isSuperadmin: false,
         };
         batch.set(userRef, userData);
@@ -106,6 +105,6 @@ export async function inviteUserAction(params: InviteUserParams): Promise<{ succ
 
     } catch (error: any) {
         console.error('Error in inviteUserAction:', error);
-        return { success: false, error: error.message || 'Ocurrió un error inesperado.' };
+        return { success: false, error: error.message || 'Ocurrió un error inesperado al escribir en Firestore.' };
     }
 }
