@@ -7,12 +7,12 @@ import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
+import { collection, query, where, writeBatch, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -27,6 +27,20 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { DropdownCat } from '@/components/ui/dropdowncat';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
+import { columns as expenseColumns } from './expenses/columns';
+import { DataTable as ExpensesDataTable } from './expenses/data-table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const SAFE_DEFAULTS = {
     barData: [],
@@ -79,7 +93,7 @@ const CustomizedYAxisTick = (props: any) => {
 };
 
 
-function OwnerDashboard() {
+function OwnerDashboard({ tenantId }: { tenantId: string }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -92,14 +106,6 @@ function OwnerDashboard() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   
   // --- Data Fetching ---
-  const userDocRef = useMemo(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-
-  const tenantId = useMemo(() => userData?.tenantIds?.[0], [userData]);
-
   const tenantRef = useMemo(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [tenantId, firestore]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
@@ -118,7 +124,7 @@ function OwnerDashboard() {
   const budgetsQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
+  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
   
  const processedData = useMemo(() => {
     if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user) {
@@ -628,11 +634,174 @@ function OwnerDashboard() {
   );
 }
 
+function MemberDashboard({ tenantId }: { tenantId: string }) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+
+  const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
+  
+  // --- Data Fetching ---
+  const expensesQuery = useMemo(() => {
+      if (!firestore || !tenantId || !user) return null;
+      return query(
+          collection(firestore, 'expenses'), 
+          where('tenantId', '==', tenantId), 
+          where('deleted', '==', false),
+          where('userId', '==', user.uid)
+      );
+  }, [firestore, tenantId, user]);
+  const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
+
+  const categoriesQuery = useMemo(() => {
+      if (!firestore || !tenantId) return null;
+      return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+
+  const tableData = React.useMemo(() => {
+      if (!expenses || !categories) return [];
+      const categoryMap = new Map(categories.map(c => [c.id, c]));
+      return expenses.map(expense => ({
+          ...expense,
+          category: categoryMap.get(expense.categoryId),
+      }));
+  }, [expenses, categories]);
+
+  const handleOpenDeleteDialog = (expenseId: string) => {
+    setExpenseToDelete(expenseId);
+  };
+  
+  const resetDeleteDialog = () => {
+    setExpenseToDelete(null);
+    setDeleteConfirmationText('');
+  }
+
+  const handleDeleteExpense = async () => {
+    if (!expenseToDelete || !firestore) return;
+
+    const expenseRef = doc(firestore, 'expenses', expenseToDelete);
+    const updatedData = { deleted: true, updatedAt: new Date().toISOString() };
+    
+    updateDoc(expenseRef, updatedData).then(() => {
+        toast({ title: 'Gasto eliminado', description: 'El gasto ha sido marcado como eliminado.' });
+        if (expenses && setExpenses) {
+            setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
+        }
+        resetDeleteDialog();
+    }).catch(error => {
+        errorEmitter.emit('permission-error', { path: expenseRef.path, operation: 'update', requestResourceData: updatedData });
+        resetDeleteDialog();
+    });
+  };
+
+  const columns = React.useMemo(() => expenseColumns.filter(c => c.id !== 'select' && c.id !== 'actions'), []);
+
+  const isLoading = isLoadingExpenses || isLoadingCategories;
+
+  return (
+    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+              <div>
+                  <CardTitle>Mis Gastos</CardTitle>
+                  <CardDescription>Aquí puedes ver y administrar todos tus gastos registrados.</CardDescription>
+              </div>
+              <Button asChild>
+                  <Link href="/dashboard/expenses/new">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Crear Nuevo Gasto
+                  </Link>
+              </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+              <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>
+          ) : (
+              <ExpensesDataTable 
+                columns={columns} 
+                data={tableData}
+                categories={categories || []}
+                onDelete={handleOpenDeleteDialog}
+              />
+          )}
+        </CardContent>
+      </Card>
+      <AlertDialog open={!!expenseToDelete} onOpenChange={(open) => !open && resetDeleteDialog()}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      Esta acción marcará el gasto como eliminado de forma permanente. Para confirmar, escribe <strong className="text-foreground">BORRAR</strong> en el campo de abajo.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="py-2">
+                  <Label htmlFor="delete-confirm" className="sr-only">Confirmación</Label>
+                  <Input 
+                      id="delete-confirm"
+                      value={deleteConfirmationText}
+                      onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                      placeholder='Escribe "BORRAR"'
+                  />
+              </div>
+              <AlertDialogFooter>
+                  <AlertDialogCancel onClick={resetDeleteDialog}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction 
+                      onClick={handleDeleteExpense}
+                      disabled={deleteConfirmationText !== 'BORRAR'}
+                      className="bg-destructive hover:bg-destructive/90"
+                  >
+                      Continuar
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
 
 export default function DashboardPageContainer() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const { toast } = useToast();
+  const firestore = useFirestore();
+
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<'owner' | 'member' | null>(null);
+  const [isLoadingRole, setIsLoadingRole] = useState(true);
+
+  // 1. Get user's tenantId
+  const userDocRef = useMemo(() => {
+    if (!user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
+  const { data: userData } = useDoc<UserType>(userDocRef);
+
+  useEffect(() => {
+    if (userData?.tenantIds?.[0]) {
+      setTenantId(userData.tenantIds[0]);
+    }
+  }, [userData]);
+
+  // 2. Get user's membership to determine role
+  const membershipDocRef = useMemo(() => {
+    if (!tenantId || !user) return null;
+    return doc(firestore, 'memberships', `${tenantId}_${user.uid}`);
+  }, [tenantId, user]);
+  const { data: membershipData, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
+
+  useEffect(() => {
+    if (!isLoadingMembership) {
+      if (membershipData?.role) {
+        setUserRole(membershipData.role as 'owner' | 'member');
+      }
+      setIsLoadingRole(false);
+    }
+  }, [membershipData, isLoadingMembership]);
+
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -658,7 +827,7 @@ export default function DashboardPageContainer() {
     }
   };
 
-  if (isUserLoading) {
+  if (isUserLoading || isLoadingRole) {
     return (
       <div className="flex h-screen items-center justify-center">
         <AhorroYaLogo className="h-12 w-12 animate-spin text-primary" />
@@ -684,7 +853,8 @@ export default function DashboardPageContainer() {
         </div>
       </header>
       <main className="flex-1">
-        <OwnerDashboard />
+        {userRole === 'owner' && tenantId && <OwnerDashboard tenantId={tenantId} />}
+        {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} />}
       </main>
     </div>
   );
