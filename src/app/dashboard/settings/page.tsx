@@ -364,6 +364,7 @@ export default function SettingsPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  
   const [members, setMembers] = useState<Membership[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(true);
   
@@ -394,25 +395,12 @@ export default function SettingsPage() {
   }, [tenantData, user]);
 
   useEffect(() => {
-    if (!tenantId || !firestore) return;
-    
-    const fetchMembers = async () => {
-        setIsLoadingMembers(true);
-        try {
-            const membersQuery = query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-            const snapshot = await getDocs(membersQuery);
-            const membersData = snapshot.docs.map(doc => doc.data() as Membership);
-            setMembers(membersData);
-        } catch (e) {
-            console.error("Error fetching members:", e);
-            toast({ variant: 'destructive', title: "Error", description: "No se pudieron cargar los miembros."});
-        } finally {
-            setIsLoadingMembers(false);
-        }
-    };
-    
-    fetchMembers();
-  }, [tenantId, firestore, toast]);
+    // This effect is now just for initially setting an empty state, 
+    // or loading from a non-realtime source if that were the case.
+    if(tenantId) {
+        setIsLoadingMembers(false);
+    }
+  }, [tenantId]);
 
   const licenseQuery = useMemoFirebase(() => {
       if (!tenantId || !firestore) return null;
@@ -422,7 +410,7 @@ export default function SettingsPage() {
 
   const activeLicense = licenses?.[0];
 
-  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses || isLoadingMembers;
+  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !tenantId || !activeLicense) {
@@ -465,9 +453,11 @@ export default function SettingsPage() {
         batch.set(membershipRef, membershipData);
         
         await batch.commit();
+        
+        // Optimistic update of the local state
+        setMembers(prev => [...prev, membershipData]);
 
         toast({ title: "¡Éxito!", description: "El usuario ha sido creado e invitado correctamente." });
-        setMembers(prev => [...prev, membershipData]); // Optimistic update
         setIsInviteDialogOpen(false);
       } catch (error) {
            errorEmitter.emit('permission-error', new FirestorePermissionError({
