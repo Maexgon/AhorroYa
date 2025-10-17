@@ -148,9 +148,10 @@ export default function ExpensesPage() {
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
         
-        // Use the 'members' (from memberships collection) to build the name map
+        // The `members` collection from `memberships` should contain the denormalized displayName.
         const memberMap = new Map(members?.map(m => [m.uid, m.displayName]) || []);
-        // Fallback for non-owners who only have their own data
+        
+        // For non-owners, they won't fetch the full `members` list, so we ensure their own name is in the map.
         if (!isOwner && user && userData) {
              if(!memberMap.has(user.uid)) {
                 memberMap.set(user.uid, userData.displayName);
