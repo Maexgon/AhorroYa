@@ -343,11 +343,12 @@ function OwnerDashboard() {
                             cursor={{ fill: 'hsl(var(--secondary))' }}
                             content={({ active, payload }) => {
                                 if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
                                 return (
                                     <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                        <p className="font-bold">{payload[0].payload.name}</p>
-                                        <p>Gastado: {processedData.formatCurrency(payload[1].value as number)}</p>
-                                        <p>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                        <p className="font-bold">{data.name}</p>
+                                        <p>Gastado: {processedData.formatCurrency(data.Gastado)}</p>
+                                        <p>Presupuestado: {processedData.formatCurrency(data.Presupuestado)}</p>
                                     </div>
                                 );
                                 }
@@ -355,8 +356,8 @@ function OwnerDashboard() {
                             }}
                         />
                         <Legend />
-                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
-                        <Bar dataKey="Gastado" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-2) / 0.3)" radius={4} />
+                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--primary))" radius={4} />
                     </BarChart>
                 </ResponsiveContainer>
               </CardContent>
