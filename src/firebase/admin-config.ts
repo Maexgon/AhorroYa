@@ -9,11 +9,12 @@ export async function initializeAdminApp() {
     return admin.app();
   }
 
-  // Environment variables for Firebase Admin SDK are automatically
-  // picked up by initializeApp() when deployed to Firebase services.
-  // For local development, you need to set up a service account file.
-  // See: https://firebase.google.com/docs/admin/setup
-  const credential = admin.credential.applicationDefault();
+  // In a deployed Google environment (like Cloud Run, Cloud Functions),
+  // GOOGLE_APPLICATION_CREDENTIALS is set automatically.
+  // For local development, you'd set this environment variable to point to your service account JSON file.
+  const credential = process.env.GOOGLE_APPLICATION_CREDENTIALS
+    ? admin.credential.applicationDefault()
+    : undefined;
 
   return admin.initializeApp({
     credential,

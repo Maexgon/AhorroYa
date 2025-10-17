@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAuth } from 'firebase-admin/auth';
@@ -40,7 +41,7 @@ export async function inviteUserAction(params: InviteUserParams): Promise<{ succ
         const license = licenseQuery.docs[0].data();
 
         const membersQuery = await adminFirestore.collection('memberships').where('tenantId', '==', tenantId).get();
-        if (members.size >= license.maxUsers) {
+        if (membersQuery.size >= license.maxUsers) {
             return { success: false, error: 'Has alcanzado el número máximo de usuarios para tu plan.' };
         }
 
