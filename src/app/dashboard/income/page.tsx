@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
@@ -23,6 +23,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { getColumns } from './columns';
 import { DataTable } from './data-table';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { DateRange } from 'react-day-picker';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const incomeCategories = [
   { value: "salarios", label: "Salarios" },
@@ -39,6 +44,10 @@ export default function IncomePage() {
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [incomeToDelete, setIncomeToDelete] = React.useState<string | null>(null);
+    const [date, setDate] = React.useState<DateRange | undefined>({
+      from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
+    });
 
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
@@ -63,6 +72,23 @@ export default function IncomePage() {
         );
     }, [firestore, tenantId, ready]);
     const { data: incomes, isLoading: isLoadingIncomes, setData: setIncomes } = useCollection<Income>(incomesQuery);
+
+    const filteredIncomes = React.useMemo(() => {
+        if (!incomes) return [];
+        if (!date || !date.from) return incomes;
+
+        const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
+        const toDate = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : fromDate;
+
+        return incomes.filter(income => {
+            const incomeDate = new Date(income.date);
+            return incomeDate >= fromDate && incomeDate <= toDate;
+        });
+    }, [incomes, date]);
+
+    const totalIncome = React.useMemo(() => {
+        return filteredIncomes.reduce((acc, income) => acc + income.amountARS, 0);
+    }, [filteredIncomes]);
 
     const handleOpenDeleteDialog = (id: string) => {
         setIncomeToDelete(id);
@@ -143,9 +169,49 @@ export default function IncomePage() {
                         </div>
                     </CardHeader>
                     <CardContent>
+                        <div className="flex items-center gap-4 py-4">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        id="date"
+                                        variant={"outline"}
+                                        className="w-[300px] justify-start text-left font-normal"
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {date?.from ? (
+                                            date.to ? (
+                                                <>
+                                                    {format(date.from, "LLL dd, y", { locale: es })} -{" "}
+                                                    {format(date.to, "LLL dd, y", { locale: es })}
+                                                </>
+                                            ) : (
+                                                format(date.from, "LLL dd, y", { locale: es })
+                                            )
+                                        ) : (
+                                            <span>Selecciona un rango de fechas</span>
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={date?.from}
+                                        selected={date}
+                                        onSelect={setDate}
+                                        numberOfMonths={2}
+                                        locale={es}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <div className="ml-auto flex items-baseline gap-2">
+                                <span className="text-sm text-muted-foreground">Total del Período:</span>
+                                <span className="text-xl font-bold text-primary">{formatCurrency(totalIncome)}</span>
+                            </div>
+                        </div>
                        <DataTable
                             columns={columns}
-                            data={incomes || []}
+                            data={filteredIncomes || []}
                             onDelete={handleOpenDeleteDialog}
                             categories={incomeCategories}
                        />

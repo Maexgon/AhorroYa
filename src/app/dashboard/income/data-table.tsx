@@ -82,7 +82,6 @@ export function DataTable<TData, TValue>({
         />
         <Select
             onValueChange={(value) => {
-                const currentFilter = table.getColumn("category")?.getFilterValue() as string[] || [];
                 if (value === 'all') {
                     table.getColumn("category")?.setFilterValue(undefined);
                 } else {
@@ -138,7 +137,7 @@ export function DataTable<TData, TValue>({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No se encontraron ingresos.
+                  No se encontraron ingresos para el período seleccionado.
                 </TableCell>
               </TableRow>
             )}
