@@ -78,7 +78,8 @@ export function DataTable<TData, TValue>({
         <Select
           value={(table.getColumn("month")?.getFilterValue() as string) ?? ""}
           onValueChange={(value) => {
-            table.getColumn("month")?.setFilterValue(value === 'all' ? null : value);
+            const isAll = value === 'all';
+            table.getColumn("month")?.setFilterValue(isAll ? null : Number(value));
           }}
         >
             <SelectTrigger className="w-[180px]">
@@ -94,7 +95,8 @@ export function DataTable<TData, TValue>({
         <Select
           value={(table.getColumn("year")?.getFilterValue() as string) ?? ""}
           onValueChange={(value) => {
-            table.getColumn("year")?.setFilterValue(value === 'all' ? null : value);
+            const isAll = value === 'all';
+            table.getColumn("year")?.setFilterValue(isAll ? null : Number(value));
           }}
         >
             <SelectTrigger className="w-[120px]">
