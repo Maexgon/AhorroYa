@@ -413,7 +413,7 @@ function OwnerDashboard() {
                             return (
                                 <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
                                     <p className="font-bold">{label}</p>
-                                    <p style={{ color: 'hsl(var(--chart-2))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                    <p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
                                     <p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p>
                                 </div>
                             );
@@ -422,7 +422,7 @@ function OwnerDashboard() {
                     }}
                 />
                 <Legend />
-                <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -684,3 +684,4 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
