@@ -8,7 +8,7 @@ import { collection, query, where, doc, writeBatch, addDoc, updateDoc, deleteDoc
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, Palette, GripVertical, Check, X } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X } from 'lucide-react';
 import { DataTable } from '@/app/dashboard/expenses/data-table';
 import { columns as memberColumns } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
@@ -49,6 +49,9 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState('#00C2A8');
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{type: 'category' | 'subcategory', id: string} | null>(null);
 
   const categoriesQuery = useMemoFirebase(() => {
       if (!firestore || !tenantId) return null;
@@ -97,19 +100,29 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
     try {
       if (dialogMode === 'newCat') {
         const newCatRef = doc(collection(firestore, 'categories'));
-        const newCategoryData = { tenantId, name, color, order: categories.length };
-        await addDoc(collection(firestore, 'categories'), newCategoryData);
+        const newCategoryData = { id: newCatRef.id, tenantId, name, color, order: categories.length };
+        addDoc(collection(firestore, 'categories'), newCategoryData);
       } else if (dialogMode === 'editCat' && currentCategory) {
         const catRef = doc(firestore, 'categories', currentCategory.id);
         const updatedData = { name, color };
-        await updateDoc(catRef, updatedData);
+        updateDoc(catRef, updatedData)
+        .catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: catRef.path, operation: 'update', requestResourceData: updatedData,
+            }))
+        });
       } else if (dialogMode === 'newSub' && currentCategory) {
         const newSubRef = doc(collection(firestore, 'subcategories'));
-        const newSubcategoryData = { tenantId, categoryId: currentCategory.id, name, order: currentCategory.subcategories.length };
-        await addDoc(collection(firestore, 'subcategories'), newSubcategoryData);
+        const newSubData = { id: newSubRef.id, tenantId, categoryId: currentCategory.id, name, order: currentCategory.subcategories.length };
+        addDoc(collection(firestore, 'subcategories'), newSubData);
       } else if (dialogMode === 'editSub' && currentSubCategory) {
         const subCatRef = doc(firestore, 'subcategories', currentSubCategory.id);
-        await updateDoc(subCatRef, { name });
+        const updatedData = { name };
+        updateDoc(subCatRef, updatedData).catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: subCatRef.path, operation: 'update', requestResourceData: updatedData,
+            }))
+        });
       }
       toast({ title: "¡Éxito!", description: "La operación se completó correctamente." });
     } catch(e) {
@@ -119,34 +132,45 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
       setIsDialogOpen(false);
     }
   }
+  
+  const openDeleteAlert = (type: 'category' | 'subcategory', id: string) => {
+    setItemToDelete({ type, id });
+    setIsAlertOpen(true);
+  }
 
-  const handleDelete = async (type: 'category' | 'subcategory', id: string) => {
-      if (!firestore) return;
+  const handleDelete = async () => {
+      if (!firestore || !itemToDelete) return;
 
-      const performDelete = async () => {
-        setIsProcessing(true);
-        try {
-          if (type === 'category') {
-            const catToDelete = categories.find(c => c.id === id);
-            if (catToDelete && catToDelete.subcategories.length > 0) {
-              toast({ variant: 'destructive', title: "Error", description: "No puedes eliminar una categoría con subcategorías. Elimínalas primero." });
-              return;
-            }
-            await deleteDoc(doc(firestore, 'categories', id));
-          } else {
-            await deleteDoc(doc(firestore, 'subcategories', id));
-          }
-          toast({ title: "Eliminado", description: "El elemento ha sido eliminado." });
-        } catch (e) {
-          toast({ variant: 'destructive', title: "Error", description: "No se pudo eliminar el elemento." });
-        } finally {
-          setIsProcessing(false);
-        }
-      };
+      const { type, id } = itemToDelete;
+      setIsProcessing(true);
       
-      // Simple confirmation for now
-      if (window.confirm("¿Estás seguro de que quieres eliminar este elemento? Esta acción no se puede deshacer.")) {
-        performDelete();
+      try {
+        let docRef;
+        if (type === 'category') {
+          const catToDelete = categories.find(c => c.id === id);
+          if (catToDelete && catToDelete.subcategories.length > 0) {
+            toast({ variant: 'destructive', title: "Error", description: "No puedes eliminar una categoría con subcategorías. Elimínalas primero." });
+            setIsProcessing(false);
+            setIsAlertOpen(false);
+            return;
+          }
+          docRef = doc(firestore, 'categories', id);
+        } else {
+          docRef = doc(firestore, 'subcategories', id);
+        }
+        
+        await deleteDoc(docRef);
+        
+        toast({ title: "Eliminado", description: "El elemento ha sido eliminado." });
+      } catch (e) {
+         const pathToDelete = itemToDelete.type === 'category' ? `categories/${itemToDelete.id}` : `subcategories/${itemToDelete.id}`;
+         errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: pathToDelete, operation: 'delete',
+         }));
+      } finally {
+        setIsProcessing(false);
+        setIsAlertOpen(false);
+        setItemToDelete(null);
       }
   }
 
@@ -156,6 +180,7 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
   }
   
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
@@ -174,7 +199,7 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
                   <span className="flex-1 font-semibold">{category.name}</span>
                   <Button variant="ghost" size="sm" onClick={() => openDialog('newSub', category)}>Agregar Subcategoría</Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openDialog('editCat', category)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete('category', category.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => openDeleteAlert('category', category.id)}><Trash2 className="h-4 w-4" /></Button>
               </div>
               {category.subcategories.length > 0 && (
                  <div className="pl-12 py-2 space-y-1">
@@ -183,7 +208,7 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
                           <span className="flex-1 text-sm text-muted-foreground">{sub.name}</span>
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openDialog('editSub', category, sub)}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete('subcategory', sub.id)}><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => openDeleteAlert('subcategory', sub.id)}><Trash2 className="h-4 w-4" /></Button>
                           </div>
                       </div>
                     ))}
@@ -225,8 +250,24 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
               </DialogFooter>
           </DialogContent>
       </Dialog>
-
     </Card>
+      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Esta acción es permanente y no se puede deshacer. ¿Estás seguro de que quieres eliminar este elemento?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} disabled={isProcessing} className="bg-destructive hover:bg-destructive/90">
+                    {isProcessing ? 'Eliminando...' : 'Eliminar'}
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
