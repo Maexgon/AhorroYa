@@ -26,6 +26,7 @@ import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { DropdownCat } from '@/components/ui/dropdowncat';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import * as XLSX from 'xlsx';
 
 const SAFE_DEFAULTS = {
     barData: [],
@@ -194,6 +195,14 @@ function OwnerDashboard() {
     return [{ label: 'Todas las categorías', value: 'all' }, ...options];
   }, [categories]);
 
+  const handleExport = (data: any[], fileName: string) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Datos");
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
+    toast({ title: "Exportación exitosa", description: `${fileName}.xlsx ha sido descargado.`});
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -334,7 +343,7 @@ function OwnerDashboard() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Exportar a Excel</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
@@ -377,7 +386,7 @@ function OwnerDashboard() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Exportar a Excel</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuestos")}>Exportar a Excel</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
