@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
@@ -8,7 +9,7 @@ import { collection, query, where, doc, writeBatch, addDoc, updateDoc, deleteDoc
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X, UserPlus, Repeat } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X, UserPlus, Repeat, Copy, RefreshCw } from 'lucide-react';
 import { MembersDataTable } from './data-table-members';
 import { columns as memberColumns } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
@@ -273,11 +274,80 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
 }
 
 
+function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onOpenChange: (open: boolean) => void; onInvite: () => void }) {
+    const { toast } = useToast();
+    const [email, setEmail] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [tempPassword, setTempPassword] = useState('');
+
+    const generatePassword = () => {
+        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
+        let password = '';
+        for (let i = 0; i < 12; i++) {
+            password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        setTempPassword(password);
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(tempPassword);
+        toast({ title: "Copiado", description: "Contraseña temporal copiada al portapapeles." });
+    };
+    
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Invitar Nuevo Miembro</DialogTitle>
+                    <DialogDescription>
+                        Crea una cuenta para un nuevo miembro. Se le asignará una contraseña temporal que deberás compartir de forma segura.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="firstName">Nombre</Label>
+                            <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="lastName">Apellido</Label>
+                            <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="phone">Teléfono (Opcional)</Label>
+                        <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="tempPassword">Contraseña Temporal</Label>
+                        <div className="flex items-center gap-2">
+                            <Input id="tempPassword" value={tempPassword} readOnly />
+                            <Button type="button" variant="secondary" size="icon" onClick={generatePassword}><RefreshCw className="h-4 w-4" /></Button>
+                            <Button type="button" variant="outline" size="icon" onClick={copyToClipboard} disabled={!tempPassword}><Copy className="h-4 w-4" /></Button>
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="submit" onClick={onInvite}>Crear e Invitar Usuario</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
 export default function SettingsPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const [tenantId, setTenantId] = React.useState<string | null>(null);
   const [isOwner, setIsOwner] = React.useState(false);
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
   // Fetch user's data to get the tenantId
   const userDocRef = useMemoFirebase(() => {
@@ -321,6 +391,12 @@ export default function SettingsPage() {
 
   const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingMembers || isLoadingLicenses;
   
+  const handleInviteUser = () => {
+    // TODO: Implement actual user creation logic here
+    console.log("Inviting user...");
+    setIsInviteDialogOpen(false);
+  }
+  
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -343,6 +419,7 @@ export default function SettingsPage() {
   }
 
   return (
+    <>
     <div className="flex min-h-screen flex-col bg-secondary/50">
         <header className="sticky top-0 z-40 w-full border-b bg-background">
             <div className="container flex h-16 items-center">
@@ -371,7 +448,10 @@ export default function SettingsPage() {
                                     Administra los usuarios que tienen acceso a este espacio de trabajo.
                                 </CardDescription>
                             </div>
-                            <Button disabled={!activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}>
+                            <Button 
+                                onClick={() => setIsInviteDialogOpen(true)}
+                                disabled={!activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
+                            >
                                 <UserPlus className="mr-2 h-4 w-4" />
                                 Invitar usuarios
                             </Button>
@@ -415,5 +495,11 @@ export default function SettingsPage() {
              </Tabs>
         </main>
     </div>
+    <InviteUserDialog 
+        open={isInviteDialogOpen} 
+        onOpenChange={setIsInviteDialogOpen}
+        onInvite={handleInviteUser}
+    />
+    </>
   );
 }
