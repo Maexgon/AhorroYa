@@ -36,6 +36,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { inviteUserAction } from './actions';
 
 
 function ManageCategories({ tenantId }: { tenantId: string }) {
@@ -274,26 +275,41 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
 }
 
 
-function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onOpenChange: (open: boolean) => void; onInvite: () => void }) {
+function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onOpenChange: (open: boolean) => void; onInvite: (data: any) => void }) {
     const { toast } = useToast();
     const [email, setEmail] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [phone, setPhone] = useState('');
-    const [tempPassword, setTempPassword] = useState('');
+    const [password, setPassword] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const generatePassword = () => {
-        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
-        let password = '';
-        for (let i = 0; i < 12; i++) {
-            password += chars.charAt(Math.floor(Math.random() * chars.length));
+        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        const specialChars = '!@#$%^&*()';
+        let newPassword = '';
+        for (let i = 0; i < 9; i++) {
+            newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-        setTempPassword(password);
+        newPassword += specialChars.charAt(Math.floor(Math.random() * specialChars.length));
+        // Shuffle password
+        newPassword = newPassword.split('').sort(() => 0.5 - Math.random()).join('');
+        setPassword(newPassword);
     };
 
     const copyToClipboard = () => {
-        navigator.clipboard.writeText(tempPassword);
+        navigator.clipboard.writeText(password);
         toast({ title: "Copiado", description: "Contraseña temporal copiada al portapapeles." });
+    };
+
+    const handleInvite = async () => {
+        if (!email || !firstName || !lastName || !password) {
+            toast({ variant: "destructive", title: "Error", description: "Por favor, completa todos los campos requeridos." });
+            return;
+        }
+        setIsProcessing(true);
+        await onInvite({ email, firstName, lastName, phone, password });
+        setIsProcessing(false);
     };
     
     return (
@@ -327,14 +343,16 @@ function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onO
                     <div className="space-y-2">
                         <Label htmlFor="tempPassword">Contraseña Temporal</Label>
                         <div className="flex items-center gap-2">
-                            <Input id="tempPassword" value={tempPassword} readOnly />
+                            <Input id="tempPassword" value={password} onChange={(e) => setPassword(e.target.value)} />
                             <Button type="button" variant="secondary" size="icon" onClick={generatePassword}><RefreshCw className="h-4 w-4" /></Button>
-                            <Button type="button" variant="outline" size="icon" onClick={copyToClipboard} disabled={!tempPassword}><Copy className="h-4 w-4" /></Button>
+                            <Button type="button" variant="outline" size="icon" onClick={copyToClipboard} disabled={!password}><Copy className="h-4 w-4" /></Button>
                         </div>
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button type="submit" onClick={onInvite}>Crear e Invitar Usuario</Button>
+                    <Button type="submit" onClick={handleInvite} disabled={isProcessing}>
+                        {isProcessing ? "Creando usuario..." : "Crear e Invitar Usuario"}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -345,6 +363,7 @@ function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onO
 export default function SettingsPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
   const [tenantId, setTenantId] = React.useState<string | null>(null);
   const [isOwner, setIsOwner] = React.useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -391,10 +410,21 @@ export default function SettingsPage() {
 
   const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingMembers || isLoadingLicenses;
   
-  const handleInviteUser = () => {
-    // TODO: Implement actual user creation logic here
-    console.log("Inviting user...");
-    setIsInviteDialogOpen(false);
+  const handleInviteUser = async (data: any) => {
+    if (!user || !tenantId) return;
+
+    const result = await inviteUserAction({
+        ...data,
+        tenantId,
+        currentUserUid: user.uid,
+    });
+
+    if (result.success) {
+        toast({ title: "¡Éxito!", description: "El usuario ha sido invitado y creado correctamente." });
+        setIsInviteDialogOpen(false);
+    } else {
+        toast({ variant: "destructive", title: "Error en la invitación", description: result.error });
+    }
   }
   
   if (isLoading) {
@@ -485,7 +515,7 @@ export default function SettingsPage() {
                             )}
                         </CardContent>
                         <CardFooter>
-                            <Button>
+                           <Button>
                                 <Repeat className="mr-2 h-4 w-4" />
                                 Renovar Licencia
                             </Button>
