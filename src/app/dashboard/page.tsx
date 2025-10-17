@@ -348,7 +348,7 @@ function OwnerDashboard() {
               <CardHeader>
                 <CardTitle>Presupuestos</CardTitle>
                 <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
-                 <div className={`text-2xl font-bold font-headline pt-2 ${processedData.budgetBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                 <div className={`text-2xl font-bold font-headline pt-2 ${processedData.budgetBalance >= 0 ? 'text-primary' : 'text-destructive'}`}>
                     {processedData.formatCurrency(processedData.budgetBalance)}
                     <p className="text-xs font-normal text-muted-foreground">
                         {processedData.budgetBalance >= 0 ? 'Restante del presupuesto' : 'Excedido del presupuesto'}
@@ -514,3 +514,4 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
