@@ -5,7 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,9 +52,11 @@ export default function ExpensesPage() {
     
     const membershipDocRef = useMemoFirebase(() => {
         if (!tenantId || !user) return null;
+        // The membership document ID is composite: {tenantId}_{userId}
         return doc(firestore, 'memberships', `${tenantId}_${user.uid}`);
     }, [tenantId, user]);
-    const { data: membershipData } = useDoc<Membership>(membershipDocRef);
+    const { data: membershipData, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
+
 
     React.useEffect(() => {
         if (membershipData) {
@@ -72,13 +74,13 @@ export default function ExpensesPage() {
         );
 
         // If user is not the owner, filter by their own user ID
-        if (!isOwner) {
+        if (!isOwner && !isLoadingMembership) { // ensure we know the role before querying
             return query(baseQuery, where('userId', '==', user.uid));
         }
 
         return baseQuery;
 
-    }, [firestore, tenantId, user, isOwner]);
+    }, [firestore, tenantId, user, isOwner, isLoadingMembership]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
@@ -93,11 +95,12 @@ export default function ExpensesPage() {
     }, [firestore, tenantId]);
     const { data: subcategories, isLoading: isLoadingSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
     
+    // Fetch all members of the tenant to map user IDs to names
     const membersQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !isOwner) return null; // Only fetch members if owner
-        return query(collection(firestore, 'users'), where('tenantIds', 'array-contains', tenantId));
+        if (!firestore || !tenantId || !isOwner) return null; // Only fetch all members if owner
+        return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId, isOwner]);
-    const { data: members, isLoading: isLoadingMembers } = useCollection<UserType>(membersQuery);
+    const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
 
 
     const handleOpenDeleteDialog = (expenseId: string) => {
@@ -144,7 +147,15 @@ export default function ExpensesPage() {
 
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
+        
+        // Use the 'members' (from memberships collection) to build the name map
         const memberMap = new Map(members?.map(m => [m.uid, m.displayName]) || []);
+        // Fallback for non-owners who only have their own data
+        if (!isOwner && user && userData) {
+             if(!memberMap.has(user.uid)) {
+                memberMap.set(user.uid, userData.displayName);
+             }
+        }
 
         return expenses.map(expense => ({
             ...expense,
@@ -152,9 +163,9 @@ export default function ExpensesPage() {
             subcategory: expense.subcategoryId ? subcategoryMap.get(expense.subcategoryId) : undefined,
             userName: memberMap.get(expense.userId) || 'Usuario desconocido',
         }));
-    }, [expenses, categories, subcategories, members]);
+    }, [expenses, categories, subcategories, members, isOwner, user, userData]);
 
-    const isLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
+    const isLoading = isAuthLoading || isUserDocLoading || isLoadingMembership || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
 
     return (
         <>
@@ -187,13 +198,15 @@ export default function ExpensesPage() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                        {isLoading || !tableData || !categories ? (
-                            <div className="text-center p-8">Cargando gastos...</div>
+                        {isLoading ? (
+                            <div className="flex items-center justify-center p-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
                         ) : (
                             <DataTable 
                                     columns={columns(isOwner)} 
                                     data={tableData}
-                                    categories={categories}
+                                    categories={categories || []}
                                     onDelete={handleOpenDeleteDialog}
                                 />
                         )}
