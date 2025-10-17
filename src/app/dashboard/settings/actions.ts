@@ -19,15 +19,12 @@ interface InviteUserParams {
 
 // Helper function to safely get the client-side firestore instance
 function getClientFirestore() {
-    // This is a simplified way to get the firestore instance on the server.
-    // In a real app, you might have a more robust way to get admin or client SDKs.
     const app = initializeFirebase();
     return getFirestore(app);
 }
 
 /**
  * Server Action to invite a new user to a tenant using Firebase Auth REST API.
- * This avoids using the Admin SDK which was causing authentication issues.
  */
 export async function inviteUserAction(params: InviteUserParams): Promise<{ success: boolean; error?: string }> {
     const { tenantId, currentUserUid, email, firstName, lastName, phone, password, license } = params;
@@ -35,11 +32,7 @@ export async function inviteUserAction(params: InviteUserParams): Promise<{ succ
     const firestore = getClientFirestore();
 
     try {
-        // 1. Validate permissions and license limits
-        const tenantDocRef = doc(firestore, 'tenants', tenantId);
-        // We trust the client sends correct ownership info, but a server check would be better
-        // For now, we proceed assuming the client-side check was sufficient.
-
+        // 1. Validate license limits
         if (!license) {
              return { success: false, error: 'No se encontró una licencia para este tenant.' };
         }
