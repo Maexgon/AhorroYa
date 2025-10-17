@@ -15,6 +15,7 @@ interface InviteUserParams {
     phone: string;
     password: string;
     license: License | null;
+    currentMemberCount: number;
 }
 
 // Helper function to safely get the client-side firestore instance
@@ -27,20 +28,17 @@ function getClientFirestore() {
  * Server Action to invite a new user to a tenant using Firebase Auth REST API.
  */
 export async function inviteUserAction(params: InviteUserParams): Promise<{ success: boolean; error?: string }> {
-    const { tenantId, currentUserUid, email, firstName, lastName, phone, password, license } = params;
+    const { tenantId, currentUserUid, email, firstName, lastName, phone, password, license, currentMemberCount } = params;
 
     const firestore = getClientFirestore();
 
     try {
-        // 1. Validate license limits
+        // 1. Validate license limits using the count passed from the client
         if (!license) {
              return { success: false, error: 'No se encontró una licencia para este tenant.' };
         }
 
-        const membersQuery = query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-        const membersSnapshot = await getDocs(membersQuery);
-
-        if (membersSnapshot.size >= license.maxUsers) {
+        if (currentMemberCount >= license.maxUsers) {
             return { success: false, error: 'Has alcanzado el número máximo de usuarios para tu plan.' };
         }
 

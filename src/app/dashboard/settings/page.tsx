@@ -420,7 +420,8 @@ export default function SettingsPage() {
         ...data,
         tenantId,
         currentUserUid: user.uid,
-        license: activeLicense
+        license: activeLicense,
+        currentMemberCount: members?.length || 0,
     });
 
     if (result.success) {
