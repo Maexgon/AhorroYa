@@ -38,6 +38,44 @@ const SAFE_DEFAULTS = {
     toCurrencyCode: 'ARS',
 };
 
+const CustomizedYAxisTick = (props: any) => {
+  const { x, y, payload } = props;
+  const words = payload.value.split(' ');
+  const maxCharsPerLine = 15; // Adjust as needed
+  
+  if (payload.value.length < maxCharsPerLine) {
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={4} textAnchor="end" fill="hsl(var(--foreground))" fontSize={12}>
+          {payload.value}
+        </text>
+      </g>
+    );
+  }
+
+  let line = '';
+  const lines = [];
+  for (const word of words) {
+    if ((line + word).length > maxCharsPerLine) {
+      lines.push(line.trim());
+      line = word + ' ';
+    } else {
+      line += word + ' ';
+    }
+  }
+  lines.push(line.trim());
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {lines.map((l, i) => (
+        <text key={i} x={0} y={0} dy={(i * 12) - (lines.length > 1 ? 5 : 0) } textAnchor="end" fill="hsl(var(--foreground))" fontSize={12}>
+          {l}
+        </text>
+      ))}
+    </g>
+  );
+};
+
 
 function OwnerDashboard() {
   const { user } = useUser();
@@ -147,7 +185,7 @@ function OwnerDashboard() {
                 const percentage = budget.amountARS > 0 ? Math.round((spentInARS / budget.amountARS) * 100) : 0;
                 
                 return {
-                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', 
+                    name: categories.find(c => c.id === budget.categoryId)?.name || 'N/A', 
                     Presupuestado: budget.amountARS, 
                     Gastado: spentInARS,
                     percentage: percentage,
@@ -404,11 +442,10 @@ function OwnerDashboard() {
                         <YAxis 
                             type="category" 
                             dataKey="name" 
-                            stroke="hsl(var(--foreground))" 
-                            fontSize={12} 
                             tickLine={false} 
                             axisLine={false} 
                             width={100}
+                            tick={<CustomizedYAxisTick />}
                         />
                         <Tooltip
                             cursor={{ fill: 'hsl(var(--secondary))' }}
