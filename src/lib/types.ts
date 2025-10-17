@@ -97,6 +97,21 @@ export type Expense = {
   updatedAt: string; // Timestamp of when the expense was last updated.
   deleted: boolean; // Indicates if the expense has been soft deleted.
 };
+export type Income = {
+  id: string; // Unique identifier for the income.
+  tenantId: string; // Reference to Tenant. (Relationship: Tenant 1:N Income)
+  userId: string; // Reference to User. (Relationship: User 1:N Income)
+  date: string; // Date of the income.
+  amount: number; // Amount of the income.
+  currency: string; // Currency of the income (e.g., ARS, USD).
+  amountARS: number; // Amount of the income in ARS.
+  category: "salarios" | "inversiones" | "premios o comisiones" | "otros"; // Category of the income.
+  description?: string; // Description or notes about the income.
+  source: string; // Source of the income data (e.g., manual).
+  createdAt: string; // Timestamp of when the income was created.
+  updatedAt: string; // Timestamp of when the income was last updated.
+  deleted: boolean; // Indicates if the income has been soft deleted.
+};
 export type Budget = {
   id: string; // Unique identifier for the budget.
   tenantId: string; // Reference to Tenant. (Relationship: Tenant 1:N Budget)

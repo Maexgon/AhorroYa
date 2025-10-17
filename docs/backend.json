@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "Tenant": {
@@ -482,6 +481,84 @@
         "deleted"
       ]
     },
+    "Income": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Income",
+      "type": "object",
+      "description": "Represents an income record.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the income."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Reference to Tenant. (Relationship: Tenant 1:N Income)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Income)"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of the income.",
+          "format": "date-time"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount of the income."
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency of the income (e.g., ARS, USD)."
+        },
+        "amountARS": {
+          "type": "number",
+          "description": "Amount of the income in ARS."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the income.",
+          "enum": ["salarios", "inversiones", "premios o comisiones", "otros"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Description or notes about the income."
+        },
+        "source": {
+          "type": "string",
+          "description": "Source of the income data (e.g., manual)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the income was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of when the income was last updated.",
+          "format": "date-time"
+        },
+        "deleted": {
+          "type": "boolean",
+          "description": "Indicates if the income has been soft deleted."
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "userId",
+        "date",
+        "amount",
+        "currency",
+        "amountARS",
+        "category",
+        "source",
+        "createdAt",
+        "updatedAt",
+        "deleted"
+      ]
+    },
     "Budget": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Budget",
@@ -883,6 +960,22 @@
         }
       },
       {
+        "path": "/incomes/{incomeId}",
+        "definition": {
+          "entityName": "Income",
+          "schema": {
+            "$ref": "#/backend/entities/Income"
+          },
+          "description": "Represents an income record. Includes denormalized 'tenantId' and 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "incomeId",
+              "description": "Unique identifier for the income."
+            }
+          ]
+        }
+      },
+      {
         "path": "/budgets/{budgetId}",
         "definition": {
           "entityName": "Budget",
@@ -966,5 +1059,3 @@
     "reasoning": "This Firestore structure is designed to support a multi-tenant expense tracking application, \"Ahorro Ya,\" with a focus on security, scalability, and maintainability. It implements key principles such as Authorization Independence via Denormalization, Structural Segregation, and Access Modeling to ensure robust security rules and efficient queries.\n\n**Authorization Independence:**  Authorization data, specifically tenant membership and roles, is denormalized across several collections. The `Membership` collection stores the role of a user within a tenant.  Instead of relying on `get()` calls in security rules to check a user's role, the tenantId is embedded in almost every collection, so it can be validated against the tenants that a user is a member of. Furthermore, many collections include the userId, which is used for path-based ownership.\n\n**Structural Segregation:** Data with different access requirements are stored in separate collections.  For example, User data is stored globally in `/users/{uid}`, while tenant-specific data (expenses, categories, etc.) are stored in collections where each document includes a `tenantId` field.  This allows for simpler and more targeted security rules.\n\n**Access Modeling:**\n*   **User Data:** User profiles are stored in `/users/{uid}`, leveraging path-based ownership. This is used to store the user's basic information. The `users` collection is separated from `tenants` and `memberships`. An alternative strategy could have been to put everything under `/users/{uid}`, with the `user` document containing an array of tenantIds. But this approach introduces many complexities and edge cases, so it was explicitly avoided.\n*   **Tenant Data:** Tenants are stored in `/tenants/{tenantId}`, with `ownerUid` representing the tenant owner. Memberships are stored in `/memberships/{membershipId}`, including tenantId and userId fields. This allows for direct queries on memberships and easier role-based access control.\n*   **Tenant-Owned Data:** All tenant-owned data (expenses, categories, subcategories, entities, budgets, alerts, receipt_raws) include the `tenantId` field. This enables efficient filtering and enforces tenant-level isolation.\n*   **Collaborative Data:** No collections use the Membership Map pattern.\n*   **Global Roles:** The `users` collection includes a boolean field `isSuperadmin`. This enables superadmin bypass in security rules, but requires a `get()` call. A better solution would be to create `/roles_superadmin/{userId}` collection.\n\n**QAPs (Rules are not Filters):** The structure facilitates secure `list` operations.  By including the `tenantId` in almost all collections, security rules can easily enforce that a user can only list documents belonging to tenants they are a member of.  For example, a user can only list expenses where `expense.tenantId in user.tenants`.\n\n**Invariants:**\n*   **Ownership:** The `ownerUid` field in the `tenants` collection and `userId` field in the `expenses` and `receipts_raw` collections enforce ownership. The `memberships` collection establishes relationships and roles within tenants.\n*   **Timestamps:** `createdAt` and `updatedAt` timestamps are present in relevant collections to track data modification history.\n*   **Denormalized Data:**  Denormalization (e.g., including tenantId in most documents) helps avoid complex joins and enables atomic operations.\n\nThis structure, combined with well-defined security rules, ensures a secure, scalable, and easily debuggable application."
   }
 }
-
-    

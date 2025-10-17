@@ -315,6 +315,11 @@ function OwnerDashboard() {
                     <TableIcon className="mr-2 h-4 w-4" /> Ver Gastos
                 </Link>
             </Button>
+            <Button asChild>
+                <Link href="/dashboard/income">
+                    <TableIcon className="mr-2 h-4 w-4" /> Ver Ingresos
+                </Link>
+            </Button>
         </div>
 
 
