@@ -1,15 +1,16 @@
+
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import { collection, query, where, doc, writeBatch, getDocs, updateDoc, deleteDoc, getFirestore } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X, UserPlus, Repeat, Copy, RefreshCw } from 'lucide-react';
 import { MembersDataTable } from './data-table-members';
-import { columns as memberColumns } from './columns';
+import { getColumns } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
 import {
   AlertDialog,
@@ -33,7 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { inviteUserAction, sendInvitationEmailAction } from './actions';
+import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction } from './actions';
 import { useCollection } from '@/firebase/firestore/use-collection';
 
 
@@ -367,6 +368,9 @@ export default function SettingsPage() {
   
   const [members, setMembers] = useState<Membership[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(true);
+
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<Membership | null>(null);
   
   const firestore = useFirestore();
 
@@ -406,17 +410,14 @@ export default function SettingsPage() {
               setMembers(membersData);
           } catch (e: any) {
               console.error("Error fetching members:", e);
-               errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: `memberships where tenantId == ${tenantId}`,
-                operation: 'list',
-            }));
+               toast({ variant: 'destructive', title: "Error de Permisos", description: "No se pudieron cargar los miembros. Verifica las reglas de seguridad."});
           } finally {
               setIsLoadingMembers(false);
           }
       };
       
       fetchMembers();
-  }, [tenantId, firestore]);
+  }, [tenantId, firestore, toast]);
 
   const licenseQuery = useMemoFirebase(() => {
       if (!tenantId || !firestore) return null;
@@ -493,7 +494,47 @@ export default function SettingsPage() {
     } else {
         toast({ variant: "destructive", title: "Error en la invitación", description: result.error });
     }
-  }
+  };
+
+  const handleDeleteMember = async () => {
+    if (!memberToDelete || !tenantId || !firestore || !user) return;
+
+    setIsDeletingMember(true);
+    toast({ title: "Eliminando miembro..." });
+
+    try {
+        const adminIdToken = await user.getIdToken();
+        const deleteResult = await deleteMemberAction({ 
+            tenantId, 
+            memberUid: memberToDelete.uid,
+            adminIdToken
+        });
+
+        if (!deleteResult.success) {
+            throw new Error(deleteResult.error);
+        }
+
+        const batch = writeBatch(firestore);
+        const userRef = doc(firestore, 'users', memberToDelete.uid);
+        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${memberToDelete.uid}`);
+
+        batch.delete(userRef);
+        batch.delete(membershipRef);
+        await batch.commit();
+
+        setMembers(prev => prev.filter(m => m.uid !== memberToDelete.uid));
+        toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
+
+    } catch (error: any) {
+        console.error("Error deleting member:", error);
+        toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo eliminar al miembro."});
+    } finally {
+        setIsDeletingMember(false);
+        setMemberToDelete(null);
+    }
+  };
+
+  const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
   if (isLoading) {
     return (
@@ -555,7 +596,7 @@ export default function SettingsPage() {
                             </Button>
                         </CardHeader>
                         <CardContent>
-                           <MembersDataTable columns={memberColumns} data={members || []} />
+                           <MembersDataTable columns={columns} data={members || []} />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -598,6 +639,23 @@ export default function SettingsPage() {
         onOpenChange={setIsInviteDialogOpen}
         onInvite={handleInviteUser}
     />
+     <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Esta acción eliminará permanentemente a <span className="font-bold">{memberToDelete?.displayName}</span>. 
+                    Se borrará su cuenta y todos sus datos asociados. Esta acción no se puede deshacer.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setMemberToDelete(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteMember} disabled={isDeletingMember} className="bg-destructive hover:bg-destructive/90">
+                    {isDeletingMember ? 'Eliminando...' : 'Sí, eliminar miembro'}
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

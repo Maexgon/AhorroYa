@@ -1,3 +1,4 @@
+
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
@@ -14,7 +15,9 @@ import {
 import { Badge } from "@/components/ui/badge"
 import type { Membership } from "@/lib/types"
 
-export const columns: ColumnDef<Membership>[] = [
+export const getColumns = (
+  onDelete: (member: Membership) => void
+): ColumnDef<Membership>[] => [
   {
     accessorKey: "displayName",
     header: "Miembro",
@@ -48,14 +51,14 @@ export const columns: ColumnDef<Membership>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const member = row.original
  
       return (
         <div className="text-right">
             <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
+                <Button variant="ghost" className="h-8 w-8 p-0" disabled={member.role === 'owner'}>
                 <span className="sr-only">Abrir menú</span>
                 <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -63,13 +66,18 @@ export const columns: ColumnDef<Membership>[] = [
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                 <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(member.uid)}
+                    onClick={() => navigator.clipboard.writeText(member.email)}
                 >
-                Copiar Email
+                    Copiar Email
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>Editar rol</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive">Eliminar miembro</DropdownMenuItem>
+                <DropdownMenuItem 
+                    className="text-destructive"
+                    onClick={() => onDelete(member)}
+                >
+                    Eliminar miembro
+                </DropdownMenuItem>
             </DropdownMenuContent>
             </DropdownMenu>
         </div>
