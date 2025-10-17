@@ -10,17 +10,17 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, query, where, writeBatch, getDocs, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Currency } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart } from 'recharts';
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -36,6 +36,7 @@ const SAFE_DEFAULTS = {
     budgetBalance: 0,
     formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
     toCurrencyCode: 'ARS',
+    monthlyOverviewData: [],
 };
 
 const CustomizedYAxisTick = (props: any) => {
@@ -110,13 +111,16 @@ function OwnerDashboard() {
   const expensesQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [tenantId, firestore]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
+  const incomesQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [tenantId, firestore]);
+  const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<WithId<Income>>(incomesQuery);
+
   const budgetsQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets;
+  const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
   
  const processedData = useMemo(() => {
-    if (isLoading || !categories || !allExpenses || !allBudgets) {
+    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes) {
       return SAFE_DEFAULTS;
     }
 
@@ -192,9 +196,30 @@ function OwnerDashboard() {
                 };
             }).slice(0, 5);
     })();
+    
+    const monthlyOverviewData = Array.from({ length: 12 }).map((_, i) => {
+      const monthDate = subMonths(new Date(), i);
+      const month = monthDate.getMonth();
+      const year = monthDate.getFullYear();
+      
+      const monthlyExpenses = allExpenses
+        .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
+        .reduce((sum, e) => sum + e.amountARS, 0);
+        
+      const monthlyIncomes = allIncomes
+        .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
+        .reduce((sum, inc) => sum + inc.amountARS, 0);
 
-    return { barData, recentExpenses, budgetChartData, totalExpenses, budgetBalance, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS' };
-  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId]);
+      return {
+        month: format(monthDate, 'MMM', { locale: es }),
+        ingresos: monthlyIncomes,
+        gastos: monthlyExpenses,
+      };
+    }).reverse();
+
+
+    return { barData, recentExpenses, budgetChartData, totalExpenses, budgetBalance, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS', monthlyOverviewData };
+  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -370,6 +395,39 @@ function OwnerDashboard() {
                 </Popover>
             </div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
+            <CardDescription>Comparación de ingresos y gastos de los últimos 12 meses.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart data={processedData.monthlyOverviewData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                <Tooltip
+                    content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                            return (
+                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                    <p className="font-bold">{label}</p>
+                                    <p style={{ color: 'hsl(var(--chart-2))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                    <p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p>
+                                </div>
+                            );
+                        }
+                        return null;
+                    }}
+                />
+                <Legend />
+                <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
         
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-4">
