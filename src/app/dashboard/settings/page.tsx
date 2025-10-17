@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import { collection, query, where, doc, writeBatch, updateDoc, deleteDoc } from 'firebase/firestore';
+import { useCollection } from '@/firebase/firestore/use-collection';
+import { collection, query, where, doc, writeBatch, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,7 +35,6 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction } from './actions';
-import { useCollection } from '@/firebase/firestore/use-collection';
 
 
 function ManageCategories({ tenantId }: { tenantId: string }) {
@@ -409,7 +409,7 @@ export default function SettingsPage() {
 
   const activeLicense = licenses?.[0];
 
-  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
+  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses || isLoadingMembers;
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !tenantId || !activeLicense) {
@@ -528,7 +528,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
-  if (isLoading) {
+  if (isUserLoading || isUserDocLoading) { // Removed other loading states to let individual components handle it
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -559,7 +559,7 @@ export default function SettingsPage() {
                         <ArrowLeft />
                     </Link>
                 </Button>
-                <h1 className="ml-4 font-headline text-xl font-bold">Administración</h1>
+                <h1 className="ml-4 font-headline text-xl font-bold">Administración de {tenantData?.name || '...'}</h1>
             </div>
         </header>
 
@@ -581,14 +581,14 @@ export default function SettingsPage() {
                             </div>
                             <Button 
                                 onClick={() => setIsInviteDialogOpen(true)}
-                                disabled={!activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
+                                disabled={isLoadingLicenses || !activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
                             >
                                 <UserPlus className="mr-2 h-4 w-4" />
                                 Invitar usuarios
                             </Button>
                         </CardHeader>
                         <CardContent>
-                           <MembersDataTable columns={columns} data={members || []} />
+                           {isLoadingMembers ? <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : <MembersDataTable columns={columns} data={members || []} />}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -604,15 +604,13 @@ export default function SettingsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {activeLicense ? (
+                            {isLoadingLicenses || !activeLicense ? <Loader2 className="animate-spin" /> : (
                                 <>
                                     <div><strong>Plan:</strong> <Badge>{activeLicense.plan}</Badge></div>
                                     <div><strong>Estado:</strong> <Badge variant={activeLicense.status === 'active' ? 'default' : 'destructive'} className={activeLicense.status === 'active' ? 'bg-green-500' : ''}>{activeLicense.status}</Badge></div>
                                     <div><strong>Usuarios:</strong> {members?.length || 0} de {activeLicense.maxUsers}</div>
                                     <div><strong>Válida hasta:</strong> {new Date(activeLicense.endDate).toLocaleDateString()}</div>
                                 </>
-                            ) : (
-                                <p>No se encontró información de la licencia.</p>
                             )}
                         </CardContent>
                         <CardFooter>

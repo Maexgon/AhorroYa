@@ -2,7 +2,6 @@
 'use server';
 
 import type { Membership } from '@/lib/types';
-import { getFirestore, query, collection, where, getDocs, type DocumentData } from 'firebase/firestore';
 import { initializeAdminApp } from '@/firebase/admin-config';
 import { getAuth } from 'firebase-admin/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -51,7 +50,7 @@ export async function inviteUserAction(params: {
             displayName,
             email,
             photoURL: '',
-            tenantIds: [tenantId],
+            tenantIds: [tenantId], // <-- CRITICAL FIX: Include tenantId
         };
 
         return { success: true, data: userData };
@@ -109,9 +108,8 @@ export async function deleteMemberAction(params: {
         const adminApp = await initializeAdminApp();
         const adminAuth = getAuth(adminApp);
         
-        // Before deleting user from Auth, make sure Firestore docs are deleted
-        // The client-side logic will now handle Firestore deletions.
-        // This action only handles Auth deletion.
+        // This action now only handles Auth deletion.
+        // Firestore deletions are handled client-side before this is called.
 
         await adminAuth.deleteUser(memberUid);
         
