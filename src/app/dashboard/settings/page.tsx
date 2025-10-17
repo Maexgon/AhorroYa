@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, doc, writeBatch, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch, addDoc, updateDoc, deleteDoc, getFirestore } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -368,11 +368,12 @@ export default function SettingsPage() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [members, setMembers] = useState<Membership[]>([]);
 
-  // Fetch user's data to get the tenantId
+  const firestore = useFirestore();
+
   const userDocRef = useMemoFirebase(() => {
-    if (!user) return null;
-    return doc(getFirestore(), 'users', user.uid);
-  }, [user]);
+    if (!user || !firestore) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
   
   React.useEffect(() => {
@@ -381,11 +382,10 @@ export default function SettingsPage() {
     }
   }, [userData]);
   
-  // Fetch tenant data to check for ownership
   const tenantDocRef = useMemoFirebase(() => {
-    if (!tenantId) return null;
-    return doc(getFirestore(), 'tenants', tenantId);
-  }, [tenantId]);
+    if (!tenantId || !firestore) return null;
+    return doc(firestore, 'tenants', tenantId);
+  }, [tenantId, firestore]);
   const { data: tenantData, isLoading: isTenantLoading } = useDoc<Tenant>(tenantDocRef);
   
   React.useEffect(() => {
@@ -395,9 +395,9 @@ export default function SettingsPage() {
   }, [tenantData, user]);
 
   const licenseQuery = useMemoFirebase(() => {
-      if (!tenantId) return null;
-      return query(collection(getFirestore(), 'licenses'), where('tenantId', '==', tenantId));
-  }, [tenantId]);
+      if (!tenantId || !firestore) return null;
+      return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
+  }, [tenantId, firestore]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
   const activeLicense = licenses?.[0];
@@ -415,7 +415,7 @@ export default function SettingsPage() {
         tenantId,
         currentUserUid: user.uid,
         license: activeLicense,
-        currentMemberCount: members?.length || 0,
+        currentMemberCount: members.length,
     });
 
     if (result.success && result.members) {
@@ -487,7 +487,7 @@ export default function SettingsPage() {
                             </Button>
                         </CardHeader>
                         <CardContent>
-                            <MembersDataTable columns={memberColumns} data={members || []} />
+                           <MembersDataTable columns={memberColumns} data={members || []} />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -533,3 +533,4 @@ export default function SettingsPage() {
     </>
   );
 }
+
