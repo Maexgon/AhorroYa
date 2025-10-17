@@ -76,7 +76,7 @@ export function DataTable<TData, TValue>({
     <div>
       <div className="flex items-center py-4 gap-4">
         <Select
-          value={(table.getColumn("month")?.getFilterValue() as string) ?? ""}
+          value={String(table.getColumn("month")?.getFilterValue() ?? "all")}
           onValueChange={(value) => {
             const isAll = value === 'all';
             table.getColumn("month")?.setFilterValue(isAll ? null : Number(value));
@@ -93,7 +93,7 @@ export function DataTable<TData, TValue>({
             </SelectContent>
         </Select>
         <Select
-          value={(table.getColumn("year")?.getFilterValue() as string) ?? ""}
+          value={String(table.getColumn("year")?.getFilterValue() ?? "all")}
           onValueChange={(value) => {
             const isAll = value === 'all';
             table.getColumn("year")?.setFilterValue(isAll ? null : Number(value));
