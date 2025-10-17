@@ -85,8 +85,8 @@ function OwnerDashboard() {
         return new Intl.NumberFormat('es-AR', {
             style: 'currency',
             currency: 'ARS',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
         }).format(amount);
     };
 
@@ -143,8 +143,13 @@ function OwnerDashboard() {
                     .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                     .reduce((acc, e) => acc + e.amountARS, 0);
 
+                const percentage = budget.amountARS > 0 ? Math.round((spentInARS / budget.amountARS) * 100) : 0;
+                
                 return {
-                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', Presupuestado: budget.amountARS, Gastado: spentInARS,
+                    name: categories.find(c => c.id === budget.categoryId)?.name?.substring(0, 10) || 'N/A', 
+                    Presupuestado: budget.amountARS, 
+                    Gastado: spentInARS,
+                    percentage: percentage,
                 };
             }).slice(0, 5);
     })();
@@ -357,9 +362,9 @@ function OwnerDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
+                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 50, left: 40, bottom: 5 }}>
                         <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false}/>
+                        <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} width={80}/>
                         <Tooltip
                             cursor={{ fill: 'hsl(var(--secondary))' }}
                             content={({ active, payload }) => {
@@ -376,9 +381,23 @@ function OwnerDashboard() {
                                 return null;
                             }}
                         />
-                        <Legend />
-                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-2) / 0.3)" radius={[0, 4, 4, 0]} />
-                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-3) / 0.4)" radius={[0, 4, 4, 0]} >
+                             <LabelList 
+                                dataKey="Presupuestado" 
+                                position="right" 
+                                offset={10}
+                                className="fill-foreground font-bold"
+                                formatter={(value: number) => processedData.formatCurrency(value)}
+                            />
+                        </Bar>
+                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--chart-3))" radius={[4, 0, 0, 4]}>
+                            <LabelList
+                                dataKey="percentage"
+                                position="center"
+                                className="fill-primary-foreground"
+                                formatter={(value: number) => `${value}%`}
+                            />
+                        </Bar>
                     </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -514,4 +533,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
