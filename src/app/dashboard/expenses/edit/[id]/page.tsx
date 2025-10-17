@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import type { Category, Subcategory, Expense, Currency } from '@/lib/types';
+import { Combobox } from '@/components/ui/combobox';
 
 
 const expenseFormSchema = z.object({
@@ -95,6 +96,11 @@ export default function EditExpensePage() {
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
+  
+  const currencyOptions = React.useMemo(() => {
+    if (!currencies) return [];
+    return currencies.map(c => ({ label: c.code, value: c.code }));
+  }, [currencies]);
 
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -232,14 +238,14 @@ export default function EditExpensePage() {
                                     name="currency"
                                     control={control}
                                     render={({ field }) => (
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {currencies?.map(rate => (
-                                                    <SelectItem key={rate.code} value={rate.code}>{rate.code}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Combobox
+                                            options={currencyOptions}
+                                            value={field.value}
+                                            onSelect={field.onChange}
+                                            placeholder="Moneda"
+                                            searchPlaceholder="Buscar moneda..."
+                                            emptyPlaceholder="No se encontró."
+                                        />
                                     )}
                                 />
                                 {errors.currency && <p className="text-sm text-destructive">{errors.currency.message}</p>}
@@ -327,5 +333,3 @@ export default function EditExpensePage() {
     </div>
   );
 }
-
-    

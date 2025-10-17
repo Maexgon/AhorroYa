@@ -25,6 +25,7 @@ import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, FxRate, Currency } from '@/lib/types';
+import { Combobox } from '@/components/ui/combobox';
 
 
 const expenseFormSchema = z.object({
@@ -113,6 +114,11 @@ export default function NewExpensePage() {
         }
     }
   }, [currencies, setValue]);
+
+  const currencyOptions = React.useMemo(() => {
+    if (!currencies) return [];
+    return currencies.map(c => ({ label: c.code, value: c.code }));
+  }, [currencies]);
 
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -425,14 +431,14 @@ export default function NewExpensePage() {
                                     name="currency"
                                     control={control}
                                     render={({ field }) => (
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {currencies?.map(rate => (
-                                                    <SelectItem key={rate.code} value={rate.code}>{rate.code}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Combobox
+                                            options={currencyOptions}
+                                            value={field.value}
+                                            onSelect={field.onChange}
+                                            placeholder="Moneda"
+                                            searchPlaceholder="Buscar moneda..."
+                                            emptyPlaceholder="No se encontró."
+                                        />
                                     )}
                                 />
                             </div>
@@ -519,5 +525,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
-    
