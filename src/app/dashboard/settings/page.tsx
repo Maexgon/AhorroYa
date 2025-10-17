@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { inviteUserAction } from './actions';
+import { inviteUserAction, sendInvitationEmailAction } from './actions';
 import { useCollection } from '@/firebase/firestore/use-collection';
 
 
@@ -395,12 +395,28 @@ export default function SettingsPage() {
   }, [tenantData, user]);
 
   useEffect(() => {
-    // This effect is now just for initially setting an empty state, 
-    // or loading from a non-realtime source if that were the case.
-    if(tenantId) {
-        setIsLoadingMembers(false);
-    }
-  }, [tenantId]);
+      if (!tenantId || !firestore) return;
+      
+      const fetchMembers = async () => {
+          setIsLoadingMembers(true);
+          try {
+              const membersQuery = query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+              const snapshot = await getDocs(membersQuery);
+              const membersData = snapshot.docs.map(doc => doc.data() as Membership);
+              setMembers(membersData);
+          } catch (e: any) {
+              console.error("Error fetching members:", e);
+               errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: `memberships where tenantId == ${tenantId}`,
+                operation: 'list',
+            }));
+          } finally {
+              setIsLoadingMembers(false);
+          }
+      };
+      
+      fetchMembers();
+  }, [tenantId, firestore]);
 
   const licenseQuery = useMemoFirebase(() => {
       if (!tenantId || !firestore) return null;
@@ -422,7 +438,7 @@ export default function SettingsPage() {
         toast({ variant: "destructive", title: "Límite alcanzado", description: "Has alcanzado el número máximo de usuarios para tu plan." });
         return;
     }
-
+    
     // Server action to create auth user
     const result = await inviteUserAction({
         email: data.email,
@@ -433,7 +449,6 @@ export default function SettingsPage() {
     });
     
     if (result.success && result.uid && result.userData) {
-      // Client-side batch write for Firestore documents
       try {
         const batch = writeBatch(firestore);
         
@@ -457,8 +472,17 @@ export default function SettingsPage() {
         // Optimistic update of the local state
         setMembers(prev => [...prev, membershipData]);
 
-        toast({ title: "¡Éxito!", description: "El usuario ha sido creado e invitado correctamente." });
+        toast({ title: "¡Usuario Creado!", description: "El usuario ha sido creado correctamente. Ahora enviando invitación..." });
+
+        const emailResult = await sendInvitationEmailAction(data.email);
+        if (emailResult.success) {
+            toast({ title: "¡Invitación Enviada!", description: "Se ha enviado un correo al nuevo miembro para que establezca su contraseña." });
+        } else {
+             toast({ variant: "destructive", title: "Error al enviar correo", description: emailResult.error });
+        }
+
         setIsInviteDialogOpen(false);
+
       } catch (error) {
            errorEmitter.emit('permission-error', new FirestorePermissionError({
               path: 'batch-write',

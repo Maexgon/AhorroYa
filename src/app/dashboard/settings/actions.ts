@@ -45,7 +45,7 @@ export async function inviteUserAction(params: {
             displayName: `${firstName} ${lastName}`,
             email: email,
             photoURL: '',
-            tenantIds: [tenantId], // FIX: Include the tenantId in the user data
+            tenantIds: [tenantId],
             isSuperadmin: false,
         };
 
@@ -54,5 +54,41 @@ export async function inviteUserAction(params: {
     } catch (error: any) {
         console.error('Error in inviteUserAction (fetch):', error);
         return { success: false, error: error.message || 'Ocurrió un error de red al contactar el servicio de autenticación.' };
+    }
+}
+
+
+export async function sendInvitationEmailAction(email: string): Promise<{ success: boolean; error?: string; }> {
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    if (!apiKey) {
+        const errorMessage = "La clave de API de Firebase no está configurada en el servidor.";
+        console.error(errorMessage);
+        return { success: false, error: errorMessage };
+    }
+
+    try {
+        const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                requestType: 'PASSWORD_RESET',
+                email: email,
+            }),
+        });
+        
+        if (!res.ok) {
+            const errorData = await res.json();
+            const errorMsg = errorData.error?.message || 'No se pudo enviar el correo de invitación.';
+             if (errorMsg === 'EMAIL_NOT_FOUND') {
+                return { success: false, error: 'El usuario fue creado en autenticación, pero el correo de invitación no se pudo enviar porque el email no fue encontrado. Contacte a soporte.' };
+            }
+            return { success: false, error: errorMsg };
+        }
+        
+        return { success: true };
+
+    } catch (error: any) {
+        console.error('Error in sendInvitationEmailAction (fetch):', error);
+        return { success: false, error: error.message || 'Ocurrió un error de red al enviar la invitación.' };
     }
 }
