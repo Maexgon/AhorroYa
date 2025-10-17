@@ -71,9 +71,9 @@ export function Combobox({
                 <CommandGroup>
                 {options.map((option) => (
                     <CommandItem
-                    key={option.value}
-                    value={option.value}
-                    onSelect={handleSelect}
+                      key={option.value}
+                      value={option.value}
+                      onSelect={handleSelect}
                     >
                     <Check
                         className={cn(
