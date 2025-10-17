@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction, getMembersAction } from './actions';
+import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction } from './actions';
 import { useCollection } from '@/firebase/firestore/use-collection';
 
 
@@ -365,9 +365,6 @@ export default function SettingsPage() {
   const [isOwner, setIsOwner] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   
-  const [members, setMembers] = useState<Membership[]>([]);
-  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
-
   const [isDeletingMember, setIsDeletingMember] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<Membership | null>(null);
   
@@ -384,6 +381,12 @@ export default function SettingsPage() {
       setTenantId(userData.tenantIds[0]);
     }
   }, [userData]);
+
+  const membersQuery = useMemoFirebase(() => {
+    if (!tenantId || !firestore) return null;
+    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+  }, [tenantId, firestore]);
+  const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(membersQuery);
   
   const tenantDocRef = useMemoFirebase(() => {
     if (!tenantId || !firestore) return null;
@@ -396,28 +399,6 @@ export default function SettingsPage() {
         setIsOwner(tenantData.ownerUid === user.uid);
     }
   }, [tenantData, user]);
-
-  useEffect(() => {
-    if (!tenantId) return;
-
-    const fetchMembers = async () => {
-        setIsLoadingMembers(true);
-        const result = await getMembersAction(tenantId);
-        if (result.success && result.members) {
-            setMembers(result.members);
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Error al cargar miembros',
-                description: result.error || 'No se pudieron obtener los datos de los miembros.'
-            });
-        }
-        setIsLoadingMembers(false);
-    }
-
-    fetchMembers();
-  }, [tenantId, toast]);
-
 
   const licenseQuery = useMemoFirebase(() => {
       if (!tenantId || !firestore) return null;
@@ -440,42 +421,43 @@ export default function SettingsPage() {
         return;
     }
     
-    // Server action to create auth user
     const result = await inviteUserAction({
         email: data.email,
         password: data.password,
-        tenantId: tenantId,
-        firstName: data.firstName,
-        lastName: data.lastName,
     });
     
-    if (result.success && result.uid && result.userData) {
+    if (result.success && result.uid) {
       try {
         const batch = writeBatch(firestore);
         
+        const userData: User = {
+            uid: result.uid,
+            displayName: `${data.firstName} ${data.lastName}`,
+            email: data.email,
+            photoURL: '',
+            tenantIds: [tenantId],
+        };
         const userRef = doc(firestore, 'users', result.uid);
-        batch.set(userRef, result.userData);
+        batch.set(userRef, userData);
 
-        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${result.uid}`);
         const membershipData: Membership = {
             tenantId: tenantId,
             uid: result.uid,
-            displayName: result.userData.displayName,
-            email: result.userData.email,
+            displayName: userData.displayName,
+            email: userData.email,
             role: 'member',
             status: 'active',
             joinedAt: new Date().toISOString(),
         };
+        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${result.uid}`);
         batch.set(membershipRef, membershipData);
         
         await batch.commit();
-        
-        // Optimistic update of the local state
-        const updatedMembersResult = await getMembersAction(tenantId);
-        if (updatedMembersResult.success && updatedMembersResult.members) {
-            setMembers(updatedMembersResult.members);
-        }
 
+        if (members && setMembers) {
+            setMembers([...members, membershipData]);
+        }
+        
         toast({ title: "¡Usuario Creado!", description: "El usuario ha sido creado correctamente. Ahora enviando invitación..." });
 
         const emailResult = await sendInvitationEmailAction(data.email);
@@ -507,22 +489,28 @@ export default function SettingsPage() {
 
     try {
         const adminIdToken = await user.getIdToken();
+        
+        const batch = writeBatch(firestore);
+        const userRef = doc(firestore, 'users', memberToDelete.uid);
+        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${memberToDelete.uid}`);
+
+        batch.delete(userRef);
+        batch.delete(membershipRef);
+        await batch.commit();
+        
         const deleteResult = await deleteMemberAction({
             memberUid: memberToDelete.uid,
-            tenantId: tenantId,
             adminIdToken: adminIdToken,
         });
 
         if (deleteResult.success) {
             toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
-            // Refetch members list
-             const updatedMembersResult = await getMembersAction(tenantId);
-            if (updatedMembersResult.success && updatedMembersResult.members) {
-                setMembers(updatedMembersResult.members);
+            if (members && setMembers) {
+                setMembers(members.filter(m => m.uid !== memberToDelete.uid));
             }
         } else {
-           console.error("Failed to delete user:", deleteResult.error);
-           toast({ variant: "destructive", title: "Error de Eliminación", description: deleteResult.error || "No se pudo completar la eliminación." });
+           console.error("Failed to delete user from Auth:", deleteResult.error);
+           toast({ variant: "destructive", title: "Error de Autenticación", description: deleteResult.error || "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." });
         }
 
     } catch (error: any) {

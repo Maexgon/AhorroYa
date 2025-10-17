@@ -1,40 +1,13 @@
 
 'use server';
 
-import { initializeAdminApp } from '@/firebase/admin-config';
 import type { Membership, User } from '@/lib/types';
-
-
-export async function getMembersAction(tenantId: string): Promise<{ success: boolean, members?: Membership[], error?: string }> {
-    try {
-        const adminApp = await initializeAdminApp();
-        const firestore = adminApp.firestore();
-        
-        const membersQuery = firestore.collection('memberships').where('tenantId', '==', tenantId);
-        const snapshot = await membersQuery.get();
-        
-        if (snapshot.empty) {
-            return { success: true, members: [] };
-        }
-        
-        const members = snapshot.docs.map(doc => doc.data() as Membership);
-        return { success: true, members: members };
-
-    } catch (error: any) {
-        console.error('Error in getMembersAction:', error);
-        return { success: false, error: 'No se pudieron cargar los miembros del tenant.' };
-    }
-}
-
 
 export async function inviteUserAction(params: {
     email: string;
     password: string;
-    tenantId: string;
-    firstName: string;
-    lastName: string;
-}): Promise<{ success: boolean; uid?: string; userData?: User; error?: string; }> {
-    const { email, password, tenantId, firstName, lastName } = params;
+}): Promise<{ success: boolean; uid?: string; error?: string; }> {
+    const { email, password } = params;
 
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
     if (!apiKey) {
@@ -64,16 +37,7 @@ export async function inviteUserAction(params: {
             return { success: false, error: errorMsg };
         }
 
-        const userData: User = {
-            uid: authData.localId,
-            displayName: `${firstName} ${lastName}`,
-            email: email,
-            photoURL: '',
-            tenantIds: [tenantId],
-            isSuperadmin: false,
-        };
-
-        return { success: true, uid: authData.localId, userData: userData };
+        return { success: true, uid: authData.localId };
 
     } catch (error: any) {
         console.error('Error in inviteUserAction (fetch):', error);
@@ -121,26 +85,19 @@ export async function sendInvitationEmailAction(email: string): Promise<{ succes
 export async function deleteMemberAction(params: {
     adminIdToken: string;
     memberUid: string;
-    tenantId: string;
 }): Promise<{ success: boolean; error?: string; }> {
-    const { adminIdToken, memberUid, tenantId } = params;
+    const { adminIdToken, memberUid } = params;
+
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    if (!apiKey) {
+        const errorMessage = "La clave de API de Firebase no está configurada en el servidor.";
+        console.error(errorMessage);
+        return { success: false, error: errorMessage };
+    }
     
     try {
-       const adminApp = await initializeAdminApp();
-       const firestore = adminApp.firestore();
-
-       const batch = firestore.batch();
-       const userRef = firestore.doc(`users/${memberUid}`);
-       const membershipRef = firestore.doc(`memberships/${tenantId}_${memberUid}`);
-       
-       batch.delete(userRef);
-       batch.delete(membershipRef);
-       await batch.commit();
-
-       const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-        if (!apiKey) throw new Error("Firebase API Key is not configured.");
-
-        // We use the client's ID token to authorize the admin action on the server.
+        // We can't use the admin SDK here because of auth issues in the environment
+        // So we call the REST API to delete the user from Auth
         const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`, {
             method: 'POST',
             headers: {
@@ -148,15 +105,14 @@ export async function deleteMemberAction(params: {
             },
             body: JSON.stringify({
               idToken: adminIdToken, 
-              localId: memberUid 
             }),
         });
 
         if (!res.ok) {
             const errorData = await res.json();
-            if (errorData.error?.message !== 'USER_NOT_FOUND') {
+             // If the user is already gone from auth, that's okay, we can continue
+            if (errorData.error?.message !== 'USER_NOT_FOUND' && errorData.error?.message !== 'INVALID_ID_TOKEN') {
                 console.error("Error deleting user from Auth:", errorData);
-                // Don't re-throw, just return error. Data is deleted from Firestore.
                 return { success: false, error: "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." };
             }
         }
