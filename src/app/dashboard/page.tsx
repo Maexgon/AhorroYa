@@ -32,6 +32,7 @@ const SAFE_DEFAULTS = {
     recentExpenses: [],
     budgetChartData: [],
     totalExpenses: 0,
+    budgetBalance: 0,
     formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
     toCurrencyCode: 'ARS',
 };
@@ -89,6 +90,9 @@ function OwnerDashboard() {
         }).format(amount);
     };
 
+    const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
+    const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
+
     const filteredExpenses = allExpenses.filter(expense => {
         if (!date?.from) return false;
         const expenseDate = new Date(expense.date);
@@ -100,6 +104,12 @@ function OwnerDashboard() {
     });
 
     const totalExpenses = filteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
+
+    const totalBudgetForPeriod = allBudgets
+      .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
+      .reduce((acc, budget) => acc + budget.amountARS, 0);
+
+    const budgetBalance = totalBudgetForPeriod - totalExpenses;
 
     const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
@@ -126,8 +136,6 @@ function OwnerDashboard() {
         });
 
     const budgetChartData = (() => {
-        const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
-        const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
         return allBudgets
             .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
             .map(budget => {
@@ -141,7 +149,7 @@ function OwnerDashboard() {
             }).slice(0, 5);
     })();
 
-    return { barData, recentExpenses, budgetChartData, totalExpenses, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS' };
+    return { barData, recentExpenses, budgetChartData, totalExpenses, budgetBalance, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS' };
   }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId]);
   
   const handleSeedCategories = async () => {
@@ -340,6 +348,12 @@ function OwnerDashboard() {
               <CardHeader>
                 <CardTitle>Presupuestos</CardTitle>
                 <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
+                 <div className={`text-2xl font-bold font-headline pt-2 ${processedData.budgetBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                    {processedData.formatCurrency(processedData.budgetBalance)}
+                    <p className="text-xs font-normal text-muted-foreground">
+                        {processedData.budgetBalance >= 0 ? 'Restante del presupuesto' : 'Excedido del presupuesto'}
+                    </p>
+                </div>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
