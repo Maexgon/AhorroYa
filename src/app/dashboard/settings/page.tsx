@@ -6,9 +6,9 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, doc, writeBatch, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X, UserPlus, Repeat } from 'lucide-react';
 import { MembersDataTable } from './data-table-members';
 import { columns as memberColumns } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
@@ -364,11 +364,17 @@ export default function SettingsPage() {
                 </TabsList>
                 <TabsContent value="members">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Miembros del Tenant</CardTitle>
-                            <CardDescription>
-                                Administra los usuarios que tienen acceso a este espacio de trabajo.
-                            </CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Miembros del Tenant</CardTitle>
+                                <CardDescription>
+                                    Administra los usuarios que tienen acceso a este espacio de trabajo.
+                                </CardDescription>
+                            </div>
+                            <Button disabled={!activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}>
+                                <UserPlus className="mr-2 h-4 w-4" />
+                                Invitar usuarios
+                            </Button>
                         </CardHeader>
                         <CardContent>
                             <MembersDataTable columns={memberColumns} data={members || []} />
@@ -389,8 +395,8 @@ export default function SettingsPage() {
                         <CardContent className="space-y-4">
                             {activeLicense ? (
                                 <>
-                                    <div className="flex items-center gap-2"><strong>Plan:</strong> <Badge>{activeLicense.plan}</Badge></div>
-                                    <div className="flex items-center gap-2"><strong>Estado:</strong> <Badge variant={activeLicense.status === 'active' ? 'default' : 'destructive'} className={activeLicense.status === 'active' ? 'bg-green-500' : ''}>{activeLicense.status}</Badge></div>
+                                    <div><strong>Plan:</strong> <Badge>{activeLicense.plan}</Badge></div>
+                                    <div><strong>Estado:</strong> <Badge variant={activeLicense.status === 'active' ? 'default' : 'destructive'} className={activeLicense.status === 'active' ? 'bg-green-500' : ''}>{activeLicense.status}</Badge></div>
                                     <div><strong>Usuarios:</strong> {members?.length || 0} de {activeLicense.maxUsers}</div>
                                     <div><strong>Válida hasta:</strong> {new Date(activeLicense.endDate).toLocaleDateString()}</div>
                                 </>
@@ -398,6 +404,12 @@ export default function SettingsPage() {
                                 <p>No se encontró información de la licencia.</p>
                             )}
                         </CardContent>
+                        <CardFooter>
+                            <Button>
+                                <Repeat className="mr-2 h-4 w-4" />
+                                Renovar Licencia
+                            </Button>
+                        </CardFooter>
                     </Card>
                 </TabsContent>
              </Tabs>

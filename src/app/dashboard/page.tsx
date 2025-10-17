@@ -307,16 +307,14 @@ function OwnerDashboard() {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem><UserPlus className="mr-2 h-4 w-4" />Invitar usuarios</DropdownMenuItem>
                         {processedData.isOwner && (
                             <DropdownMenuItem asChild>
                                 <Link href="/dashboard/settings">
-                                    <FileText className="mr-2 h-4 w-4" />Administrar licencia
+                                    <FileText className="mr-2 h-4 w-4" />Administrar
                                 </Link>
                             </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem><Repeat className="mr-2 h-4 w-4" />Renovar</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><XCircle className="mr-2 h-4 w-4" />Cancelar</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><XCircle className="mr-2 h-4 w-4" />Cancelar Licencia</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
