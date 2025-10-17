@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -24,7 +23,7 @@ import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
-import type { Category, Subcategory, User as UserType, FxRate, Currency } from '@/lib/types';
+import type { Category, Subcategory, User as UserType, FxRate, Currency, Entity } from '@/lib/types';
 import { Combobox } from '@/components/ui/combobox';
 
 
@@ -104,6 +103,17 @@ export default function NewExpensePage() {
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
+  
+  const entitiesQuery = useMemoFirebase(() => {
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'entities'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: entities, isLoading: isLoadingEntities } = useCollection<Entity>(entitiesQuery);
+
+  const entityOptions = React.useMemo(() => {
+    if (!entities) return [];
+    return entities.map(e => ({ label: e.razonSocial, value: e.id, cuit: e.cuit }));
+  }, [entities]);
 
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -218,25 +228,41 @@ export default function NewExpensePage() {
 
     try {
         // 1. Handle Entity
-        if (data.entityCuit) {
-            const entitiesRef = collection(firestore, 'entities');
-            const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', data.entityCuit));
-            const entitySnapshot = await getDocs(q);
+        const entityCuit = data.entityCuit?.trim();
+        const entityName = data.entityName?.trim();
+        let entityAlreadyExists = false;
 
-            if (entitySnapshot.empty) {
-                const newEntityRef = doc(collection(firestore, 'entities'));
-                const entityData = {
-                    id: newEntityRef.id,
-                    tenantId: tenantId,
-                    cuit: data.entityCuit,
-                    razonSocial: data.entityName,
-                    tipo: 'comercio',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                };
-                batch.set(newEntityRef, entityData);
-                writes.push({path: newEntityRef.path, data: entityData});
+        if (entityCuit) {
+            const entitiesByCuitRef = collection(firestore, 'entities');
+            const q = query(entitiesByCuitRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+            const entitySnapshot = await getDocs(q);
+            if (!entitySnapshot.empty) {
+                entityAlreadyExists = true;
             }
+        }
+        
+        if (!entityAlreadyExists && entityName) {
+             const entitiesByNameRef = collection(firestore, 'entities');
+             const q = query(entitiesByNameRef, where('tenantId', '==', tenantId), where('razonSocial', '==', entityName));
+             const entitySnapshot = await getDocs(q);
+             if (!entitySnapshot.empty) {
+                 entityAlreadyExists = true;
+             }
+        }
+        
+        if (!entityAlreadyExists && entityName) {
+            const newEntityRef = doc(collection(firestore, 'entities'));
+            const entityData = {
+                id: newEntityRef.id,
+                tenantId: tenantId,
+                cuit: entityCuit || '',
+                razonSocial: entityName,
+                tipo: 'comercio',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
+            batch.set(newEntityRef, entityData);
+            writes.push({path: newEntityRef.path, data: entityData});
         }
         
         // 2. Handle Receipt if it exists
@@ -274,8 +300,8 @@ export default function NewExpensePage() {
             amountARS: amountARS,
             categoryId: data.categoryId,
             subcategoryId: data.subcategoryId || null,
-            entityCuit: data.entityCuit || '',
-            entityName: data.entityName,
+            entityCuit: entityCuit || '',
+            entityName: entityName,
             paymentMethod: data.paymentMethod,
             notes: data.notes || '',
             source: receiptBase64 ? 'ocr' : 'manual',
@@ -370,8 +396,30 @@ export default function NewExpensePage() {
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <Label htmlFor="entityName">Nombre de la Entidad</Label>
-                            <Controller name="entityName" control={control} render={({ field }) => <Input id="entityName" {...field} />} />
+                           <Label htmlFor="entityName">Nombre de la Entidad</Label>
+                            <Controller
+                                name="entityName"
+                                control={control}
+                                render={({ field }) => (
+                                    <Combobox
+                                        options={entityOptions.map(e => ({ label: e.label, value: e.label }))} // Use name as value for free text
+                                        value={field.value}
+                                        onSelect={(value) => {
+                                            const selectedEntity = entityOptions.find(e => e.label === value);
+                                            if (selectedEntity) {
+                                                setValue('entityName', selectedEntity.label);
+                                                setValue('entityCuit', selectedEntity.cuit || '');
+                                            } else {
+                                                setValue('entityName', value); // Allow free text
+                                                setValue('entityCuit', ''); // Clear CUIT if new entity
+                                            }
+                                        }}
+                                        placeholder="Buscar o crear entidad..."
+                                        searchPlaceholder="Buscar entidad..."
+                                        emptyPlaceholder="No se encontró la entidad."
+                                    />
+                                )}
+                            />
                             {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
                         </div>
                         <div className="space-y-2">
@@ -507,5 +555,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
-    
