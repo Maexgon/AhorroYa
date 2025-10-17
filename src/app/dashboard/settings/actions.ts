@@ -1,7 +1,11 @@
 
 'use server';
 
-import type { Membership, User } from '@/lib/types';
+import type { Membership } from '@/lib/types';
+import { getFirestore, query, collection, where, getDocs, type DocumentData } from 'firebase/firestore';
+import { initializeAdminApp } from '@/firebase/admin-config';
+import { getAuth } from 'firebase-admin/auth';
+
 
 export async function inviteUserAction(params: {
     email: string;
@@ -36,7 +40,7 @@ export async function inviteUserAction(params: {
             }
             return { success: false, error: errorMsg };
         }
-
+        
         return { success: true, uid: authData.localId };
 
     } catch (error: any) {
@@ -88,38 +92,111 @@ export async function deleteMemberAction(params: {
 }): Promise<{ success: boolean; error?: string; }> {
     const { adminIdToken, memberUid } = params;
 
-    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-    if (!apiKey) {
-        const errorMessage = "La clave de API de Firebase no está configurada en el servidor.";
-        console.error(errorMessage);
-        return { success: false, error: errorMessage };
-    }
+    // This action now primarily uses the client-side batch write. 
+    // This server action is only for deleting the user from Auth.
     
     try {
-        // We can't use the admin SDK here because of auth issues in the environment
-        // So we call the REST API to delete the user from Auth
-        const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              idToken: adminIdToken, 
-            }),
-        });
-
-        if (!res.ok) {
-            const errorData = await res.json();
-             // If the user is already gone from auth, that's okay, we can continue
-            if (errorData.error?.message !== 'USER_NOT_FOUND' && errorData.error?.message !== 'INVALID_ID_TOKEN') {
-                console.error("Error deleting user from Auth:", errorData);
-                return { success: false, error: "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." };
-            }
-        }
+        const adminApp = await initializeAdminApp();
+        const adminAuth = getAuth(adminApp);
+        
+        await adminAuth.deleteUser(memberUid);
+        
         return { success: true };
 
     } catch (error: any) {
         console.error('Error in deleteMemberAction:', error);
-        return { success: false, error: error.message || 'Ocurrió un error desconocido al eliminar al miembro.' };
+         if (error.code === 'auth/user-not-found') {
+            console.warn(`User ${memberUid} not found in Firebase Auth. May have been already deleted.`);
+            return { success: true }; // Consider it a success if user is already gone.
+        }
+        return { success: false, error: error.message || 'Ocurrió un error desconocido al eliminar al miembro de Authentication.' };
+    }
+}
+
+
+async function getServiceAccountToken() {
+    const { GoogleAuth } = require('google-auth-library');
+    const auth = new GoogleAuth({
+        scopes: [
+            'https://www.googleapis.com/auth/cloud-platform',
+            'https://www.googleapis.com/auth/firebase.database',
+            'https://www.googleapis.com/auth/firebase.messaging',
+            'https://www.googleapis.com/auth/identitytoolkit',
+            'https://www.googleapis.com/auth/userinfo.email',
+        ],
+    });
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+    return accessToken.token;
+}
+
+export async function getMembersAction(params: {
+    tenantId: string;
+    adminIdToken: string;
+}): Promise<{ success: boolean; members?: Membership[], error?: string; }> {
+    
+    const { tenantId } = params;
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+
+    if (!projectId) {
+        return { success: false, error: "El ID del proyecto de Firebase no está configurado." };
+    }
+
+    try {
+        const token = await getServiceAccountToken();
+        if (!token) {
+            return { success: false, error: "No se pudo obtener el token de la cuenta de servicio." };
+        }
+
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                structuredQuery: {
+                    from: [{ collectionId: 'memberships' }],
+                    where: {
+                        fieldFilter: {
+                            field: { fieldPath: 'tenantId' },
+                            op: 'EQUAL',
+                            value: { stringValue: tenantId }
+                        }
+                    }
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            console.error("Error from Firestore REST API:", errorBody);
+            throw new Error(errorBody.error?.message || `Error al consultar Firestore: ${response.statusText}`);
+        }
+
+        const queryResult = await response.json();
+        
+        const members = queryResult.map((doc: any) => {
+            const fields = doc.document.fields;
+            const formattedDoc: DocumentData = {};
+            for (const key in fields) {
+                const value = fields[key];
+                if (value.stringValue) formattedDoc[key] = value.stringValue;
+                else if (value.integerValue) formattedDoc[key] = parseInt(value.integerValue, 10);
+                else if (value.doubleValue) formattedDoc[key] = value.doubleValue;
+                else if (value.booleanValue) formattedDoc[key] = value.booleanValue;
+                else if (value.timestampValue) formattedDoc[key] = value.timestampValue;
+            }
+            return formattedDoc as Membership;
+        }).filter(Boolean);
+
+
+        return { success: true, members };
+
+    } catch (e: any) {
+        console.error("Error in getMembersAction:", e);
+        return { success: false, error: e.message };
     }
 }

@@ -3,11 +3,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import { collection, query, where, doc, writeBatch, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X, UserPlus, Repeat, Copy, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, UserPlus, Repeat, Copy, RefreshCw } from 'lucide-react';
 import { MembersDataTable } from './data-table-members';
 import { getColumns } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction } from './actions';
+import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction, getMembersAction } from './actions';
 import { useCollection } from '@/firebase/firestore/use-collection';
 
 
@@ -370,6 +370,9 @@ export default function SettingsPage() {
   
   const firestore = useFirestore();
 
+  const [members, setMembers] = useState<Membership[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
+
   const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
@@ -381,19 +384,13 @@ export default function SettingsPage() {
       setTenantId(userData.tenantIds[0]);
     }
   }, [userData]);
-
-  const membersQuery = useMemoFirebase(() => {
-    if (!tenantId || !firestore) return null;
-    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-  }, [tenantId, firestore]);
-  const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(membersQuery);
   
   const tenantDocRef = useMemoFirebase(() => {
     if (!tenantId || !firestore) return null;
     return doc(firestore, 'tenants', tenantId);
   }, [tenantId, firestore]);
   const { data: tenantData, isLoading: isTenantLoading } = useDoc<Tenant>(tenantDocRef);
-  
+
   useEffect(() => {
     if(tenantData && user) {
         setIsOwner(tenantData.ownerUid === user.uid);
@@ -408,7 +405,33 @@ export default function SettingsPage() {
 
   const activeLicense = licenses?.[0];
 
-  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses || isLoadingMembers;
+  const fetchMembers = React.useCallback(async () => {
+    if (!tenantId || !user) return;
+
+    setIsLoadingMembers(true);
+    try {
+      const adminIdToken = await user.getIdToken();
+      const result = await getMembersAction({ tenantId, adminIdToken });
+
+      if (result.success && result.members) {
+        setMembers(result.members);
+      } else {
+        throw new Error(result.error || "No se pudieron cargar los miembros.");
+      }
+    } catch (e: any) {
+      console.error("Error fetching members:", e);
+      toast({ variant: 'destructive', title: "Error", description: e.message });
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  }, [tenantId, user, toast]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
+
+
+  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !tenantId || !activeLicense) {
@@ -421,42 +444,40 @@ export default function SettingsPage() {
         return;
     }
     
-    const result = await inviteUserAction({
+    const actionResult = await inviteUserAction({
         email: data.email,
         password: data.password,
     });
     
-    if (result.success && result.uid) {
+    if (actionResult.success && actionResult.uid) {
       try {
         const batch = writeBatch(firestore);
         
-        const userData: User = {
-            uid: result.uid,
+        const userData = {
+            uid: actionResult.uid,
             displayName: `${data.firstName} ${data.lastName}`,
             email: data.email,
             photoURL: '',
             tenantIds: [tenantId],
         };
-        const userRef = doc(firestore, 'users', result.uid);
+        const userRef = doc(firestore, 'users', actionResult.uid);
         batch.set(userRef, userData);
 
         const membershipData: Membership = {
             tenantId: tenantId,
-            uid: result.uid,
+            uid: actionResult.uid,
             displayName: userData.displayName,
             email: userData.email,
             role: 'member',
             status: 'active',
             joinedAt: new Date().toISOString(),
         };
-        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${result.uid}`);
+        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${actionResult.uid}`);
         batch.set(membershipRef, membershipData);
         
         await batch.commit();
 
-        if (members && setMembers) {
-            setMembers([...members, membershipData]);
-        }
+        await fetchMembers(); // Refetch members list
         
         toast({ title: "¡Usuario Creado!", description: "El usuario ha sido creado correctamente. Ahora enviando invitación..." });
 
@@ -477,7 +498,7 @@ export default function SettingsPage() {
           }));
       }
     } else {
-        toast({ variant: "destructive", title: "Error en la invitación", description: result.error });
+        toast({ variant: "destructive", title: "Error en la invitación", description: actionResult.error });
     }
   };
 
@@ -496,6 +517,7 @@ export default function SettingsPage() {
 
         batch.delete(userRef);
         batch.delete(membershipRef);
+        
         await batch.commit();
         
         const deleteResult = await deleteMemberAction({
@@ -505,9 +527,7 @@ export default function SettingsPage() {
 
         if (deleteResult.success) {
             toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
-            if (members && setMembers) {
-                setMembers(members.filter(m => m.uid !== memberToDelete.uid));
-            }
+            await fetchMembers();
         } else {
            console.error("Failed to delete user from Auth:", deleteResult.error);
            toast({ variant: "destructive", title: "Error de Autenticación", description: deleteResult.error || "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." });
@@ -528,7 +548,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
-  if (isUserLoading || isUserDocLoading || isTenantLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
