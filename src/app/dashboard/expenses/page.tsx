@@ -64,7 +64,7 @@ export default function ExpensesPage() {
     }, [membershipData]);
 
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !user) return null;
+        if (!firestore || !tenantId || !user || isLoadingMembership) return null; // Wait for role check
         
         const baseQuery = query(
             collection(firestore, 'expenses'), 
@@ -73,7 +73,7 @@ export default function ExpensesPage() {
         );
 
         // If user is not the owner, filter by their own user ID
-        if (!isOwner && !isLoadingMembership) { // ensure we know the role before querying
+        if (!isOwner) { 
             return query(baseQuery, where('userId', '==', user.uid));
         }
 
@@ -151,7 +151,7 @@ export default function ExpensesPage() {
         const memberMap = new Map(members?.map(m => [m.uid, m.displayName]) || []);
         
         // 2. Explicitly add the current user (owner) to the map if they aren't already there.
-        // This covers expenses created by the owner.
+        // This covers expenses created by the owner themselves.
         if (isOwner && user && userData && !memberMap.has(user.uid)) {
             memberMap.set(user.uid, userData.displayName);
         }
