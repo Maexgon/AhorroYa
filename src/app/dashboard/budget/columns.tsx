@@ -65,11 +65,17 @@ export const getColumns = (
         const date = new Date(row.original.year, row.original.month - 1);
         const monthName = date.toLocaleString('es', { month: 'long' });
         return <div className="capitalize">{monthName}</div>;
-    }
+    },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
+    },
   },
   {
     accessorKey: "year",
     header: "Año",
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
+    },
   },
   {
     accessorKey: "amountARS",
