@@ -24,7 +24,7 @@ import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tool
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import { Combobox } from '@/components/ui/combobox';
+import { DropdownCat } from '@/components/ui/dropdowncat';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const SAFE_DEFAULTS = {
@@ -258,7 +258,7 @@ function OwnerDashboard() {
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 <Combobox
+                 <DropdownCat
                     options={categoryOptions}
                     value={selectedCategoryId}
                     onSelect={(value) => setSelectedCategoryId(value === 'all' ? 'all' : value)}
@@ -356,8 +356,8 @@ function OwnerDashboard() {
                             }}
                         />
                         <Legend />
-                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-2) / 0.3)" radius={4} />
-                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--primary))" radius={4} />
+                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-2) / 0.3)" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
               </CardContent>

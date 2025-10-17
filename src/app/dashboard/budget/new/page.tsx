@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Category, User as UserType } from '@/lib/types';
-import { Combobox } from '@/components/ui/combobox';
+import { DropdownCat } from '@/components/ui/dropdowncat';
 
 const budgetFormSchema = z.object({
   year: z.coerce.number().min(new Date().getFullYear(), "El año no puede ser anterior al actual."),
@@ -207,7 +207,7 @@ export default function NewBudgetPage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Combobox
+                                    <DropdownCat
                                         options={categoryOptions}
                                         value={field.value}
                                         onSelect={field.onChange}

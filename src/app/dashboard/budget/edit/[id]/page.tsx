@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Category, Budget } from '@/lib/types';
-import { Combobox } from '@/components/ui/combobox';
+import { DropdownCat } from '@/components/ui/dropdowncat';
 
 
 const budgetFormSchema = z.object({
@@ -193,7 +193,7 @@ export default function EditBudgetPage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Combobox
+                                    <DropdownCat
                                         options={categoryOptions}
                                         value={field.value}
                                         onSelect={field.onChange}
