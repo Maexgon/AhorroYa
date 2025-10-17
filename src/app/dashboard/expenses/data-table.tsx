@@ -133,7 +133,7 @@ export function DataTable<TData, TValue>({
                       column.toggleVisibility(!!value)
                     }
                   >
-                    {column.id}
+                    {column.id === 'userName' ? 'Usuario' : column.id}
                   </DropdownMenuCheckboxItem>
                 )
               })}

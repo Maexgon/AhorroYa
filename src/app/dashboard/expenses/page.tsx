@@ -32,52 +32,73 @@ export default function ExpensesPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
+    const [isOwner, setIsOwner] = React.useState(false);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
-    // 1. Fetch user's data to get the first tenantId
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
     
-    // Set tenantId only after we have the user document
     React.useEffect(() => {
         if (userData?.tenantIds && userData.tenantIds.length > 0) {
             setTenantId(userData.tenantIds[0]);
         }
     }, [userData]);
     
-    // 2. Fetch Expenses, which depends on tenantId and the user
+    const membershipDocRef = useMemoFirebase(() => {
+        if (!tenantId || !user) return null;
+        return doc(firestore, 'memberships', `${tenantId}_${user.uid}`);
+    }, [tenantId, user]);
+    const { data: membershipData } = useDoc<Membership>(membershipDocRef);
+
+    React.useEffect(() => {
+        if (membershipData) {
+            setIsOwner(membershipData.role === 'owner');
+        }
+    }, [membershipData]);
+
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId || !user) return null;
         
-        return query(
+        const baseQuery = query(
             collection(firestore, 'expenses'), 
             where('tenantId', '==', tenantId), 
-            where('deleted', '==', false),
-            where('userId', '==', user.uid)
+            where('deleted', '==', false)
         );
 
-    }, [firestore, tenantId, user]);
+        // If user is not the owner, filter by their own user ID
+        if (!isOwner) {
+            return query(baseQuery, where('userId', '==', user.uid));
+        }
+
+        return baseQuery;
+
+    }, [firestore, tenantId, user, isOwner]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
-    // Fetch Categories, depends on tenantId
     const categoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
-    // Fetch Subcategories, depends on tenantId
     const subcategoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'subcategories'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
     const { data: subcategories, isLoading: isLoadingSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
+    
+    const membersQuery = useMemoFirebase(() => {
+        if (!firestore || !tenantId || !isOwner) return null; // Only fetch members if owner
+        return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+    }, [firestore, tenantId, isOwner]);
+    const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
+
 
     const handleOpenDeleteDialog = (expenseId: string) => {
         setExpenseToDelete(expenseId);
@@ -123,15 +144,17 @@ export default function ExpensesPage() {
 
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
+        const memberMap = new Map(members?.map(m => [m.uid, m.displayName]) || []);
 
         return expenses.map(expense => ({
             ...expense,
             category: categoryMap.get(expense.categoryId),
             subcategory: expense.subcategoryId ? subcategoryMap.get(expense.subcategoryId) : undefined,
+            userName: memberMap.get(expense.userId) || 'Usuario desconocido',
         }));
-    }, [expenses, categories, subcategories]);
+    }, [expenses, categories, subcategories, members]);
 
-    const isLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories;
+    const isLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
 
     return (
         <>
@@ -168,7 +191,7 @@ export default function ExpensesPage() {
                             <div className="text-center p-8">Cargando gastos...</div>
                         ) : (
                             <DataTable 
-                                    columns={columns} 
+                                    columns={columns(isOwner)} 
                                     data={tableData}
                                     categories={categories}
                                     onDelete={handleOpenDeleteDialog}
@@ -210,5 +233,3 @@ export default function ExpensesPage() {
         </>
     );
 }
-
-    
