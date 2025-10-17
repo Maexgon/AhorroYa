@@ -12,37 +12,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import type { Membership, User } from "@/lib/types"
-import { useDoc } from "@/firebase/firestore/use-doc"
-import { useFirestore, useMemoFirebase } from "@/firebase/provider"
-import { doc } from "firebase/firestore"
-import { useMemo } from "react"
-
-
-const MemberCell = ({ uid, displayName }: { uid: string, displayName: string }) => {
-    const firestore = useFirestore();
-    const userDocRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return doc(firestore, 'users', uid);
-    }, [firestore, uid]);
-
-    const { data: userData } = useDoc<User>(userDocRef);
-    const email = useMemo(() => userData?.email || 'cargando...', [userData]);
-    
-    return (
-        <div>
-            <div className="font-medium">{displayName}</div>
-            <div className="text-sm text-muted-foreground">{email}</div>
-        </div>
-    )
-};
-
+import type { Membership } from "@/lib/types"
 
 export const columns: ColumnDef<Membership>[] = [
   {
     accessorKey: "displayName",
     header: "Miembro",
-    cell: ({ row }) => <MemberCell uid={row.original.uid} displayName={row.original.displayName} />,
+    cell: ({ row }) => {
+        const member = row.original;
+        return (
+            <div>
+                <div className="font-medium">{member.displayName}</div>
+                <div className="text-sm text-muted-foreground">{member.email}</div>
+            </div>
+        )
+    },
   },
   {
     accessorKey: "role",

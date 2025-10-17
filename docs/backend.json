@@ -120,6 +120,11 @@
           "type": "string",
           "description": "Denormalized display name of the user for efficient lookups."
         },
+        "email": {
+          "type": "string",
+          "description": "Denormalized email of the user for efficient lookups.",
+          "format": "email"
+        },
         "role": {
           "type": "string",
           "description": "Role of the member within the tenant (owner, admin, member)."
@@ -138,6 +143,7 @@
         "tenantId",
         "uid",
         "displayName",
+        "email",
         "role",
         "status",
         "joinedAt"
@@ -518,7 +524,6 @@
         },
         "category": {
           "type": "string",
-          "description": "Category of the income.",
           "enum": ["salarios", "inversiones", "premios o comisiones", "otros"]
         },
         "description": {

@@ -25,6 +25,7 @@ export type Membership = {
   tenantId: string; // Reference to Tenant. (Relationship: Tenant 1:N Membership)
   uid: string; // User ID of the member. (Relationship: User 1:N Membership)
   displayName: string; // Denormalized display name of the user for efficient lookups.
+  email: string; // Denormalized email of the user for efficient lookups.
   role: string; // Role of the member within the tenant (owner, admin, member).
   status: string; // Status of the membership (active, invited, revoked).
   joinedAt: string; // Timestamp of when the user joined the tenant.
