@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input"
 
 
 interface ComboboxProps {
-    options: { label: string; value: string }[];
+    options: { label: string; value: string; cuit: string; }[];
     value: string;
     onSelect: (value: string) => void;
     placeholder?: string;
@@ -43,29 +43,21 @@ export function Combobox({
   const [search, setSearch] = React.useState("")
 
   React.useEffect(() => {
-      const selectedOption = options.find(opt => opt.value === value);
+      const selectedOption = options.find(opt => opt.value === value || opt.label === value);
       setInputValue(selectedOption?.label || value);
   }, [value, options]);
 
   const handleSelect = (currentValue: string) => {
-    const selectedOption = options.find(opt => opt.label.toLowerCase() === currentValue.toLowerCase());
-    onSelect(selectedOption ? selectedOption.value : currentValue);
-    setInputValue(selectedOption ? selectedOption.label : currentValue);
+    onSelect(currentValue);
     setOpen(false);
     setSearch("");
   }
   
-  const filteredOptions = React.useMemo(() => {
-    if (!search || search.length < 5) return [];
-    return options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase()));
-  }, [search, options]);
-
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
-    setSearch(newValue); // Update search term as user types
-    onSelect(newValue); // Allow free text entry by updating form state
+    setSearch(newValue);
+    onSelect(newValue);
 
     if (newValue.length >= 5) {
         const matchingOptions = options.filter(opt => opt.label.toLowerCase().includes(newValue.toLowerCase()));
@@ -83,14 +75,6 @@ export function Combobox({
                 placeholder={placeholder}
                 value={inputValue}
                 onChange={handleInputChange}
-                onBlur={() => setOpen(false)} // Close popover on blur
-                onFocus={(e) => {
-                    const value = e.target.value;
-                    if(value.length >= 5) {
-                        const matchingOptions = options.filter(opt => opt.label.toLowerCase().includes(value.toLowerCase()));
-                        setOpen(matchingOptions.length > 0);
-                    }
-                }}
                 className={cn("w-full justify-between", className)}
             />
             <ChevronsUpDown 
@@ -102,26 +86,25 @@ export function Combobox({
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
             <CommandList>
-                {filteredOptions.length === 0 ? (
-                  <div className="py-6 text-center text-sm">{emptyPlaceholder}</div>
-                ) : (
-                  <CommandGroup>
-                    {filteredOptions.map((option) => (
-                        <CommandItem
-                          key={option.value}
-                          value={option.label}
-                          onSelect={handleSelect}
-                        >
-                        <Check
-                            className={cn(
-                            "mr-2 h-4 w-4",
-                            value === option.value ? "opacity-100" : "opacity-0"
-                            )}
-                        />
-                        {option.label}
-                        </CommandItem>
-                    ))}
-                  </CommandGroup>
+                <CommandGroup>
+                  {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).map((option) => (
+                      <CommandItem
+                        key={option.value}
+                        value={option.label}
+                        onSelect={handleSelect}
+                      >
+                      <Check
+                          className={cn(
+                          "mr-2 h-4 w-4",
+                          value === option.value ? "opacity-100" : "opacity-0"
+                          )}
+                      />
+                      {option.label}
+                      </CommandItem>
+                  ))}
+                </CommandGroup>
+                {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).length === 0 && (
+                    <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
                 )}
             </CommandList>
           </Command>
