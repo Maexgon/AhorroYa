@@ -322,8 +322,22 @@ function OwnerDashboard() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-4">
               <CardHeader>
-                <CardTitle>Análisis de Gastos</CardTitle>
-                <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
+                <div className="flex items-start justify-between">
+                    <div>
+                        <CardTitle>Análisis de Gastos</CardTitle>
+                        <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem>Exportar a Excel</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
                  <div className="text-2xl font-bold font-headline text-primary pt-2">
                     {processedData.formatCurrency(processedData.totalExpenses)}
                     <p className="text-xs font-normal text-muted-foreground">Total de Gastos en {processedData.toCurrencyCode}</p>
@@ -351,8 +365,22 @@ function OwnerDashboard() {
             </Card>
             <Card className="lg:col-span-3">
               <CardHeader>
-                <CardTitle>Presupuestos</CardTitle>
-                <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
+                 <div className="flex items-start justify-between">
+                    <div>
+                        <CardTitle>Presupuestos</CardTitle>
+                        <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem>Exportar a Excel</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
                  <div className={`text-2xl font-bold font-headline pt-2 ${processedData.budgetBalance >= 0 ? 'text-primary' : 'text-destructive'}`}>
                     {processedData.formatCurrency(processedData.budgetBalance)}
                     <p className="text-xs font-normal text-muted-foreground">
