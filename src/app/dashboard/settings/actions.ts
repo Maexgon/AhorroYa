@@ -1,7 +1,30 @@
 
 'use server';
 
+import { initializeAdminApp } from '@/firebase/admin-config';
 import type { Membership, User } from '@/lib/types';
+
+
+export async function getMembersAction(tenantId: string): Promise<{ success: boolean, members?: Membership[], error?: string }> {
+    try {
+        const adminApp = await initializeAdminApp();
+        const firestore = adminApp.firestore();
+        
+        const membersQuery = firestore.collection('memberships').where('tenantId', '==', tenantId);
+        const snapshot = await membersQuery.get();
+        
+        if (snapshot.empty) {
+            return { success: true, members: [] };
+        }
+        
+        const members = snapshot.docs.map(doc => doc.data() as Membership);
+        return { success: true, members: members };
+
+    } catch (error: any) {
+        console.error('Error in getMembersAction:', error);
+        return { success: false, error: 'No se pudieron cargar los miembros del tenant.' };
+    }
+}
 
 
 export async function inviteUserAction(params: {
@@ -98,10 +121,22 @@ export async function sendInvitationEmailAction(email: string): Promise<{ succes
 export async function deleteMemberAction(params: {
     adminIdToken: string;
     memberUid: string;
+    tenantId: string;
 }): Promise<{ success: boolean; error?: string; }> {
-    const { adminIdToken, memberUid } = params;
+    const { adminIdToken, memberUid, tenantId } = params;
     
     try {
+       const adminApp = await initializeAdminApp();
+       const firestore = adminApp.firestore();
+
+       const batch = firestore.batch();
+       const userRef = firestore.doc(`users/${memberUid}`);
+       const membershipRef = firestore.doc(`memberships/${tenantId}_${memberUid}`);
+       
+       batch.delete(userRef);
+       batch.delete(membershipRef);
+       await batch.commit();
+
        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
         if (!apiKey) throw new Error("Firebase API Key is not configured.");
 
@@ -119,16 +154,16 @@ export async function deleteMemberAction(params: {
 
         if (!res.ok) {
             const errorData = await res.json();
-             // Don't throw if user is already deleted, just log it.
             if (errorData.error?.message !== 'USER_NOT_FOUND') {
                 console.error("Error deleting user from Auth:", errorData);
-                throw new Error(errorData.error?.message || 'Failed to delete user from Firebase Auth.');
+                // Don't re-throw, just return error. Data is deleted from Firestore.
+                return { success: false, error: "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." };
             }
         }
         return { success: true };
 
     } catch (error: any) {
-        console.error('Error in deleteMemberAction (fetch auth):', error);
-        return { success: false, error: error.message || 'An unknown error occurred while deleting the user from Authentication.' };
+        console.error('Error in deleteMemberAction:', error);
+        return { success: false, error: error.message || 'Ocurrió un error desconocido al eliminar al miembro.' };
     }
 }

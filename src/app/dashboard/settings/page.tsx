@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
@@ -34,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction } from './actions';
+import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction, getMembersAction } from './actions';
 import { useCollection } from '@/firebase/firestore/use-collection';
 
 
@@ -398,19 +397,26 @@ export default function SettingsPage() {
     }
   }, [tenantData, user]);
 
-  const membersQuery = useMemoFirebase(() => {
-    if (!tenantId || !firestore) return null;
-    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-  }, [tenantId, firestore]);
-
-  const { data: membersData, isLoading: membersLoading } = useCollection<Membership>(membersQuery);
-
   useEffect(() => {
-      if (membersData) {
-          setMembers(membersData);
-          setIsLoadingMembers(false);
-      }
-  }, [membersData]);
+    if (!tenantId) return;
+
+    const fetchMembers = async () => {
+        setIsLoadingMembers(true);
+        const result = await getMembersAction(tenantId);
+        if (result.success && result.members) {
+            setMembers(result.members);
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Error al cargar miembros',
+                description: result.error || 'No se pudieron obtener los datos de los miembros.'
+            });
+        }
+        setIsLoadingMembers(false);
+    }
+
+    fetchMembers();
+  }, [tenantId, toast]);
 
 
   const licenseQuery = useMemoFirebase(() => {
@@ -465,7 +471,10 @@ export default function SettingsPage() {
         await batch.commit();
         
         // Optimistic update of the local state
-        setMembers(prev => [...prev, membershipData]);
+        const updatedMembersResult = await getMembersAction(tenantId);
+        if (updatedMembersResult.success && updatedMembersResult.members) {
+            setMembers(updatedMembersResult.members);
+        }
 
         toast({ title: "¡Usuario Creado!", description: "El usuario ha sido creado correctamente. Ahora enviando invitación..." });
 
@@ -497,29 +506,24 @@ export default function SettingsPage() {
     toast({ title: "Eliminando miembro..." });
 
     try {
-        const batch = writeBatch(firestore);
-        const userRef = doc(firestore, 'users', memberToDelete.uid);
-        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${memberToDelete.uid}`);
-
-        batch.delete(userRef);
-        batch.delete(membershipRef);
-        await batch.commit();
-        
         const adminIdToken = await user.getIdToken();
-        const deleteAuthResult = await deleteMemberAction({
+        const deleteResult = await deleteMemberAction({
             memberUid: memberToDelete.uid,
+            tenantId: tenantId,
             adminIdToken: adminIdToken,
         });
 
-        if (!deleteAuthResult.success) {
-           // Log the error but don't block the UI flow, as Firestore data is already deleted.
-           console.error("Failed to delete user from Auth:", deleteAuthResult.error);
-           toast({ variant: "destructive", title: "Error de Sincronización", description: "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." });
-        } else {
+        if (deleteResult.success) {
             toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
+            // Refetch members list
+             const updatedMembersResult = await getMembersAction(tenantId);
+            if (updatedMembersResult.success && updatedMembersResult.members) {
+                setMembers(updatedMembersResult.members);
+            }
+        } else {
+           console.error("Failed to delete user:", deleteResult.error);
+           toast({ variant: "destructive", title: "Error de Eliminación", description: deleteResult.error || "No se pudo completar la eliminación." });
         }
-
-        setMembers(prev => prev.filter(m => m.uid !== memberToDelete.uid));
 
     } catch (error: any) {
         console.error("Error deleting member:", error);
@@ -536,7 +540,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
-  if (isLoading) {
+  if (isUserLoading || isUserDocLoading || isTenantLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
