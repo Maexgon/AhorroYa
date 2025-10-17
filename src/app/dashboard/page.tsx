@@ -31,6 +31,7 @@ const SAFE_DEFAULTS = {
     barData: [],
     recentExpenses: [],
     budgetChartData: [],
+    totalExpenses: 0,
     formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
     toCurrencyCode: 'ARS',
 };
@@ -98,6 +99,8 @@ function OwnerDashboard() {
         return true;
     });
 
+    const totalExpenses = filteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
+
     const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         if (!acc[categoryName]) acc[categoryName] = 0;
@@ -138,7 +141,7 @@ function OwnerDashboard() {
             }).slice(0, 5);
     })();
 
-    return { barData, recentExpenses, budgetChartData, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS' };
+    return { barData, recentExpenses, budgetChartData, totalExpenses, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS' };
   }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId]);
   
   const handleSeedCategories = async () => {
@@ -307,7 +310,11 @@ function OwnerDashboard() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Análisis de Gastos</CardTitle>
-                 <CardDescription>Resumen por categoría del período seleccionado en {processedData.toCurrencyCode}.</CardDescription>
+                <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
+                 <div className="text-2xl font-bold font-headline text-primary pt-2">
+                    {processedData.formatCurrency(processedData.totalExpenses)}
+                    <p className="text-xs font-normal text-muted-foreground">Total de Gastos en {processedData.toCurrencyCode}</p>
+                </div>
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
