@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -148,7 +147,8 @@ export default function ExpensesPage() {
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
         
-        // The `members` collection from `memberships` should contain the denormalized displayName.
+        // This is the key part: create a map from user ID to display name from the `members` collection.
+        // This assumes `displayName` is correctly populated in the `memberships` documents.
         const memberMap = new Map(members?.map(m => [m.uid, m.displayName]) || []);
         
         // For non-owners, they won't fetch the full `members` list, so we ensure their own name is in the map.
