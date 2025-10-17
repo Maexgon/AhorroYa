@@ -5,13 +5,17 @@ import type { Membership } from '@/lib/types';
 import { getFirestore, query, collection, where, getDocs, type DocumentData } from 'firebase/firestore';
 import { initializeAdminApp } from '@/firebase/admin-config';
 import { getAuth } from 'firebase-admin/auth';
+import { firebaseConfig } from '@/firebase/config';
 
 
 export async function inviteUserAction(params: {
     email: string;
     password: string;
-}): Promise<{ success: boolean; uid?: string; error?: string; }> {
-    const { email, password } = params;
+    tenantId: string;
+    firstName: string;
+    lastName: string;
+}): Promise<{ success: boolean; data?: {uid: string, displayName: string, email: string, tenantIds: string[]}; error?: string; }> {
+    const { email, password, tenantId, firstName, lastName } = params;
 
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
     if (!apiKey) {
@@ -41,7 +45,16 @@ export async function inviteUserAction(params: {
             return { success: false, error: errorMsg };
         }
         
-        return { success: true, uid: authData.localId };
+        const displayName = `${firstName} ${lastName}`;
+        const userData = {
+            uid: authData.localId,
+            displayName,
+            email,
+            photoURL: '',
+            tenantIds: [tenantId],
+        };
+
+        return { success: true, data: userData };
 
     } catch (error: any) {
         console.error('Error in inviteUserAction (fetch):', error);
@@ -92,9 +105,6 @@ export async function deleteMemberAction(params: {
 }): Promise<{ success: boolean; error?: string; }> {
     const { adminIdToken, memberUid } = params;
 
-    // This action now primarily uses the client-side batch write. 
-    // This server action is only for deleting the user from Auth.
-    
     try {
         const adminApp = await initializeAdminApp();
         const adminAuth = getAuth(adminApp);
@@ -107,7 +117,7 @@ export async function deleteMemberAction(params: {
         console.error('Error in deleteMemberAction:', error);
          if (error.code === 'auth/user-not-found') {
             console.warn(`User ${memberUid} not found in Firebase Auth. May have been already deleted.`);
-            return { success: true }; // Consider it a success if user is already gone.
+            return { success: true }; 
         }
         return { success: false, error: error.message || 'Ocurrió un error desconocido al eliminar al miembro de Authentication.' };
     }
@@ -136,7 +146,7 @@ export async function getMembersAction(params: {
 }): Promise<{ success: boolean; members?: Membership[], error?: string; }> {
     
     const { tenantId } = params;
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const projectId = firebaseConfig.projectId;
 
     if (!projectId) {
         return { success: false, error: "El ID del proyecto de Firebase no está configurado." };
