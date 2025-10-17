@@ -1,17 +1,17 @@
 
 'use server';
 
-/**
- * Server Action to create a new user in Firebase Authentication using the REST API.
- * This avoids server-side SDK credential issues in certain environments.
- * It only handles the creation in Auth and returns the new user's UID.
- * The Firestore document creation is handled by the client.
- */
+import type { Membership, User } from '@/lib/types';
+
+
 export async function inviteUserAction(params: {
     email: string;
     password: string;
-}): Promise<{ success: boolean; uid?: string; error?: string; }> {
-    const { email, password } = params;
+    tenantId: string;
+    firstName: string;
+    lastName: string;
+}): Promise<{ success: boolean; uid?: string; userData?: User; error?: string; }> {
+    const { email, password, tenantId, firstName, lastName } = params;
 
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
     if (!apiKey) {
@@ -41,7 +41,16 @@ export async function inviteUserAction(params: {
             return { success: false, error: errorMsg };
         }
 
-        return { success: true, uid: authData.localId };
+        const userData: User = {
+            uid: authData.localId,
+            displayName: `${firstName} ${lastName}`,
+            email: email,
+            photoURL: '',
+            tenantIds: [tenantId], // FIX: Include the tenantId in the user data
+            isSuperadmin: false,
+        };
+
+        return { success: true, uid: authData.localId, userData: userData };
 
     } catch (error: any) {
         console.error('Error in inviteUserAction (fetch):', error);
