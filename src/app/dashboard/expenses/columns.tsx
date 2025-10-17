@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import type { Expense, Category, Subcategory } from "@/lib/types"
 import Link from "next/link"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 // This type is used to define the shape of our data.
 export type ExpenseRow = Expense & {
@@ -15,6 +16,15 @@ export type ExpenseRow = Expense & {
   subcategory?: Subcategory;
   userName?: string;
 }
+
+const getInitials = (name: string = "") => {
+    const names = name.split(' ');
+    if (names.length > 1) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+}
+
 
 export const columns = (isOwner: boolean): ColumnDef<ExpenseRow>[] => {
   const baseColumns: ColumnDef<ExpenseRow>[] = [
@@ -159,7 +169,17 @@ export const columns = (isOwner: boolean): ColumnDef<ExpenseRow>[] => {
     baseColumns.splice(3, 0, {
       accessorKey: "userName",
       header: "Usuario",
-      cell: ({ row }) => <div className="font-medium">{row.original.userName}</div>,
+      cell: ({ row }) => {
+        const userName = row.original.userName || "";
+        return (
+            <div className="flex items-center gap-2">
+                <Avatar className="h-8 w-8">
+                    <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                </Avatar>
+                <span className="font-medium hidden lg:table-cell">{userName}</span>
+            </div>
+        )
+      },
     });
   }
 
