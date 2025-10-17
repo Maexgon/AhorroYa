@@ -232,8 +232,11 @@ export default function NewExpensePage() {
         const entityName = data.entityName?.trim();
         let entityAlreadyExists = false;
 
-        if (entityCuit) {
-            const entitiesByCuitRef = collection(firestore, 'entities');
+        const existingEntity = entities?.find(e => e.id === data.entityName);
+        if (existingEntity) {
+            entityAlreadyExists = true;
+        } else if (entityCuit) {
+             const entitiesByCuitRef = collection(firestore, 'entities');
             const q = query(entitiesByCuitRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
             const entitySnapshot = await getDocs(q);
             if (!entitySnapshot.empty) {
@@ -301,7 +304,7 @@ export default function NewExpensePage() {
             categoryId: data.categoryId,
             subcategoryId: data.subcategoryId || null,
             entityCuit: entityCuit || '',
-            entityName: entityName,
+            entityName: existingEntity ? existingEntity.razonSocial : entityName,
             paymentMethod: data.paymentMethod,
             notes: data.notes || '',
             source: receiptBase64 ? 'ocr' : 'manual',
@@ -402,21 +405,21 @@ export default function NewExpensePage() {
                                 control={control}
                                 render={({ field }) => (
                                     <Combobox
-                                        options={entityOptions.map(e => ({ label: e.label, value: e.label }))} // Use name as value for free text
+                                        options={entityOptions}
                                         value={field.value}
                                         onSelect={(value) => {
-                                            const selectedEntity = entityOptions.find(e => e.label === value);
+                                            const selectedEntity = entityOptions.find(e => e.value === value);
                                             if (selectedEntity) {
-                                                setValue('entityName', selectedEntity.label);
+                                                setValue('entityName', selectedEntity.value);
                                                 setValue('entityCuit', selectedEntity.cuit || '');
                                             } else {
-                                                setValue('entityName', value); // Allow free text
-                                                setValue('entityCuit', ''); // Clear CUIT if new entity
+                                                setValue('entityName', value); 
+                                                setValue('entityCuit', '');
                                             }
                                         }}
                                         placeholder="Buscar o crear entidad..."
                                         searchPlaceholder="Buscar entidad..."
-                                        emptyPlaceholder="No se encontró la entidad."
+                                        emptyPlaceholder="No se encontró la entidad. Puedes crear una nueva."
                                     />
                                 )}
                             />
