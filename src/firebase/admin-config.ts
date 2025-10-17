@@ -1,3 +1,4 @@
+
 // src/firebase/admin-config.ts
 import admin from 'firebase-admin';
 
@@ -8,10 +9,8 @@ export async function initializeAdminApp() {
   if (admin.apps.length > 0) {
     return admin.app();
   }
-
-  // In a deployed Google environment (like Cloud Run, Cloud Functions),
-  // GOOGLE_APPLICATION_CREDENTIALS is set automatically.
-  // For local development, you'd set this environment variable to point to your service account JSON file.
+  
+  // Use service account credentials if available, otherwise use application default credentials
   const credential = process.env.GOOGLE_APPLICATION_CREDENTIALS
     ? admin.credential.applicationDefault()
     : undefined;

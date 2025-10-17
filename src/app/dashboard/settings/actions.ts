@@ -2,8 +2,9 @@
 'use server';
 
 import { getFirestore, doc, collection, writeBatch, getDocs, query, where } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase/config';
-import type { License } from '@/lib/types';
+import { initializeAdminApp } from '@/firebase/admin-config';
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
+import type { License, Membership } from '@/lib/types';
 
 
 interface InviteUserParams {
@@ -18,19 +19,25 @@ interface InviteUserParams {
     currentMemberCount: number;
 }
 
-// Helper function to safely get the client-side firestore instance
-function getClientFirestore() {
-    const app = initializeFirebase();
-    return getFirestore(app);
+// Helper function to safely get the admin firestore instance
+async function getAdminFirestore() {
+    const app = await initializeAdminApp();
+    return app.firestore();
 }
+async function getAdminAuthSdk() {
+    const app = await initializeAdminApp();
+    return getAdminAuth(app);
+}
+
 
 /**
  * Server Action to invite a new user to a tenant using Firebase Auth REST API.
  */
-export async function inviteUserAction(params: InviteUserParams): Promise<{ success: boolean; error?: string }> {
+export async function inviteUserAction(params: InviteUserParams): Promise<{ success: boolean; error?: string; members?: Membership[] }> {
     const { tenantId, currentUserUid, email, firstName, lastName, phone, password, license, currentMemberCount } = params;
 
-    const firestore = getClientFirestore();
+    const firestore = await getAdminFirestore();
+    const adminAuth = await getAdminAuthSdk();
 
     try {
         // 1. Validate license limits using the count passed from the client
@@ -42,39 +49,20 @@ export async function inviteUserAction(params: InviteUserParams): Promise<{ succ
             return { success: false, error: 'Has alcanzado el número máximo de usuarios para tu plan.' };
         }
 
-        // 2. Create user via Firebase Auth REST API
-        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '';
-        const signUpUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`;
-
-        const authResponse = await fetch(signUpUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email,
-                password,
-                returnSecureToken: true,
-            }),
+        // 2. Create user via Firebase Admin SDK
+        const userRecord = await adminAuth.createUser({
+            email,
+            password,
+            displayName: `${firstName} ${lastName}`,
+            emailVerified: false, // User will need to verify their email
         });
-
-        const authData = await authResponse.json();
-
-        if (!authResponse.ok) {
-            const errorMessage = authData.error?.message || 'UNKNOWN_AUTH_ERROR';
-             if (errorMessage === 'EMAIL_EXISTS') {
-                return { success: false, error: 'El correo electrónico ya está en uso por otro usuario.' };
-            }
-            console.error('Firebase Auth REST API Error:', authData);
-            return { success: false, error: `Error de autenticación: ${errorMessage}` };
-        }
-
-        const newUserUid = authData.localId;
+        
+        const newUserUid = userRecord.uid;
 
         // 3. Create user and membership documents in Firestore within a batch
-        const batch = writeBatch(firestore);
+        const batch = firestore.batch();
 
-        const userRef = doc(firestore, 'users', newUserUid);
+        const userRef = firestore.collection('users').doc(newUserUid);
         const userData = {
             uid: newUserUid,
             displayName: `${firstName} ${lastName}`,
@@ -85,7 +73,7 @@ export async function inviteUserAction(params: InviteUserParams): Promise<{ succ
         };
         batch.set(userRef, userData);
 
-        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${newUserUid}`);
+        const membershipRef = firestore.collection('memberships').doc(`${tenantId}_${newUserUid}`);
         const membershipData = {
             tenantId: tenantId,
             uid: newUserUid,
@@ -98,10 +86,19 @@ export async function inviteUserAction(params: InviteUserParams): Promise<{ succ
 
         await batch.commit();
 
-        return { success: true };
+        // 4. Fetch the updated list of members
+        const membersQuery = query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+        const membersSnapshot = await getDocs(membersQuery);
+        const updatedMembers = membersSnapshot.docs.map(doc => doc.data() as Membership);
+
+        return { success: true, members: updatedMembers };
 
     } catch (error: any) {
         console.error('Error in inviteUserAction:', error);
-        return { success: false, error: error.message || 'Ocurrió un error inesperado al invitar al usuario.' };
+         let errorMessage = error.message || 'Ocurrió un error inesperado al invitar al usuario.';
+        if (error.code === 'auth/email-already-exists') {
+            errorMessage = 'El correo electrónico ya está en uso por otro usuario.';
+        }
+        return { success: false, error: errorMessage };
     }
 }

@@ -362,17 +362,17 @@ function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onO
 
 export default function SettingsPage() {
   const { user, isUserLoading } = useUser();
-  const firestore = useFirestore();
   const { toast } = useToast();
   const [tenantId, setTenantId] = React.useState<string | null>(null);
   const [isOwner, setIsOwner] = React.useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [members, setMembers] = useState<Membership[]>([]);
 
   // Fetch user's data to get the tenantId
   const userDocRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
+    if (!user) return null;
+    return doc(getFirestore(), 'users', user.uid);
+  }, [user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
   
   React.useEffect(() => {
@@ -383,9 +383,9 @@ export default function SettingsPage() {
   
   // Fetch tenant data to check for ownership
   const tenantDocRef = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return doc(firestore, 'tenants', tenantId);
-  }, [firestore, tenantId]);
+    if (!tenantId) return null;
+    return doc(getFirestore(), 'tenants', tenantId);
+  }, [tenantId]);
   const { data: tenantData, isLoading: isTenantLoading } = useDoc<Tenant>(tenantDocRef);
   
   React.useEffect(() => {
@@ -394,21 +394,15 @@ export default function SettingsPage() {
     }
   }, [tenantData, user]);
 
-  const membersQuery = useMemoFirebase(() => {
-      if (!firestore || !tenantId) return null;
-      return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
-  const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
-
   const licenseQuery = useMemoFirebase(() => {
-      if (!firestore || !tenantId) return null;
-      return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
+      if (!tenantId) return null;
+      return query(collection(getFirestore(), 'licenses'), where('tenantId', '==', tenantId));
+  }, [tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
   const activeLicense = licenses?.[0];
 
-  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingMembers || isLoadingLicenses;
+  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
   
   const handleInviteUser = async (data: any) => {
     if (!user || !tenantId || !activeLicense) {
@@ -424,8 +418,9 @@ export default function SettingsPage() {
         currentMemberCount: members?.length || 0,
     });
 
-    if (result.success) {
+    if (result.success && result.members) {
         toast({ title: "¡Éxito!", description: "El usuario ha sido invitado y creado correctamente." });
+        setMembers(result.members);
         setIsInviteDialogOpen(false);
     } else {
         toast({ variant: "destructive", title: "Error en la invitación", description: result.error });
