@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, Check, X } from 'lucide-react';
-import { DataTable } from '@/app/dashboard/expenses/data-table';
+import { MembersDataTable } from './data-table-members';
 import { columns as memberColumns } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
 import {
@@ -370,7 +370,7 @@ export default function SettingsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <DataTable columns={memberColumns} data={members || []} categories={[]} onDelete={() => {}} />
+                            <MembersDataTable columns={memberColumns} data={members || []} />
                         </CardContent>
                     </Card>
                 </TabsContent>

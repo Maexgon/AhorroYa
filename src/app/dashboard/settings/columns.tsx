@@ -12,7 +12,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import type { Membership } from "@/lib/types"
+import type { Membership, User } from "@/lib/types"
+import { useCollection } from "@/firebase"
+import { useFirestore, useMemoFirebase } from "@/firebase/provider"
+import { collection, query, where } from "firebase/firestore"
+import { useMemo } from "react"
+
+
+const MemberCell = ({ uid }: { uid: string }) => {
+    const firestore = useFirestore();
+    const userQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'users'), where('uid', '==', uid));
+    }, [firestore, uid]);
+
+    const { data: userData } = useCollection<User>(userQuery);
+    const email = useMemo(() => userData?.[0]?.email || uid, [userData, uid]);
+    
+    return <div className="lowercase text-muted-foreground">{email}</div>;
+};
 
 
 export const columns: ColumnDef<Membership>[] = [
@@ -23,10 +41,7 @@ export const columns: ColumnDef<Membership>[] = [
   {
     accessorKey: "uid",
     header: "Email",
-    cell: ({ row }) => {
-        // Asumiendo que el uid es el email para el display
-      return <div className="lowercase text-muted-foreground">{row.getValue("uid")}</div>
-    }
+    cell: ({ row }) => <MemberCell uid={row.getValue("uid")} />,
   },
   {
     accessorKey: "role",
