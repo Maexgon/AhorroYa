@@ -109,6 +109,10 @@ export async function deleteMemberAction(params: {
         const adminApp = await initializeAdminApp();
         const adminAuth = getAuth(adminApp);
         
+        // Before deleting user from Auth, make sure Firestore docs are deleted
+        // The client-side logic will now handle Firestore deletions.
+        // This action only handles Auth deletion.
+
         await adminAuth.deleteUser(memberUid);
         
         return { success: true };
@@ -117,6 +121,7 @@ export async function deleteMemberAction(params: {
         console.error('Error in deleteMemberAction:', error);
          if (error.code === 'auth/user-not-found') {
             console.warn(`User ${memberUid} not found in Firebase Auth. May have been already deleted.`);
+            // Return success because the desired state (user doesn't exist in Auth) is achieved.
             return { success: true }; 
         }
         return { success: false, error: error.message || 'Ocurrió un error desconocido al eliminar al miembro de Authentication.' };
