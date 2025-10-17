@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Expense, Category, Subcategory, Membership, User as UserType } from '@/lib/types';
 import { DataTable } from './data-table';
@@ -95,9 +95,9 @@ export default function ExpensesPage() {
     
     const membersQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId || !isOwner) return null; // Only fetch members if owner
-        return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+        return query(collection(firestore, 'users'), where('tenantIds', 'array-contains', tenantId));
     }, [firestore, tenantId, isOwner]);
-    const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
+    const { data: members, isLoading: isLoadingMembers } = useCollection<UserType>(membersQuery);
 
 
     const handleOpenDeleteDialog = (expenseId: string) => {
