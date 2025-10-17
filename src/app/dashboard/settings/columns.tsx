@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, ArrowUpDown } from "lucide-react"
+import { MoreHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -13,35 +13,36 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import type { Membership, User } from "@/lib/types"
-import { useCollection } from "@/firebase"
+import { useDoc } from "@/firebase/firestore/use-doc"
 import { useFirestore, useMemoFirebase } from "@/firebase/provider"
-import { collection, query, where } from "firebase/firestore"
+import { doc } from "firebase/firestore"
 import { useMemo } from "react"
 
 
-const MemberCell = ({ uid }: { uid: string }) => {
+const MemberCell = ({ uid, displayName }: { uid: string, displayName: string }) => {
     const firestore = useFirestore();
-    const userQuery = useMemoFirebase(() => {
+    const userDocRef = useMemoFirebase(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'users'), where('uid', '==', uid));
+        return doc(firestore, 'users', uid);
     }, [firestore, uid]);
 
-    const { data: userData } = useCollection<User>(userQuery);
-    const email = useMemo(() => userData?.[0]?.email || uid, [userData, uid]);
+    const { data: userData } = useDoc<User>(userDocRef);
+    const email = useMemo(() => userData?.email || 'cargando...', [userData]);
     
-    return <div className="lowercase text-muted-foreground">{email}</div>;
+    return (
+        <div>
+            <div className="font-medium">{displayName}</div>
+            <div className="text-sm text-muted-foreground">{email}</div>
+        </div>
+    )
 };
 
 
 export const columns: ColumnDef<Membership>[] = [
   {
     accessorKey: "displayName",
-    header: "Nombre",
-  },
-  {
-    accessorKey: "uid",
-    header: "Email",
-    cell: ({ row }) => <MemberCell uid={row.getValue("uid")} />,
+    header: "Miembro",
+    cell: ({ row }) => <MemberCell uid={row.original.uid} displayName={row.original.displayName} />,
   },
   {
     accessorKey: "role",
