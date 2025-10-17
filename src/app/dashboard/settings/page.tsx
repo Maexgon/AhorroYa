@@ -398,26 +398,20 @@ export default function SettingsPage() {
     }
   }, [tenantData, user]);
 
+  const membersQuery = useMemoFirebase(() => {
+    if (!tenantId || !firestore) return null;
+    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+  }, [tenantId, firestore]);
+
+  const { data: membersData, isLoading: membersLoading } = useCollection<Membership>(membersQuery);
+
   useEffect(() => {
-      if (!tenantId || !firestore) return;
-      
-      const fetchMembers = async () => {
-          setIsLoadingMembers(true);
-          try {
-              const membersQuery = query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-              const snapshot = await getDocs(membersQuery);
-              const membersData = snapshot.docs.map(doc => doc.data() as Membership);
-              setMembers(membersData);
-          } catch (e: any) {
-              console.error("Error fetching members:", e);
-               toast({ variant: 'destructive', title: "Error de Permisos", description: "No se pudieron cargar los miembros. Verifica las reglas de seguridad."});
-          } finally {
-              setIsLoadingMembers(false);
-          }
-      };
-      
-      fetchMembers();
-  }, [tenantId, firestore, toast]);
+      if (membersData) {
+          setMembers(membersData);
+          setIsLoadingMembers(false);
+      }
+  }, [membersData]);
+
 
   const licenseQuery = useMemoFirebase(() => {
       if (!tenantId || !firestore) return null;
@@ -427,7 +421,7 @@ export default function SettingsPage() {
 
   const activeLicense = licenses?.[0];
 
-  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
+  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses || isLoadingMembers;
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !tenantId || !activeLicense) {
@@ -503,17 +497,6 @@ export default function SettingsPage() {
     toast({ title: "Eliminando miembro..." });
 
     try {
-        const adminIdToken = await user.getIdToken();
-        const deleteResult = await deleteMemberAction({ 
-            tenantId, 
-            memberUid: memberToDelete.uid,
-            adminIdToken
-        });
-
-        if (!deleteResult.success) {
-            throw new Error(deleteResult.error);
-        }
-
         const batch = writeBatch(firestore);
         const userRef = doc(firestore, 'users', memberToDelete.uid);
         const membershipRef = doc(firestore, 'memberships', `${tenantId}_${memberToDelete.uid}`);
@@ -521,13 +504,30 @@ export default function SettingsPage() {
         batch.delete(userRef);
         batch.delete(membershipRef);
         await batch.commit();
+        
+        const adminIdToken = await user.getIdToken();
+        const deleteAuthResult = await deleteMemberAction({
+            memberUid: memberToDelete.uid,
+            adminIdToken: adminIdToken,
+        });
+
+        if (!deleteAuthResult.success) {
+           // Log the error but don't block the UI flow, as Firestore data is already deleted.
+           console.error("Failed to delete user from Auth:", deleteAuthResult.error);
+           toast({ variant: "destructive", title: "Error de Sincronización", description: "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." });
+        } else {
+            toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
+        }
 
         setMembers(prev => prev.filter(m => m.uid !== memberToDelete.uid));
-        toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
 
     } catch (error: any) {
         console.error("Error deleting member:", error);
-        toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo eliminar al miembro."});
+         errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: 'batch-write-delete',
+            operation: 'delete',
+            requestResourceData: `Deleting user ${memberToDelete.uid}`
+        }));
     } finally {
         setIsDeletingMember(false);
         setMemberToDelete(null);

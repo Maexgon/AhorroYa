@@ -96,14 +96,11 @@ export async function sendInvitationEmailAction(email: string): Promise<{ succes
 
 
 export async function deleteMemberAction(params: {
-    tenantId: string;
-    memberUid: string;
     adminIdToken: string;
+    memberUid: string;
 }): Promise<{ success: boolean; error?: string; }> {
-    const { tenantId, memberUid, adminIdToken } = params;
+    const { adminIdToken, memberUid } = params;
     
-    // Step 1: Delete user from Firebase Authentication
-    // We must use the Admin SDK for this, which requires the app to be initialized.
     try {
        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
         if (!apiKey) throw new Error("Firebase API Key is not configured.");
@@ -115,18 +112,17 @@ export async function deleteMemberAction(params: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              idToken: adminIdToken, // The admin's token
-              localId: memberUid // The UID of the user to delete
+              idToken: adminIdToken, 
+              localId: memberUid 
             }),
         });
 
-        // The API returns an error if the user to delete is not found, but we can treat it as a success
-        // if our goal is to ensure the user is gone. We only fail on other errors.
         if (!res.ok) {
             const errorData = await res.json();
+             // Don't throw if user is already deleted, just log it.
             if (errorData.error?.message !== 'USER_NOT_FOUND') {
                 console.error("Error deleting user from Auth:", errorData);
-                 // We don't return here, we try to delete from Firestore anyway.
+                throw new Error(errorData.error?.message || 'Failed to delete user from Firebase Auth.');
             }
         }
         return { success: true };
