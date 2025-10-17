@@ -41,11 +41,6 @@ export function Combobox({
     className,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
-
-  const handleSelect = (currentValue: string) => {
-    onSelect(currentValue === value ? "" : currentValue);
-    setOpen(false);
-  };
   
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -72,8 +67,14 @@ export function Combobox({
                 {options.map((option) => (
                     <CommandItem
                       key={option.value}
-                      value={option.value}
-                      onSelect={handleSelect}
+                      value={option.label}
+                      onSelect={(currentLabel) => {
+                        const selectedOption = options.find(opt => opt.label.toLowerCase() === currentLabel.toLowerCase());
+                        if (selectedOption) {
+                          onSelect(selectedOption.value === value ? "" : selectedOption.value)
+                        }
+                        setOpen(false)
+                      }}
                     >
                     <Check
                         className={cn(
