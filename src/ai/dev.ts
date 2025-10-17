@@ -3,3 +3,4 @@ config();
 
 import '@/ai/flows/ocr-receipt-processing.ts';
 import '@/ai/flows/suggest-budget-reallocations.ts';
+import '@/ai/flows/generate-financial-insights.ts';

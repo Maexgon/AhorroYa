@@ -462,7 +462,9 @@ function OwnerDashboard() {
                 </div>
             </CardContent>
             <CardFooter>
-                <Button variant="outline" className="w-full">Ver más insights</Button>
+                <Button variant="outline" className="w-full" asChild>
+                    <Link href="/dashboard/insights">Ver más insights</Link>
+                </Button>
             </CardFooter>
           </Card>
         </div>
