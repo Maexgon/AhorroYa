@@ -381,17 +381,17 @@ function OwnerDashboard() {
                                 return null;
                             }}
                         />
-                        <Bar dataKey="Presupuestado" stackId="a" fill="hsl(var(--chart-3) / 0.2)" radius={[4, 4, 4, 4]}>
+                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3) / 0.2)" radius={[0, 4, 4, 0]}>
                             <LabelList 
                                 dataKey="Presupuestado" 
-                                position="right" 
+                                position="insideLeft" 
                                 offset={10}
                                 className="fill-foreground font-semibold"
                                 fontSize={12}
                                 formatter={(value: number) => processedData.formatCurrency(value)}
                             />
                         </Bar>
-                        <Bar dataKey="Gastado" stackId="a" fill="hsl(var(--chart-3))" radius={[4, 0, 0, 4]}>
+                        <Bar dataKey="Gastado" fill="hsl(var(--chart-3))" radius={[0, 4, 4, 0]}>
                             <LabelList
                                 dataKey="percentage"
                                 position="center"
