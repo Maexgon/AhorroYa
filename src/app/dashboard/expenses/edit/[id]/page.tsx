@@ -23,8 +23,6 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import type { Category, Subcategory, Expense, Currency } from '@/lib/types';
-import { Combobox } from '@/components/ui/combobox';
-
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
@@ -97,11 +95,6 @@ export default function EditExpensePage() {
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
   
-  const currencyOptions = React.useMemo(() => {
-    if (!currencies) return [];
-    return currencies.map(c => ({ label: c.code, value: c.code }));
-  }, [currencies]);
-
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
     if (!allSubcategories || !selectedCategoryId) return [];
@@ -109,7 +102,7 @@ export default function EditExpensePage() {
   }, [allSubcategories, selectedCategoryId]);
 
   const onSubmit = async (data: ExpenseFormValues) => {
-     if (!firestore || !expenseId || !tenantId || !currencies) {
+     if (!firestore || !expenseId || !tenantId) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el gasto para actualizar.' });
         return;
     }
@@ -118,13 +111,11 @@ export default function EditExpensePage() {
 
     const expenseToUpdateRef = doc(firestore, 'expenses', expenseId);
     
-    const selectedCurrencyDoc = currencies.find(c => c.code === data.currency);
-    const arsCurrencyDoc = currencies.find(c => c.code === 'ARS');
-
     let amountARS = data.amount;
-    if (selectedCurrencyDoc && arsCurrencyDoc && selectedCurrencyDoc.code !== 'ARS') {
-        const amountInUSD = data.amount / (selectedCurrencyDoc.exchangeRate || 1);
-        amountARS = amountInUSD * (arsCurrencyDoc.exchangeRate || 1);
+    if (data.currency === 'USD') {
+        const usdCurrencyDoc = currencies?.find(c => c.code === 'USD');
+        const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1
+        amountARS = data.amount * exchangeRate;
     }
     
     const updatedData = {
@@ -238,14 +229,13 @@ export default function EditExpensePage() {
                                     name="currency"
                                     control={control}
                                     render={({ field }) => (
-                                        <Combobox
-                                            options={currencyOptions}
-                                            value={field.value}
-                                            onSelect={field.onChange}
-                                            placeholder="Moneda"
-                                            searchPlaceholder="Buscar moneda..."
-                                            emptyPlaceholder="No se encontró."
-                                        />
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ARS">ARS</SelectItem>
+                                                <SelectItem value="USD">USD</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     )}
                                 />
                                 {errors.currency && <p className="text-sm text-destructive">{errors.currency.message}</p>}
@@ -333,3 +323,5 @@ export default function EditExpensePage() {
     </div>
   );
 }
+
+    

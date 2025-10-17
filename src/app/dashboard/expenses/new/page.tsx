@@ -61,7 +61,7 @@ export default function NewExpensePage() {
       entityName: '',
       entityCuit: '',
       amount: 0,
-      currency: '', // Will be set by default ARS currency
+      currency: 'ARS',
       categoryId: '',
       subcategoryId: '',
       paymentMethod: 'cash',
@@ -104,21 +104,6 @@ export default function NewExpensePage() {
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
-
-  // Set default currency to ARS
-  React.useEffect(() => {
-    if (currencies) {
-        const arsCurrency = currencies.find(c => c.code === 'ARS');
-        if (arsCurrency) {
-            setValue('currency', arsCurrency.code);
-        }
-    }
-  }, [currencies, setValue]);
-
-  const currencyOptions = React.useMemo(() => {
-    if (!currencies) return [];
-    return currencies.map(c => ({ label: c.code, value: c.code }));
-  }, [currencies]);
 
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -220,8 +205,8 @@ export default function NewExpensePage() {
   };
   
   const onSubmit = async (data: ExpenseFormValues) => {
-    if (!tenantId || !user || !firestore || !currencies) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario, tenant o monedas.' });
+    if (!tenantId || !user || !firestore) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
         return;
     }
     setIsSubmitting(true);
@@ -271,13 +256,11 @@ export default function NewExpensePage() {
              writes.push({path: newReceiptRef.path, data: receiptData});
         }
         
-        const selectedCurrencyDoc = currencies.find(c => c.code === data.currency);
-        const arsCurrencyDoc = currencies.find(c => c.code === 'ARS');
-
         let amountARS = data.amount;
-        if (selectedCurrencyDoc && arsCurrencyDoc && selectedCurrencyDoc.code !== 'ARS') {
-            const amountInUSD = data.amount / (selectedCurrencyDoc.exchangeRate || 1);
-            amountARS = amountInUSD * (arsCurrencyDoc.exchangeRate || 1);
+        if (data.currency === 'USD') {
+            const usdCurrencyDoc = currencies?.find(c => c.code === 'USD');
+            const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1 if not found
+            amountARS = data.amount * exchangeRate;
         }
 
         // 3. Handle Expense
@@ -427,18 +410,17 @@ export default function NewExpensePage() {
                             </div>
                              <div className="space-y-2">
                                 <Label htmlFor="currency">Moneda</Label>
-                                <Controller
+                                 <Controller
                                     name="currency"
                                     control={control}
                                     render={({ field }) => (
-                                        <Combobox
-                                            options={currencyOptions}
-                                            value={field.value}
-                                            onSelect={field.onChange}
-                                            placeholder="Moneda"
-                                            searchPlaceholder="Buscar moneda..."
-                                            emptyPlaceholder="No se encontró."
-                                        />
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ARS">ARS</SelectItem>
+                                                <SelectItem value="USD">USD</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     )}
                                 />
                             </div>
@@ -525,3 +507,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    
