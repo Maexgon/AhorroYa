@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -71,42 +72,36 @@ export function DataTable<TData, TValue>({
     },
   })
 
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
-
-  React.useEffect(() => {
-    table.getColumn("year")?.setFilterValue(String(currentYear));
-    table.getColumn("month")?.setFilterValue(String(currentMonth));
-  }, [table, currentYear, currentMonth]);
-
   return (
     <div>
       <div className="flex items-center py-4 gap-4">
         <Select
-          value={(table.getColumn("month")?.getFilterValue() as string) ?? String(currentMonth)}
+          value={(table.getColumn("month")?.getFilterValue() as string) ?? ""}
           onValueChange={(value) => {
-            table.getColumn("month")?.setFilterValue(value);
+            table.getColumn("month")?.setFilterValue(value === 'all' ? null : value);
           }}
         >
             <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Mes" />
+                <SelectValue placeholder="Filtrar por mes..." />
             </SelectTrigger>
             <SelectContent>
+                <SelectItem value="all">Todos los meses</SelectItem>
                 {months.map(m => (
                     <SelectItem key={m.value} value={String(m.value)}>{m.name.charAt(0).toUpperCase() + m.name.slice(1)}</SelectItem>
                 ))}
             </SelectContent>
         </Select>
         <Select
-          value={(table.getColumn("year")?.getFilterValue() as string) ?? String(currentYear)}
+          value={(table.getColumn("year")?.getFilterValue() as string) ?? ""}
           onValueChange={(value) => {
-            table.getColumn("year")?.setFilterValue(value);
+            table.getColumn("year")?.setFilterValue(value === 'all' ? null : value);
           }}
         >
             <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Año" />
+                <SelectValue placeholder="Filtrar por año..." />
             </SelectTrigger>
             <SelectContent>
+                <SelectItem value="all">Todos los años</SelectItem>
                 {years.map(y => (
                     <SelectItem key={y.value} value={String(y.value)}>{y.label}</SelectItem>
                 ))}
