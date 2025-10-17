@@ -139,8 +139,8 @@ export default function BudgetPage() {
     const handleDuplicateBudgets = async () => {
         if (!firestore || !user || !tenantId) return;
 
-        const selectedIds = Object.keys(rowSelection);
-        const budgetsToDuplicate = budgets?.filter(b => selectedIds.includes(b.id)) || [];
+        const selectedRowIndices = Object.keys(rowSelection).map(Number);
+        const budgetsToDuplicate = budgetData.filter((_, index) => selectedRowIndices.includes(index));
 
         if (budgetsToDuplicate.length === 0) {
             toast({ variant: 'destructive', title: 'Error', description: 'No hay presupuestos seleccionados para duplicar.' });
