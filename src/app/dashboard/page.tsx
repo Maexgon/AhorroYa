@@ -37,6 +37,7 @@ const SAFE_DEFAULTS = {
     formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
     toCurrencyCode: 'ARS',
     monthlyOverviewData: [],
+    isOwner: false,
 };
 
 const CustomizedYAxisTick = (props: any) => {
@@ -120,7 +121,7 @@ function OwnerDashboard() {
   const isLoading = isUserDocLoading || isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
   
  const processedData = useMemo(() => {
-    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes) {
+    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user) {
       return SAFE_DEFAULTS;
     }
 
@@ -217,9 +218,11 @@ function OwnerDashboard() {
       };
     }).reverse();
 
+    const isOwner = activeTenant?.ownerUid === user.uid;
 
-    return { barData, recentExpenses, budgetChartData, totalExpenses, budgetBalance, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS', monthlyOverviewData };
-  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes]);
+
+    return { barData, recentExpenses, budgetChartData, totalExpenses, budgetBalance, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS', monthlyOverviewData, isOwner };
+  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -305,7 +308,13 @@ function OwnerDashboard() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem><UserPlus className="mr-2 h-4 w-4" />Invitar usuarios</DropdownMenuItem>
-                        <DropdownMenuItem><FileText className="mr-2 h-4 w-4" />Administrar licencia</DropdownMenuItem>
+                        {processedData.isOwner && (
+                            <DropdownMenuItem asChild>
+                                <Link href="/dashboard/settings">
+                                    <FileText className="mr-2 h-4 w-4" />Administrar licencia
+                                </Link>
+                            </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem><Repeat className="mr-2 h-4 w-4" />Renovar</DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><XCircle className="mr-2 h-4 w-4" />Cancelar</DropdownMenuItem>
                     </DropdownMenuContent>
@@ -663,8 +672,6 @@ export default function DashboardPageContainer() {
     return null;
   }
   
-  const isOwner = true; 
-
   return (
     <div className="flex min-h-screen flex-col">
        <header className="sticky top-0 z-40 w-full border-b bg-background">
@@ -679,9 +686,8 @@ export default function DashboardPageContainer() {
         </div>
       </header>
       <main className="flex-1">
-        {isOwner ? <OwnerDashboard /> : <div className="p-8"><p>Dashboard de Miembro Próximamente</p></div>}
+        <OwnerDashboard />
       </main>
     </div>
   );
 }
-
