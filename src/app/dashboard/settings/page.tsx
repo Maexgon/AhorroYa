@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
@@ -292,12 +291,12 @@ function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onO
             newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         newPassword += specialChars.charAt(Math.floor(Math.random() * specialChars.length));
-        // Shuffle password
         newPassword = newPassword.split('').sort(() => 0.5 - Math.random()).join('');
         setPassword(newPassword);
     };
 
     const copyToClipboard = () => {
+        if (!password) return;
         navigator.clipboard.writeText(password);
         toast({ title: "Copiado", description: "Contraseña temporal copiada al portapapeles." });
     };
@@ -405,23 +404,58 @@ export default function SettingsPage() {
   const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
   
   const handleInviteUser = async (data: any) => {
-    if (!user || !tenantId || !activeLicense) {
+    if (!user || !firestore || !tenantId || !activeLicense) {
         toast({ variant: "destructive", title: "Error", description: "No se pueden cargar los datos del tenant o la licencia." });
+        return;
+    }
+
+    if (members.length >= activeLicense.maxUsers) {
+        toast({ variant: "destructive", title: "Límite alcanzado", description: "Has alcanzado el número máximo de usuarios para tu plan." });
         return;
     }
 
     const result = await inviteUserAction({
         ...data,
-        tenantId,
-        currentUserUid: user.uid,
-        license: activeLicense,
-        currentMemberCount: members.length,
     });
+    
+    if (result.success && result.uid) {
+        const batch = writeBatch(firestore);
+        
+        const userRef = doc(firestore, 'users', result.uid);
+        const userData: User = {
+            uid: result.uid,
+            displayName: `${data.firstName} ${data.lastName}`,
+            email: data.email,
+            photoURL: '',
+            tenantIds: [tenantId],
+            isSuperadmin: false,
+        };
+        batch.set(userRef, userData);
 
-    if (result.success && result.members) {
-        toast({ title: "¡Éxito!", description: "El usuario ha sido invitado y creado correctamente." });
-        setMembers(result.members);
-        setIsInviteDialogOpen(false);
+        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${result.uid}`);
+        const membershipData: Membership = {
+            tenantId: tenantId,
+            uid: result.uid,
+            displayName: `${data.firstName} ${data.lastName}`,
+            role: 'member',
+            status: 'active',
+            joinedAt: new Date().toISOString(),
+        };
+        batch.set(membershipRef, membershipData);
+        
+        try {
+            await batch.commit();
+            toast({ title: "¡Éxito!", description: "El usuario ha sido creado e invitado correctamente." });
+            setMembers(prev => [...prev, membershipData]); // Optimistic update
+            setIsInviteDialogOpen(false);
+        } catch (error) {
+             errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: 'batch-write',
+                operation: 'write',
+                requestResourceData: 'Creating new user and membership'
+            }));
+        }
+
     } else {
         toast({ variant: "destructive", title: "Error en la invitación", description: result.error });
     }
@@ -533,4 +567,3 @@ export default function SettingsPage() {
     </>
   );
 }
-
