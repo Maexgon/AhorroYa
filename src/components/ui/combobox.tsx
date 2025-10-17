@@ -39,8 +39,7 @@ export function Combobox({
     if (!search) return options;
     const searchLower = search.toLowerCase();
     return options.filter(option => 
-      option.label.toLowerCase().includes(searchLower) ||
-      option.value.toLowerCase().includes(searchLower)
+      option.label.toLowerCase().includes(searchLower)
     );
   }, [options, search]);
 
