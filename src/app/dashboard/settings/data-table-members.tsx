@@ -66,10 +66,10 @@ export function MembersDataTable<TData, TValue>({
     <div>
       <div className="flex items-center py-4">
         <Input
-          placeholder="Filtrar por email..."
-          value={(table.getColumn("uid")?.getFilterValue() as string) ?? ""}
+          placeholder="Filtrar por nombre..."
+          value={(table.getColumn("displayName")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
-            table.getColumn("uid")?.setFilterValue(event.target.value)
+            table.getColumn("displayName")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />
