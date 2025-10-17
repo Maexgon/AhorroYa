@@ -5,20 +5,12 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft, Loader2, Pencil, Trash2, TableIcon } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, Repeat } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, doc, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, doc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Budget, Category, Expense, User as UserType } from '@/lib/types';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,10 +20,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { getColumns } from './columns';
+import { DataTable } from './data-table';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function BudgetPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
@@ -41,6 +36,11 @@ export default function BudgetPage() {
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [budgetToDelete, setBudgetToDelete] = React.useState<string | null>(null);
+    const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = React.useState(false);
+    const [isDuplicating, setIsDuplicating] = React.useState(false);
+    const [targetMonth, setTargetMonth] = React.useState(new Date().getMonth() + 1);
+    const [targetYear, setTargetYear] = React.useState(new Date().getFullYear());
+    const [rowSelection, setRowSelection] = React.useState({});
 
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
@@ -65,7 +65,7 @@ export default function BudgetPage() {
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!ready) return null;
-        return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
+        return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId, ready]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
@@ -74,11 +74,10 @@ export default function BudgetPage() {
         return query(
             collection(firestore, 'expenses'), 
             where('tenantId', '==', tenantId),
-            where('userId', '==', user!.uid)
+            where('deleted', '==', false)
         );
-    }, [firestore, tenantId, ready, user]);
+    }, [firestore, tenantId, ready]);
     const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
-
 
     const budgetData = React.useMemo(() => {
         if (!budgets || !categories || !expenses) return [];
@@ -137,7 +136,88 @@ export default function BudgetPage() {
             });
     };
     
-    if (!ready || isLoadingBudgets || isLoadingCategories || isLoadingExpenses) {
+    const handleDuplicateBudgets = async () => {
+        if (!firestore || !user || !tenantId) return;
+
+        const selectedIds = Object.keys(rowSelection);
+        const budgetsToDuplicate = budgets?.filter(b => selectedIds.includes(b.id)) || [];
+
+        if (budgetsToDuplicate.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No hay presupuestos seleccionados para duplicar.' });
+            return;
+        }
+
+        setIsDuplicating(true);
+        toast({ title: "Procesando...", description: "Duplicando presupuestos." });
+
+        try {
+            const budgetsRef = collection(firestore, 'budgets');
+            const q = query(budgetsRef, 
+                where('tenantId', '==', tenantId),
+                where('year', '==', targetYear),
+                where('month', '==', targetMonth)
+            );
+            const existingDocsSnap = await getDocs(q);
+            const existingCategoryIds = new Set(existingDocsSnap.docs.map(d => d.data().categoryId));
+
+            const batch = writeBatch(firestore);
+            let duplicatedCount = 0;
+            let skippedCount = 0;
+            const writes: {path: string, data: any}[] = [];
+
+            budgetsToDuplicate.forEach(budget => {
+                if (existingCategoryIds.has(budget.categoryId)) {
+                    skippedCount++;
+                } else {
+                    const newBudgetRef = doc(collection(firestore, 'budgets'));
+                    const newBudgetData = {
+                        tenantId: budget.tenantId,
+                        year: targetYear,
+                        month: targetMonth,
+                        categoryId: budget.categoryId,
+                        subcategoryId: budget.subcategoryId || null,
+                        amountARS: budget.amountARS,
+                        rolloverFromPrevARS: 0, // Reset rollover for new month
+                    };
+                    batch.set(newBudgetRef, newBudgetData);
+                    writes.push({path: newBudgetRef.path, data: newBudgetData});
+                    duplicatedCount++;
+                }
+            });
+
+            if (duplicatedCount > 0) {
+                await batch.commit();
+            }
+
+            toast({
+                title: "Proceso completado",
+                description: `${duplicatedCount} presupuestos duplicados. ${skippedCount} omitidos por ya existir.`
+            });
+
+        } catch (error) {
+             errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: 'batch-write',
+                operation: 'write',
+                requestResourceData: 'Duplicating budgets' // simplified data for error
+            }));
+        } finally {
+            setIsDuplicating(false);
+            setIsDuplicateDialogOpen(false);
+            setRowSelection({});
+        }
+    };
+    
+    const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR").format(amount);
+    
+    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), [handleOpenDeleteDialog]);
+
+    const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({length: 5}, (_, i) => currentYear + i);
+    
+    const isLoading = isAuthLoading || isUserDocLoading || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
+
+    if (isLoading) {
         return (
             <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -163,78 +243,74 @@ export default function BudgetPage() {
             <main className="flex-1 p-4 md:p-8">
                 <Card>
                     <CardHeader>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
                             <div>
                                 <CardTitle>Mis Presupuestos</CardTitle>
                                 <CardDescription>Administra tus presupuestos por categoría para cada mes.</CardDescription>
                             </div>
-                            <Button asChild>
-                                <Link href="/dashboard/budget/new">
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Crear Presupuesto
-                                </Link>
-                            </Button>
+                            <div className="flex gap-2">
+                                <AlertDialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="outline" disabled={Object.keys(rowSelection).length === 0}>
+                                            <Repeat className="mr-2 h-4 w-4" />
+                                            Duplicar ({Object.keys(rowSelection).length})
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Duplicar Presupuestos</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Selecciona el mes y año de destino para los
+                                                <span className="font-bold"> {Object.keys(rowSelection).length}</span> presupuestos seleccionados. Los presupuestos para categorías que ya existan en el mes de destino no serán duplicados.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <div className="grid grid-cols-2 gap-4 py-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="target-month">Mes</Label>
+                                                <Select value={String(targetMonth)} onValueChange={(val) => setTargetMonth(Number(val))}>
+                                                    <SelectTrigger id="target-month"><SelectValue/></SelectTrigger>
+                                                    <SelectContent>
+                                                        {months.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.name.charAt(0).toUpperCase() + m.name.slice(1)}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="target-year">Año</Label>
+                                                <Select value={String(targetYear)} onValueChange={(val) => setTargetYear(Number(val))}>
+                                                    <SelectTrigger id="target-year"><SelectValue/></SelectTrigger>
+                                                    <SelectContent>
+                                                        {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleDuplicateBudgets} disabled={isDuplicating}>
+                                                {isDuplicating ? 'Duplicando...' : 'Confirmar Duplicación'}
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                                <Button asChild>
+                                    <Link href="/dashboard/budget/new">
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Crear Presupuesto
+                                    </Link>
+                                </Button>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                    
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className='w-[200px]'>Categoría</TableHead>
-                                    <TableHead>Mes/Año</TableHead>
-                                    <TableHead className="text-right">Presupuestado</TableHead>
-                                    <TableHead className="text-right">Gastado</TableHead>
-                                    <TableHead className="text-right">Restante</TableHead>
-                                    <TableHead className='w-[200px]'>Progreso</TableHead>
-                                    <TableHead className="w-[100px] text-center">Acciones</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {budgetData.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={7} className="h-24 text-center">
-                                            No has creado ningún presupuesto todavía.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    budgetData.map(item => (
-                                        <TableRow key={item.id}>
-                                            <TableCell>
-                                                <Badge style={{ backgroundColor: item.categoryColor, color: '#fff' }}>
-                                                    {item.categoryName}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>{item.month}/{item.year}</TableCell>
-                                            <TableCell className="text-right font-mono">${item.amountARS.toLocaleString('es-AR')}</TableCell>
-                                            <TableCell className="text-right font-mono">${item.spent.toLocaleString('es-AR')}</TableCell>
-                                            <TableCell className={`text-right font-mono ${item.remaining < 0 ? 'text-destructive' : 'text-green-600'}`}>
-                                                ${item.remaining.toLocaleString('es-AR')}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className='flex items-center gap-2'>
-                                                    <Progress value={item.percentage > 100 ? 100 : item.percentage} className="h-2" />
-                                                    <span className='text-xs font-mono'>{Math.round(item.percentage)}%</span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="icon" asChild>
-                                                        <Link href={`/dashboard/budget/edit/${item.id}`}>
-                                                            <Pencil className="h-4 w-4" />
-                                                        </Link>
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleOpenDeleteDialog(item.id)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    
+                       <DataTable
+                            columns={columns}
+                            data={budgetData}
+                            onDelete={handleOpenDeleteDialog}
+                            rowSelection={rowSelection}
+                            setRowSelection={setRowSelection}
+                            months={months}
+                            years={years.map(y => ({ value: y, label: String(y)}))}
+                       />
                     </CardContent>
                 </Card>
             </main>
@@ -262,4 +338,3 @@ export default function BudgetPage() {
         </>
     );
 }
-

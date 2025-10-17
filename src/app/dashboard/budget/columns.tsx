@@ -1,0 +1,131 @@
+"use client"
+
+import { ColumnDef } from "@tanstack/react-table"
+import { Pencil, Trash2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
+import { Progress } from "@/components/ui/progress"
+
+export type BudgetRow = {
+  id: string;
+  categoryName: string;
+  categoryColor: string;
+  month: number;
+  year: number;
+  amountARS: number;
+  spent: number;
+  remaining: number;
+  percentage: number;
+  categoryId: string;
+}
+
+export const getColumns = (
+  onDelete: (id: string) => void,
+  formatCurrency: (amount: number) => string
+): ColumnDef<BudgetRow>[] => [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: "categoryName",
+    header: "Categoría",
+    cell: ({ row }) => {
+      return (
+        <Badge style={{ backgroundColor: row.original.categoryColor, color: '#fff' }}>
+            {row.original.categoryName}
+        </Badge>
+      )
+    },
+  },
+  {
+    accessorKey: "month",
+    header: "Mes",
+    cell: ({ row }) => {
+        const date = new Date(row.original.year, row.original.month - 1);
+        const monthName = date.toLocaleString('es', { month: 'long' });
+        return <div className="capitalize">{monthName}</div>;
+    }
+  },
+  {
+    accessorKey: "year",
+    header: "Año",
+  },
+  {
+    accessorKey: "amountARS",
+    header: () => <div className="text-right">Presupuestado</div>,
+    cell: ({ row }) => <div className="text-right font-mono">{formatCurrency(row.original.amountARS)}</div>,
+  },
+  {
+    accessorKey: "spent",
+    header: () => <div className="text-right">Gastado</div>,
+    cell: ({ row }) => <div className="text-right font-mono">{formatCurrency(row.original.spent)}</div>,
+  },
+  {
+    accessorKey: "remaining",
+    header: () => <div className="text-right">Restante</div>,
+    cell: ({ row }) => (
+        <div className={`text-right font-mono ${row.original.remaining < 0 ? 'text-destructive' : 'text-green-600'}`}>
+            {formatCurrency(row.original.remaining)}
+        </div>
+    ),
+  },
+  {
+    accessorKey: "percentage",
+    header: "Progreso",
+    cell: ({ row }) => {
+        const percentage = row.original.percentage;
+        return (
+            <div className='flex items-center gap-2'>
+                <Progress value={percentage > 100 ? 100 : percentage} className="h-2" />
+                <span className='text-xs font-mono'>{Math.round(percentage)}%</span>
+            </div>
+        )
+    }
+  },
+  {
+    id: "actions",
+    header: () => <div className="text-center">Acciones</div>,
+    cell: ({ row }) => {
+      const budget = row.original
+
+      return (
+        <div className="flex items-center justify-center gap-1">
+           <Button variant="ghost" size="icon" asChild>
+                <Link href={`/dashboard/budget/edit/${budget.id}`}>
+                    <Pencil className="h-4 w-4" />
+                </Link>
+           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDelete(budget.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      )
+    },
+  },
+]
