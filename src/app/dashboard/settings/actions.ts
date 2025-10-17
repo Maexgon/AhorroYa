@@ -1,4 +1,3 @@
-
 'use server';
 
 import type { Membership, User } from '@/lib/types';

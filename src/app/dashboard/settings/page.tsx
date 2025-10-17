@@ -1,10 +1,9 @@
 'use client';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, doc, writeBatch, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch, getDocs, updateDoc, deleteDoc, getFirestore } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -29,13 +28,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { inviteUserAction } from './actions';
+import { useCollection } from '@/firebase/firestore/use-collection';
 
 
 function ManageCategories({ tenantId }: { tenantId: string }) {
@@ -362,9 +361,11 @@ function InviteUserDialog({ open, onOpenChange, onInvite }: { open: boolean; onO
 export default function SettingsPage() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [tenantId, setTenantId] = React.useState<string | null>(null);
-  const [isOwner, setIsOwner] = React.useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [members, setMembers] = useState<Membership[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
   
   const firestore = useFirestore();
 
@@ -374,7 +375,7 @@ export default function SettingsPage() {
   }, [user, firestore]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
   
-  React.useEffect(() => {
+  useEffect(() => {
     if (userData?.tenantIds && userData.tenantIds.length > 0) {
       setTenantId(userData.tenantIds[0]);
     }
@@ -386,23 +387,38 @@ export default function SettingsPage() {
   }, [tenantId, firestore]);
   const { data: tenantData, isLoading: isTenantLoading } = useDoc<Tenant>(tenantDocRef);
   
-  React.useEffect(() => {
+  useEffect(() => {
     if(tenantData && user) {
         setIsOwner(tenantData.ownerUid === user.uid);
     }
   }, [tenantData, user]);
+
+  useEffect(() => {
+    if (!tenantId || !firestore) return;
+    
+    const fetchMembers = async () => {
+        setIsLoadingMembers(true);
+        try {
+            const membersQuery = query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+            const snapshot = await getDocs(membersQuery);
+            const membersData = snapshot.docs.map(doc => doc.data() as Membership);
+            setMembers(membersData);
+        } catch (e) {
+            console.error("Error fetching members:", e);
+            toast({ variant: 'destructive', title: "Error", description: "No se pudieron cargar los miembros."});
+        } finally {
+            setIsLoadingMembers(false);
+        }
+    };
+    
+    fetchMembers();
+  }, [tenantId, firestore, toast]);
 
   const licenseQuery = useMemoFirebase(() => {
       if (!tenantId || !firestore) return null;
       return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
   }, [tenantId, firestore]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
-
-  const membershipsQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
-  const { data: members, setData: setMembers, isLoading: isLoadingMembers } = useCollection<Membership>(membershipsQuery);
 
   const activeLicense = licenses?.[0];
 
@@ -419,42 +435,47 @@ export default function SettingsPage() {
         return;
     }
 
-    const result = await inviteUserAction({ email: data.email, password: data.password });
+    // Server action to create auth user
+    const result = await inviteUserAction({
+        email: data.email,
+        password: data.password,
+        tenantId: tenantId,
+        firstName: data.firstName,
+        lastName: data.lastName,
+    });
     
     if (result.success && result.uid && result.userData) {
-        const newMemberData = result.userData;
+      // Client-side batch write for Firestore documents
+      try {
         const batch = writeBatch(firestore);
         
-        const userRef = doc(firestore, 'users', newMemberData.uid);
-        batch.set(userRef, newMemberData);
+        const userRef = doc(firestore, 'users', result.uid);
+        batch.set(userRef, result.userData);
 
-        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${newMemberData.uid}`);
+        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${result.uid}`);
         const membershipData: Membership = {
             tenantId: tenantId,
-            uid: newMemberData.uid,
-            displayName: newMemberData.displayName,
-            email: newMemberData.email,
+            uid: result.uid,
+            displayName: result.userData.displayName,
+            email: result.userData.email,
             role: 'member',
             status: 'active',
             joinedAt: new Date().toISOString(),
         };
         batch.set(membershipRef, membershipData);
         
-        try {
-            await batch.commit();
-            toast({ title: "¡Éxito!", description: "El usuario ha sido creado e invitado correctamente." });
-            if (setMembers && members) {
-              setMembers([...members, membershipData]); // Optimistic update
-            }
-            setIsInviteDialogOpen(false);
-        } catch (error) {
-             errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: 'batch-write',
-                operation: 'write',
-                requestResourceData: 'Creating new user and membership'
-            }));
-        }
+        await batch.commit();
 
+        toast({ title: "¡Éxito!", description: "El usuario ha sido creado e invitado correctamente." });
+        setMembers(prev => [...prev, membershipData]); // Optimistic update
+        setIsInviteDialogOpen(false);
+      } catch (error) {
+           errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: 'batch-write',
+              operation: 'write',
+              requestResourceData: 'Creating new user and membership'
+          }));
+      }
     } else {
         toast({ variant: "destructive", title: "Error en la invitación", description: result.error });
     }
