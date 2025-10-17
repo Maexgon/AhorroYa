@@ -417,24 +417,24 @@ function OwnerDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Entidad</TableHead>
-                    <TableHead className="hidden sm:table-cell">Categoría</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="py-2">Entidad</TableHead>
+                    <TableHead className="hidden sm:table-cell py-2">Categoría</TableHead>
+                    <TableHead className="text-right py-2">Monto</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {processedData.recentExpenses.map((expense, i) => (
                     <TableRow key={i}>
-                      <TableCell>
+                      <TableCell className="py-2">
                         <div className="flex items-center gap-3">
                           <div className="bg-muted p-2 rounded-md hidden sm:block">
                             <expense.icon className="h-5 w-5 text-muted-foreground" />
                           </div>
-                          <span className="font-medium">{expense.entity}</span>
+                          <div className="text-sm font-medium">{expense.entity}</div>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell">{expense.category}</TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="hidden sm:table-cell text-sm py-2">{expense.category}</TableCell>
+                      <TableCell className="text-right font-mono text-sm py-2">
                         {processedData.formatCurrency(expense.amountConverted)}
                       </TableCell>
                     </TableRow>
