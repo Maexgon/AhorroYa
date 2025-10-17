@@ -148,10 +148,9 @@ export default function ExpensesPage() {
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
         const memberMap = new Map(members?.map(m => [m.uid, m.displayName]) || []);
         
-        if (!isOwner && user && userData) {
-             if(!memberMap.has(user.uid)) {
-                memberMap.set(user.uid, userData.displayName);
-             }
+        // Ensure the current user (owner) is in the map if they have expenses but aren't in the members list yet.
+        if (isOwner && user && userData && !memberMap.has(user.uid)) {
+            memberMap.set(user.uid, userData.displayName);
         }
 
         return expenses.map(expense => ({
