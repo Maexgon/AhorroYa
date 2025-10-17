@@ -411,12 +411,16 @@ export default function SettingsPage() {
   const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingMembers || isLoadingLicenses;
   
   const handleInviteUser = async (data: any) => {
-    if (!user || !tenantId) return;
+    if (!user || !tenantId || !activeLicense) {
+        toast({ variant: "destructive", title: "Error", description: "No se pueden cargar los datos del tenant o la licencia." });
+        return;
+    }
 
     const result = await inviteUserAction({
         ...data,
         tenantId,
         currentUserUid: user.uid,
+        license: activeLicense
     });
 
     if (result.success) {
