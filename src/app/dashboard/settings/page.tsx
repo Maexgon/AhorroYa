@@ -389,10 +389,10 @@ export default function SettingsPage() {
                         <CardContent className="space-y-4">
                             {activeLicense ? (
                                 <>
-                                    <p><strong>Plan:</strong> <Badge>{activeLicense.plan}</Badge></p>
-                                    <p><strong>Estado:</strong> <Badge variant={activeLicense.status === 'active' ? 'default' : 'destructive'} className={activeLicense.status === 'active' ? 'bg-green-500' : ''}>{activeLicense.status}</Badge></p>
-                                    <p><strong>Usuarios:</strong> {members?.length || 0} de {activeLicense.maxUsers}</p>
-                                    <p><strong>Válida hasta:</strong> {new Date(activeLicense.endDate).toLocaleDateString()}</p>
+                                    <div className="flex items-center gap-2"><strong>Plan:</strong> <Badge>{activeLicense.plan}</Badge></div>
+                                    <div className="flex items-center gap-2"><strong>Estado:</strong> <Badge variant={activeLicense.status === 'active' ? 'default' : 'destructive'} className={activeLicense.status === 'active' ? 'bg-green-500' : ''}>{activeLicense.status}</Badge></div>
+                                    <div><strong>Usuarios:</strong> {members?.length || 0} de {activeLicense.maxUsers}</div>
+                                    <div><strong>Válida hasta:</strong> {new Date(activeLicense.endDate).toLocaleDateString()}</div>
                                 </>
                             ) : (
                                 <p>No se encontró información de la licencia.</p>
