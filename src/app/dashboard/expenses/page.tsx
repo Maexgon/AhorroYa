@@ -146,24 +146,29 @@ export default function ExpensesPage() {
 
         const categoryMap = new Map(categories.map(c => [c.id, c]));
         const subcategoryMap = new Map(subcategories.map(s => [s.id, s]));
+        const memberMap = new Map<string, string>();
+
+        // Populate map with members from the memberships collection
+        if (members) {
+            members.forEach(m => {
+                if (m.uid && m.displayName) {
+                    memberMap.set(m.uid, m.displayName);
+                }
+            });
+        }
         
-        // 1. Create the map from the `members` collection.
-        const memberMap = new Map(members?.map(m => [m.uid, m.displayName]) || []);
-        
-        // 2. Explicitly add the current user (owner) to the map if they aren't already there.
-        // This covers expenses created by the owner themselves.
-        if (isOwner && user && userData && !memberMap.has(user.uid)) {
+        // Ensure the current user (owner) is in the map, as they might not be in the `members` list if it's a single-user tenant.
+        if (user && userData && userData.displayName && !memberMap.has(user.uid)) {
             memberMap.set(user.uid, userData.displayName);
         }
 
-        // 3. Map over expenses and use the completed `memberMap`.
         return expenses.map(expense => ({
             ...expense,
             category: categoryMap.get(expense.categoryId),
             subcategory: expense.subcategoryId ? subcategoryMap.get(expense.subcategoryId) : undefined,
             userName: memberMap.get(expense.userId) || 'Usuario desconocido',
         }));
-    }, [expenses, categories, subcategories, members, isOwner, user, userData]);
+    }, [expenses, categories, subcategories, members, user, userData]);
 
     const isLoading = isAuthLoading || isUserDocLoading || isLoadingMembership || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
 
