@@ -691,12 +691,12 @@ function MemberDashboard({ tenantId }: { tenantId: string }) {
         }
         resetDeleteDialog();
     }).catch(error => {
-        errorEmitter.emit('permission-error', { path: expenseRef.path, operation: 'update', requestResourceData: updatedData });
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: expenseRef.path, operation: 'update', requestResourceData: updatedData }));
         resetDeleteDialog();
     });
   };
 
-  const columns = React.useMemo(() => expenseColumns.filter(c => c.id !== 'select' && c.id !== 'actions'), []);
+  const columns = React.useMemo(() => expenseColumns(false).filter(c => c.id !== 'select' && c.id !== 'actions'), []);
 
   const isLoading = isLoadingExpenses || isLoadingCategories;
 
