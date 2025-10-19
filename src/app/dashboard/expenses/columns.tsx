@@ -81,7 +81,15 @@ export const columns = (isOwner: boolean): ColumnDef<ExpenseRow>[] => {
           </Button>
         )
       },
-      cell: ({ row }) => <div className="pl-4 font-medium">{row.getValue("entityName")}</div>,
+      cell: ({ row }) => {
+        const notes = row.original.notes
+        return (
+          <div className="pl-4">
+            <div className="font-medium">{row.getValue("entityName")}</div>
+            {notes && <div className="text-xs text-muted-foreground">{notes}</div>}
+          </div>
+        )
+      }
     },
     {
       accessorKey: "category",

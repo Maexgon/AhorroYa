@@ -97,6 +97,9 @@ export type Expense = {
   createdAt: string; // Timestamp of when the expense was created.
   updatedAt: string; // Timestamp of when the expense was last updated.
   deleted: boolean; // Indicates if the expense has been soft deleted.
+  installments?: number; // Total number of installments.
+  installmentNumber?: number; // The number of the current installment (e.g., 1 of 3).
+  cardType?: string; // The type of credit card used (e.g., visa, mastercard).
 };
 export type Income = {
   id: string; // Unique identifier for the income.

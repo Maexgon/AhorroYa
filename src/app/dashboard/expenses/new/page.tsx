@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, ArrowLeft, UploadCloud, X } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
@@ -37,6 +37,8 @@ const expenseFormSchema = z.object({
   subcategoryId: z.string().optional(),
   paymentMethod: z.string().min(1, "El método de pago es requerido."),
   notes: z.string().optional(),
+  installments: z.coerce.number().optional(),
+  cardType: z.string().optional(),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
@@ -66,10 +68,12 @@ export default function NewExpensePage() {
       paymentMethod: 'cash',
       notes: '',
       date: new Date(),
+      installments: 1,
     }
   });
 
   const selectedCategoryId = watch('categoryId');
+  const paymentMethod = watch('paymentMethod');
 
   // 1. Fetch user's data to get the first tenantId
   const userDocRef = useMemoFirebase(() => {
@@ -223,99 +227,108 @@ export default function NewExpensePage() {
     toast({ title: "Procesando...", description: "Guardando el gasto." });
 
     const batch = writeBatch(firestore);
-    const newExpenseRef = doc(collection(firestore, 'expenses'));
     let writes: {path: string, data: any}[] = [];
 
     try {
-        // 1. Handle Entity
-        const entityCuit = data.entityCuit?.trim();
-        const entityName = data.entityName?.trim();
-        let entityAlreadyExists = false;
+        const installments = data.paymentMethod === 'credit' ? data.installments || 1 : 1;
+        const installmentAmount = data.amount / installments;
+        const originalNotes = data.notes || '';
 
-        const existingEntity = entities?.find(e => e.id === data.entityName);
-        if (existingEntity) {
-            entityAlreadyExists = true;
-        } else if (entityCuit) {
-             const entitiesByCuitRef = collection(firestore, 'entities');
-            const q = query(entitiesByCuitRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
-            const entitySnapshot = await getDocs(q);
-            if (!entitySnapshot.empty) {
-                entityAlreadyExists = true;
+        for (let i = 0; i < installments; i++) {
+            const newExpenseRef = doc(collection(firestore, 'expenses'));
+            
+            let amountARS = installmentAmount;
+            if (data.currency === 'USD') {
+                const usdCurrencyDoc = currencies?.find(c => c.code === 'USD');
+                const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1 if not found
+                amountARS = installmentAmount * exchangeRate;
             }
-        }
-        
-        if (!entityAlreadyExists && entityName) {
-             const entitiesByNameRef = collection(firestore, 'entities');
-             const q = query(entitiesByNameRef, where('tenantId', '==', tenantId), where('razonSocial', '==', entityName));
-             const entitySnapshot = await getDocs(q);
-             if (!entitySnapshot.empty) {
-                 entityAlreadyExists = true;
-             }
-        }
-        
-        if (!entityAlreadyExists && entityName) {
-            const newEntityRef = doc(collection(firestore, 'entities'));
-            const entityData = {
-                id: newEntityRef.id,
-                tenantId: tenantId,
-                cuit: entityCuit || '',
-                razonSocial: entityName,
-                tipo: 'comercio',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            };
-            batch.set(newEntityRef, entityData);
-            writes.push({path: newEntityRef.path, data: entityData});
-        }
-        
-        // 2. Handle Receipt if it exists
-        if (receiptBase64 && receiptFile) {
-             const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
-             const receiptData = {
-                id: newReceiptRef.id,
+
+            const expenseDate = addMonths(data.date, installments > 1 ? i + 1 : 0);
+            
+            const notesWithInstallment = installments > 1 
+                ? `${originalNotes} (Cuota ${i + 1}/${installments})`.trim()
+                : originalNotes;
+
+            const expenseData = {
+                id: newExpenseRef.id,
                 tenantId: tenantId,
                 userId: user.uid,
-                expenseId: newExpenseRef.id,
-                base64Content: receiptBase64,
-                fileType: receiptFile.type.startsWith('image/') ? 'image' : 'pdf',
-                status: 'processed',
+                date: expenseDate.toISOString(),
+                amount: parseFloat(installmentAmount.toFixed(2)),
+                currency: data.currency,
+                amountARS: parseFloat(amountARS.toFixed(2)),
+                categoryId: data.categoryId,
+                subcategoryId: data.subcategoryId || null,
+                entityCuit: data.entityCuit?.trim() || '',
+                entityName: data.entityName?.trim(),
+                paymentMethod: data.paymentMethod,
+                isRecurring: false,
+                notes: notesWithInstallment,
+                source: receiptBase64 ? 'ocr' : 'manual',
+                status: 'posted',
+                deleted: false,
                 createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                ...(installments > 1 && {
+                    installments: installments,
+                    installmentNumber: i + 1,
+                    cardType: data.cardType || null,
+                })
             };
-             batch.set(newReceiptRef, receiptData);
-             writes.push({path: newReceiptRef.path, data: receiptData});
-        }
-        
-        let amountARS = data.amount;
-        if (data.currency === 'USD') {
-            const usdCurrencyDoc = currencies?.find(c => c.code === 'USD');
-            const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1 if not found
-            amountARS = data.amount * exchangeRate;
-        }
 
-        // 3. Handle Expense
-        const expenseData = {
-            id: newExpenseRef.id,
-            tenantId: tenantId,
-            userId: user.uid,
-            date: data.date.toISOString(),
-            amount: data.amount,
-            currency: data.currency,
-            amountARS: amountARS,
-            categoryId: data.categoryId,
-            subcategoryId: data.subcategoryId || null,
-            entityCuit: entityCuit || '',
-            entityName: existingEntity ? existingEntity.razonSocial : entityName,
-            paymentMethod: data.paymentMethod,
-            notes: data.notes || '',
-            source: receiptBase64 ? 'ocr' : 'manual',
-            status: 'posted',
-            isRecurring: false,
-            deleted: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        };
-        batch.set(newExpenseRef, expenseData);
-        writes.push({path: newExpenseRef.path, data: expenseData});
+            batch.set(newExpenseRef, expenseData);
+            writes.push({ path: newExpenseRef.path, data: expenseData });
+
+             // Handle Entity - only once
+            if (i === 0) {
+                const entityCuit = data.entityCuit?.trim();
+                const entityName = data.entityName?.trim();
+                let entityAlreadyExists = false;
+
+                if (entities?.some(e => e.razonSocial === entityName)) {
+                    entityAlreadyExists = true;
+                } else if (entityCuit) {
+                    const q = query(collection(firestore, 'entities'), where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+                    const entitySnapshot = await getDocs(q);
+                    if (!entitySnapshot.empty) {
+                        entityAlreadyExists = true;
+                    }
+                }
+                
+                if (!entityAlreadyExists && entityName) {
+                    const newEntityRef = doc(collection(firestore, 'entities'));
+                    const entityData = {
+                        id: newEntityRef.id,
+                        tenantId: tenantId,
+                        cuit: entityCuit || '',
+                        razonSocial: entityName,
+                        tipo: 'comercio',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    };
+                    batch.set(newEntityRef, entityData);
+                    writes.push({path: newEntityRef.path, data: entityData});
+                }
+            }
+
+            // Handle Receipt - only once
+            if (i === 0 && receiptBase64 && receiptFile) {
+                const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
+                const receiptData = {
+                    id: newReceiptRef.id,
+                    tenantId: tenantId,
+                    userId: user.uid,
+                    expenseId: newExpenseRef.id, // Associate with the first installment
+                    base64Content: receiptBase64,
+                    fileType: receiptFile.type.startsWith('image/') ? 'image' : 'pdf',
+                    status: 'processed',
+                    createdAt: new Date().toISOString(),
+                };
+                batch.set(newReceiptRef, receiptData);
+                writes.push({path: newReceiptRef.path, data: receiptData});
+            }
+        }
         
         await batch.commit();
 
@@ -410,7 +423,7 @@ export default function NewExpensePage() {
                                         onSelect={(value) => {
                                             const selectedEntity = entityOptions.find(e => e.value === value);
                                             if (selectedEntity) {
-                                                setValue('entityName', selectedEntity.value);
+                                                setValue('entityName', selectedEntity.label);
                                                 setValue('entityCuit', selectedEntity.cuit || '');
                                             } else {
                                                 setValue('entityName', value); 
@@ -497,6 +510,45 @@ export default function NewExpensePage() {
                             />
                             {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                         </div>
+
+                        {paymentMethod === 'credit' && (
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="installments">Cuotas</Label>
+                                    <Controller
+                                        name="installments"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {[1, 3, 6, 12, 24].map(i => <SelectItem key={i} value={String(i)}>{i}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="cardType">Tipo de Tarjeta</Label>
+                                    <Controller
+                                        name="cardType"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger><SelectValue placeholder="Selecciona tipo" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="visa">Visa</SelectItem>
+                                                    <SelectItem value="mastercard">Mastercard</SelectItem>
+                                                    <SelectItem value="amex">American Express</SelectItem>
+                                                    <SelectItem value="diners">Diners</SelectItem>
+                                                    <SelectItem value="other">Otra</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <Label htmlFor="categoryId">Categoría</Label>

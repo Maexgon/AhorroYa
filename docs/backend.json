@@ -467,6 +467,18 @@
         "deleted": {
           "type": "boolean",
           "description": "Indicates if the expense has been soft deleted."
+        },
+        "installments": {
+            "type": "number",
+            "description": "Total number of installments."
+        },
+        "installmentNumber": {
+            "type": "number",
+            "description": "The number of the current installment (e.g., 1 of 3)."
+        },
+        "cardType": {
+            "type": "string",
+            "description": "The type of credit card used (e.g., visa, mastercard)."
         }
       },
       "required": [

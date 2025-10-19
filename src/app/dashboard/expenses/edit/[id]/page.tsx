@@ -34,6 +34,8 @@ const expenseFormSchema = z.object({
   subcategoryId: z.string().optional(),
   paymentMethod: z.string().min(1, "El método de pago es requerido."),
   notes: z.string().optional(),
+  installments: z.coerce.number().optional(),
+  cardType: z.string().optional(),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
@@ -68,12 +70,15 @@ export default function EditExpensePage() {
         notes: expenseData.notes || '',
         entityCuit: expenseData.entityCuit || '',
         subcategoryId: expenseData.subcategoryId || '',
+        installments: expenseData.installments,
+        cardType: expenseData.cardType,
       });
     }
   }, [expenseData, reset]);
 
 
   const selectedCategoryId = watch('categoryId');
+  const paymentMethod = watch('paymentMethod');
   const tenantId = expenseData?.tenantId;
 
   // Fetch categories and subcategories for the tenant
@@ -262,6 +267,46 @@ export default function EditExpensePage() {
                             />
                             {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                         </div>
+                        
+                        {paymentMethod === 'credit' && (
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="installments">Cuotas</Label>
+                                    <Controller
+                                        name="installments"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Select disabled onValueChange={(v) => field.onChange(Number(v))} value={String(field.value || 1)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {[1, 3, 6, 12, 24].map(i => <SelectItem key={i} value={String(i)}>{i}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                    <p className="text-xs text-muted-foreground">No se pueden editar las cuotas de un gasto existente.</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="cardType">Tipo de Tarjeta</Label>
+                                    <Controller
+                                        name="cardType"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger><SelectValue placeholder="Selecciona tipo" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="visa">Visa</SelectItem>
+                                                    <SelectItem value="mastercard">Mastercard</SelectItem>
+                                                    <SelectItem value="amex">American Express</SelectItem>
+                                                    <SelectItem value="diners">Diners</SelectItem>
+                                                    <SelectItem value="other">Otra</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <Label htmlFor="categoryId">Categoría</Label>
