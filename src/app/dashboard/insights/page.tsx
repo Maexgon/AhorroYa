@@ -75,14 +75,20 @@ export default function InsightsPage() {
 
     const incomesQuery = useMemoFirebase(() => {
         if (!tenantId || !firestore) return null;
-        return query(collection(firestore, 'incomes'), 
-            where('tenantId', '==', tenantId), 
-            where('deleted', '==', false),
-            where('date', '>=', fromDate.toISOString()),
-            where('date', '<=', toDate.toISOString())
+        return query(collection(firestore, 'incomes'),
+            where('tenantId', '==', tenantId),
+            where('deleted', '==', false)
         );
-    }, [tenantId, firestore, fromDate, toDate]);
-    const { data: monthlyIncomes, isLoading: isLoadingIncomes } = useCollection<Income>(incomesQuery);
+    }, [tenantId, firestore]);
+    const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<Income>(incomesQuery);
+
+    const monthlyIncomes = React.useMemo(() => {
+        if (!allIncomes) return [];
+        return allIncomes.filter(inc => {
+            const incomeDate = new Date(inc.date);
+            return incomeDate >= fromDate && incomeDate <= toDate;
+        })
+    }, [allIncomes, fromDate, toDate]);
 
     const budgetsQuery = useMemoFirebase(() => {
         if (!tenantId || !firestore) return null;
