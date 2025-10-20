@@ -12,6 +12,13 @@ import { getFirestore, writeBatch, doc, collection, query, where, getDocs } from
 
 const plans = [
     {
+        name: 'Demo',
+        price: 'Gratis',
+        description: 'Prueba las funcionalidades básicas por 15 días.',
+        features: ['1 Usuario', 'Funcionalidades básicas', 'Válido por 15 días'],
+        planId: 'demo'
+    },
+    {
         name: 'Personal',
         price: '$1.000',
         description: 'Ideal para empezar a tomar el control de tus finanzas.',
@@ -45,6 +52,11 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
         if (!user) {
             toast({ variant: 'destructive', title: 'Error', description: 'Debes iniciar sesión para seleccionar un plan.' });
             router.push('/login');
+            return;
+        }
+
+        if (plan.planId === 'demo') {
+            router.push('/register');
             return;
         }
 
@@ -83,6 +95,7 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
                 personal: 1,
                 familiar: 4,
                 empresa: 10,
+                demo: 1,
             };
 
             const licenseData = {
@@ -137,7 +150,7 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
                     <h2 className="font-headline text-3xl font-bold tracking-tight sm:text-4xl">Planes para cada necesidad</h2>
                     <p className="text-muted-foreground mt-2 text-lg">Elige el plan que mejor se adapte a tu vida financiera. Simple y transparente.</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-7xl mx-auto">
                     {plans.map((plan) => (
                         <Card key={plan.planId} className={`flex flex-col ${plan.highlight ? 'border-primary ring-2 ring-primary shadow-lg' : ''}`}>
                             <CardHeader className="pb-4">
@@ -145,7 +158,7 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
                                 <CardDescription>{plan.description}</CardDescription>
                             </CardHeader>
                             <CardContent className="flex-1 space-y-6">
-                                <div className="text-4xl font-bold font-headline">{plan.price}<span className="text-sm font-normal text-muted-foreground">/mes</span></div>
+                                <div className="text-4xl font-bold font-headline">{plan.price}<span className="text-sm font-normal text-muted-foreground">{plan.planId !== 'demo' && '/mes'}</span></div>
                                 <ul className="space-y-3 text-sm">
                                     {plan.features.map((feature, i) => (
                                         <li key={i} className="flex items-center gap-2">
@@ -160,7 +173,7 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
                                     className="w-full" 
                                     variant={plan.highlight ? 'default' : 'outline'}
                                     onClick={() => getButtonAction(plan.planId)}
-                                    disabled={isUserLoading || isLoading !== ''}
+                                    disabled={isUserLoading || (isLoading !== '' && isLoading !== plan.planId)}
                                 >
                                     {isLoading === plan.planId ? 'Procesando...' : (isSubscribeFlow ? 'Seleccionar Plan' : 'Comenzar Ahora')}
                                 </Button>

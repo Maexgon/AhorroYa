@@ -163,7 +163,7 @@ export default function RegisterPage() {
           const licenseRef = doc(firestore, "licenses", crypto.randomUUID());
           const startDate = new Date();
           const endDate = new Date();
-          endDate.setFullYear(endDate.getFullYear() + 1); // 1 year demo
+          endDate.setDate(endDate.getDate() + 15); // 15 day demo
 
           const licenseData = {
               id: licenseRef.id,
@@ -392,3 +392,4 @@ export default function RegisterPage() {
     
 
     
+
