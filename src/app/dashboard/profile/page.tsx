@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useUser, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError, useFirebase } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { getAuth, updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -15,9 +15,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, Loader2, Upload } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'El nombre es requerido.'),
@@ -30,17 +29,12 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function ProfilePage() {
   const { user, isUserLoading } = useUser();
-  const { firestore, storage } = useFirebase();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isUploading, setIsUploading] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
   
-  const [avatarKey, setAvatarKey] = React.useState(Date.now());
-
-
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
@@ -101,8 +95,6 @@ export default function ProfilePage() {
       }
       
       toast({ title: '¡Éxito!', description: 'Tu perfil ha sido actualizado.' });
-      setAvatarKey(Date.now());
-
     } catch (error) {
        errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: `users/${currentUser.uid}`,
@@ -111,54 +103,6 @@ export default function ProfilePage() {
         }));
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleAvatarClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("[DEBUG] handleFileChange triggered");
-    const file = event.target.files?.[0];
-    const currentUser = user;
-    
-    if (!file || !currentUser || !storage) return;
-    
-    console.log("[DEBUG] File selected:", { name: file.name, size: file.size, type: file.type });
-    
-    if (file.size > 2 * 1024 * 1024) { // 2MB limit
-        toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 2MB.' });
-        return;
-    }
-
-    setIsUploading(true);
-    toast({ title: 'Subiendo imagen...' });
-
-    const filePath = `avatars/${currentUser.uid}/${file.name}`;
-    const fileRef = storageRef(storage, filePath);
-    console.log("[DEBUG] Uploading to storageRef path:", fileRef.fullPath);
-
-    try {
-      await uploadBytes(fileRef, file);
-      const publicUrl = await getDownloadURL(fileRef);
-      
-      console.log("[DEBUG] Upload successful. Public URL:", publicUrl);
-
-      const auth = getAuth();
-      const userDocRef = doc(firestore, 'users', currentUser.uid);
-
-      await updateProfile(currentUser, { photoURL: publicUrl });
-      await updateDoc(userDocRef, { photoURL: publicUrl });
-
-      toast({ title: '¡Foto actualizada!', description: 'Tu nueva foto de perfil está lista.' });
-      setAvatarKey(Date.now());
-      
-    } catch (error: any) {
-        console.error("[DEBUG] Full error object during upload:", error);
-        toast({ variant: 'destructive', title: 'Error al subir', description: error.message || 'No se pudo subir la imagen. Revisa la consola para más detalles.' });
-    } finally {
-        setIsUploading(false);
     }
   };
 
@@ -190,34 +134,19 @@ export default function ProfilePage() {
             <Card>
               <CardHeader>
                 <CardTitle>Información Personal</CardTitle>
-                <CardDescription>Actualiza tus datos personales y foto de perfil.</CardDescription>
+                <CardDescription>Actualiza tus datos personales.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-6">
-                  <div className="relative">
-                    <Avatar className="h-24 w-24 cursor-pointer" onClick={handleAvatarClick}>
-                      <AvatarImage key={avatarKey} src={user?.photoURL || undefined} alt={user?.displayName || "Usuario"} />
+                  <Avatar className="h-24 w-24">
+                      <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "Usuario"} />
                       <AvatarFallback className="text-3xl">
                         {getInitials(user?.displayName || "")}
                       </AvatarFallback>
-                    </Avatar>
-                    <div className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
-                    </div>
-                     <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        className="hidden"
-                        accept="image/png, image/jpeg"
-                    />
-                  </div>
+                  </Avatar>
                   <div className="space-y-1">
                       <h3 className="font-bold text-lg">{user?.displayName}</h3>
                       <p className="text-sm text-muted-foreground">{user?.email}</p>
-                      <Button type="button" variant="outline" size="sm" onClick={handleAvatarClick} disabled={isUploading}>
-                        Cambiar foto
-                      </Button>
                   </div>
                 </div>
 
