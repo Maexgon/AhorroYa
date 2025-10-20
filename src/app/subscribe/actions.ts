@@ -2,7 +2,7 @@
 'use server';
 
 import { initializeAdminApp } from '@/firebase/admin-config';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { defaultCategories } from '@/lib/default-categories';
 
@@ -37,27 +37,25 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
         // --- Step 1: Find or Create the Tenant, User, and Membership ---
         const tenantsRef = adminFirestore.collection("tenants");
-        const q = tenantsRef.where("ownerUid", "==", user.uid);
-        const querySnapshot = await q.get();
+        const userRef = adminFirestore.collection("users").doc(user.uid);
+        const userSnap = await userRef.get();
+        const existingTenantIds = userSnap.data()?.tenantIds || [];
 
         let tenantId: string;
         let isNewTenant = false;
-
-        if (querySnapshot.empty) {
+        
+        if (existingTenantIds.length === 0) {
             isNewTenant = true;
+            
+            // Create Tenant
             const tenantRef = tenantsRef.doc();
             tenantId = tenantRef.id;
 
             const initialBatch = adminFirestore.batch();
+            
+            // Associate tenant with user
+            initialBatch.update(userRef, { tenantIds: FieldValue.arrayUnion(tenantId) });
 
-            // Create User document in Firestore
-            const userRef = adminFirestore.collection("users").doc(user.uid);
-            initialBatch.set(userRef, {
-                uid: user.uid, displayName: user.displayName, email: user.email, photoURL: user.photoURL,
-                tenantIds: [tenantId], isSuperadmin: false,
-            });
-
-            // Create Tenant
             initialBatch.set(tenantRef, {
                 id: tenantId, type: planId.toUpperCase(), name: `Espacio de ${user.displayName.split(' ')[0]}`,
                 baseCurrency: "ARS", createdAt: new Date().toISOString(), ownerUid: user.uid,
@@ -73,12 +71,11 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             });
 
             await initialBatch.commit();
-
         } else {
-            const tenantDoc = querySnapshot.docs[0];
-            tenantId = tenantDoc.id;
-            if (tenantDoc.data().status === 'active') {
-                return { success: false, error: 'Ya tienes un plan activo.' };
+            tenantId = existingTenantIds[0];
+            const tenantSnap = await tenantsRef.doc(tenantId).get();
+            if (tenantSnap.data()?.status === 'active') {
+                 return { success: false, error: 'Ya tienes un plan activo.' };
             }
         }
         

@@ -13,10 +13,15 @@ import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
+import { useFirestore } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+
 
 export default function RegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const firestore = useFirestore();
+
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -51,7 +56,7 @@ export default function RegisterPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) {
+    if (!isFormValid || !firestore) {
       toast({
         variant: "destructive",
         title: "Error de validación",
@@ -69,6 +74,17 @@ export default function RegisterPage() {
       const displayName = `${firstName} ${lastName}`;
 
       await updateProfile(user, { displayName });
+      
+      // Create user document in Firestore
+      const userRef = doc(firestore, 'users', user.uid);
+      await setDoc(userRef, {
+          uid: user.uid,
+          displayName: displayName,
+          email: user.email,
+          photoURL: user.photoURL || null,
+          tenantIds: [],
+          isSuperadmin: false,
+      });
       
       toast({
         title: "¡Cuenta Creada!",
