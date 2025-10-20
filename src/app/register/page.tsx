@@ -13,11 +13,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
-import { getFirestore, writeBatch, doc } from "firebase/firestore";
 import { FirebaseError } from 'firebase/app';
-import { errorEmitter, FirestorePermissionError } from '@/firebase';
-import { defaultCategories } from '@/lib/default-categories';
-import { createDemoLicenseAction } from './actions';
+import { useFirestore } from '@/firebase';
 
 
 export default function RegisterPage() {
@@ -39,9 +36,10 @@ export default function RegisterPage() {
   const [captcha, setCaptcha] = React.useState('');
 
   const [isLoading, setIsLoading] = React.useState(false);
+  
+  const firestore = useFirestore(); // Get firestore instance for use in handleRegister
 
   React.useEffect(() => {
-    // These will only run on the client, after initial hydration
     setNum1(Math.floor(Math.random() * 10) + 1);
     setNum2(Math.floor(Math.random() * 10) + 1);
   }, []);
@@ -72,124 +70,25 @@ export default function RegisterPage() {
 
     try {
       const auth = getAuth();
-      const firestore = getFirestore();
-      
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       const displayName = `${firstName} ${lastName}`;
 
       await updateProfile(user, { displayName });
-      await sendEmailVerification(user);
+      // await sendEmailVerification(user); // Temporarily disabled for smoother testing flow
 
-      const batch = writeBatch(firestore);
-      let writes: any[] = [];
-
-      const userRef = doc(firestore, "users", user.uid);
-      const tenantRef = doc(firestore, "tenants", crypto.randomUUID());
-      const membershipRef = doc(firestore, "memberships", `${tenantRef.id}_${user.uid}`);
-      
-      const userData = {
-        uid: user.uid,
-        displayName: displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-        tenantIds: [tenantRef.id],
-        isSuperadmin: false,
-      };
-      batch.set(userRef, userData);
-      writes.push({path: userRef.path, data: userData});
-      
-      const tenantNameMapping = {
-        personal: `Espacio de ${firstName}`,
-        familiar: `Familia ${lastName}`,
-        empresa: `Empresa de ${firstName}`,
-      }
-
-      const tenantData = {
-        id: tenantRef.id,
-        type: accountType.toUpperCase(),
-        name: tenantNameMapping[accountType as keyof typeof tenantNameMapping] || `Espacio de ${firstName}`,
-        baseCurrency: "ARS",
-        createdAt: new Date().toISOString(),
-        ownerUid: user.uid,
-        status: "pending",
-        settings: JSON.stringify({ quietHours: true, rollover: false }),
-      };
-      batch.set(tenantRef, tenantData);
-      writes.push({path: tenantRef.path, data: tenantData});
-
-      const membershipData = {
-        tenantId: tenantRef.id,
-        uid: user.uid,
-        displayName: displayName,
-        email: user.email,
-        role: 'owner',
-        status: 'active',
-        joinedAt: new Date().toISOString()
-      };
-      batch.set(membershipRef, membershipData);
-      writes.push({path: membershipRef.path, data: membershipData});
-      
-      // Add default categories and subcategories
-      defaultCategories.forEach((category, catIndex) => {
-        const categoryId = crypto.randomUUID();
-        const categoryRef = doc(firestore, "categories", categoryId);
-        const categoryData = {
-            id: categoryId,
-            tenantId: tenantRef.id,
-            name: category.name,
-            color: category.color,
-            order: catIndex
-        };
-        batch.set(categoryRef, categoryData);
-        writes.push({path: categoryRef.path, data: categoryData});
-
-        category.subcategories.forEach((subcategoryName, subCatIndex) => {
-            const subcategoryId = crypto.randomUUID();
-            const subcategoryRef = doc(firestore, "subcategories", subcategoryId);
-            const subcategoryData = {
-                id: subcategoryId,
-                tenantId: tenantRef.id,
-                categoryId: categoryId,
-                name: subcategoryName,
-                order: subCatIndex
-            };
-            batch.set(subcategoryRef, subcategoryData);
-            writes.push({path: subcategoryRef.path, data: subcategoryData});
-        });
+      // After successful authentication, redirect to the subscription page
+      // The subscription page will handle the creation of tenants, licenses, etc.
+      toast({
+        title: "¡Cuenta Creada!",
+        description: "Ahora, por favor elige tu plan.",
       });
-      
-      await batch.commit();
-
-      // If account is personal, call server action to create DEMO license and activate tenant
-      if (accountType === 'personal') {
-          const licenseResult = await createDemoLicenseAction(tenantRef.id);
-          if (licenseResult.success) {
-            toast({
-                title: "¡Cuenta Creada!",
-                description: "Tu plan DEMO está activo. Bienvenido a Ahorro Ya.",
-            });
-            router.push('/dashboard');
-          } else {
-             toast({
-                variant: 'destructive',
-                title: "Error al activar DEMO",
-                description: licenseResult.error || "No se pudo crear la licencia de demostración. Por favor contacta a soporte.",
-            });
-          }
-      } else {
-        toast({
-          title: "¡Cuenta creada!",
-          description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
-        });
-        router.push('/subscribe');
-      }
+      router.push('/subscribe');
 
     } catch (error) {
       let title = "Error al crear la cuenta";
       let description = "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.";
       if (error instanceof FirebaseError) {
-        // Handle Firebase Auth specific errors
         switch (error.code) {
           case 'auth/email-already-in-use':
             title = "Email en uso";
@@ -204,19 +103,7 @@ export default function RegisterPage() {
             description = "La contraseña debe tener al menos 6 caracteres.";
             break;
           default:
-            // Handle Firestore permission errors from batch commit
-            if (error.code === 'permission-denied') {
-                title = 'Error de Permisos';
-                description = 'No tienes permisos para realizar esta acción. Verifica las reglas de seguridad.';
-                // We can still emit our custom error for detailed logging if we want
-                errorEmitter.emit('permission-error', new FirestorePermissionError({
-                    path: 'batch-write',
-                    operation: 'write',
-                    requestResourceData: 'User Registration Batch',
-                }));
-            } else {
-                description = error.message;
-            }
+            description = error.message;
             break;
         }
       }
