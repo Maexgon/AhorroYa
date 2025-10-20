@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import DashboardPreview from '@/components/landing/dashboard-preview';
 import { ArrowRight } from 'lucide-react';
-import Footer from '@/components/shared/footer';
 
 export default function HeroSection() {
   return (
