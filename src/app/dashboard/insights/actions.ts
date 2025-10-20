@@ -70,5 +70,3 @@ export async function generateInsightsAction(
         return { success: false, error: e.message || 'Ocurrió un error desconocido al generar el análisis.' };
     }
 }
-
-    
