@@ -14,7 +14,7 @@ import { generateInsightsAction } from './actions';
 import { type GenerateFinancialInsightsOutput } from '@/ai/flows/generate-financial-insights';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import html2pdf from 'html2pdf.js';
+
 
 function InsightIcon({ emoji }: { emoji?: string }) {
     switch (emoji) {
@@ -52,7 +52,6 @@ export default function InsightsPage() {
         }
     }, [userData]);
     
-    // Get current month date range
     const fromDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const toDate = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
 
@@ -149,7 +148,7 @@ export default function InsightsPage() {
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
 
-    const handleExportToPdf = () => {
+    const handleExportToPdf = async () => {
         if (!reportRef.current) {
             toast({
                 variant: 'destructive',
@@ -158,6 +157,8 @@ export default function InsightsPage() {
             });
             return;
         }
+        
+        const html2pdf = (await import('html2pdf.js')).default;
 
         setIsExporting(true);
         toast({ title: 'Exportando...', description: 'Generando el documento PDF.' });
@@ -174,7 +175,7 @@ export default function InsightsPage() {
         html2pdf().from(element).set(opt).save().then(() => {
             setIsExporting(false);
             toast({ title: '¡Éxito!', description: 'El informe se ha descargado como PDF.' });
-        }).catch(err => {
+        }).catch((err: any) => {
             setIsExporting(false);
             toast({
                 variant: 'destructive',
