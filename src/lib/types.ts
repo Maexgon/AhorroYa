@@ -165,3 +165,14 @@ export type AuditLog = {
   userId: string; // Reference to User. (Relationship: User 1:N AuditLog)
   ts: string; // Timestamp of when the audit log entry was created.
 };
+export type Report = {
+  id: string; // Unique identifier for the report.
+  tenantId: string; // Reference to Tenant.
+  userId: string; // Reference to User who generated the report.
+  createdAt: string; // Timestamp of when the report was created.
+  reportMonth: string; // The month the report covers (e.g., 'Octubre').
+  reportYear: string; // The year the report covers (e.g., '2024').
+  data: string; // The full JSON payload of the generated report.
+};
+
+    

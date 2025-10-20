@@ -139,10 +139,17 @@ export default function InsightsPage() {
                     userName: user.displayName || 'Usuario',
                     reportMonth: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1),
                     reportYear: fromDate.getFullYear().toString(),
-                });
+                }, tenantId, user.uid);
 
                 if (result.success && result.data) {
                     setInsightsData(result.data);
+                    if (result.error) { // Partial success, show warning for db save error
+                         toast({
+                            variant: "destructive",
+                            title: 'Advertencia',
+                            description: result.error,
+                        });
+                    }
                 } else {
                     setError(result.error || 'No se pudieron generar los insights.');
                 }
@@ -320,3 +327,5 @@ export default function InsightsPage() {
         </div>
     );
 }
+
+    
