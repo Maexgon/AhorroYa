@@ -4,14 +4,15 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ChevronsRight, Wallet, PiggyBank } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import type { Budget, Category, Expense, User as UserType } from '@/lib/types';
+import type { Budget, Category, Expense, User as UserType, Income } from '@/lib/types';
 import { generateInsightsAction } from './actions';
 import { type GenerateFinancialInsightsOutput } from '@/ai/flows/generate-financial-insights';
+import { Separator } from '@/components/ui/separator';
 
 function InsightIcon({ emoji }: { emoji?: string }) {
     switch (emoji) {
@@ -19,7 +20,7 @@ function InsightIcon({ emoji }: { emoji?: string }) {
         case '📈': return <TrendingUp className="h-8 w-8 text-green-500" />;
         case '💸': return <TrendingDown className="h-8 w-8 text-red-500" />;
         case '⚠️': return <AlertTriangle className="h-8 w-8 text-orange-500" />;
-        default: return <Sparkles className="h-8 w-8 text-accent" />;
+        default: return <Sparkles className="h-8 w-8 text-primary" />;
     }
 }
 
@@ -44,17 +45,53 @@ export default function InsightsPage() {
             setTenantId(userData.tenantIds[0]);
         }
     }, [userData]);
+    
+    // Get current month date range
+    const fromDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const toDate = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
 
     const expensesQuery = useMemoFirebase(() => {
         if (!tenantId || !firestore) return null;
-        return query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false));
+        return query(collection(firestore, 'expenses'), 
+            where('tenantId', '==', tenantId), 
+            where('deleted', '==', false)
+        );
     }, [tenantId, firestore]);
-    const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
+    const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<Expense>(allExpenses);
+    
+    const monthlyExpenses = React.useMemo(() => {
+        if (!allExpenses) return [];
+        return allExpenses.filter(e => {
+            const expenseDate = new Date(e.date);
+            return expenseDate >= fromDate && expenseDate <= toDate;
+        })
+    }, [allExpenses, fromDate, toDate]);
+    
+    const pendingInstallments = React.useMemo(() => {
+        if(!allExpenses) return [];
+        return allExpenses.filter(e => e.paymentMethod === 'credit' && new Date(e.date) > toDate);
+    }, [allExpenses, toDate]);
+
+
+    const incomesQuery = useMemoFirebase(() => {
+        if (!tenantId || !firestore) return null;
+        return query(collection(firestore, 'incomes'), 
+            where('tenantId', '==', tenantId), 
+            where('deleted', '==', false),
+            where('date', '>=', fromDate.toISOString()),
+            where('date', '<=', toDate.toISOString())
+        );
+    }, [tenantId, firestore, fromDate, toDate]);
+    const { data: monthlyIncomes, isLoading: isLoadingIncomes } = useCollection<Income>(incomesQuery);
 
     const budgetsQuery = useMemoFirebase(() => {
         if (!tenantId || !firestore) return null;
-        return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-    }, [tenantId, firestore]);
+        return query(collection(firestore, 'budgets'), 
+            where('tenantId', '==', tenantId),
+            where('month', '==', fromDate.getMonth() + 1),
+            where('year', '==', fromDate.getFullYear())
+        );
+    }, [tenantId, firestore, fromDate]);
     const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
@@ -65,8 +102,8 @@ export default function InsightsPage() {
     
     // --- AI Insights Generation ---
     React.useEffect(() => {
-        const areDataQueriesLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories;
-        if (areDataQueriesLoading || !expenses || !budgets || !categories) {
+        const areDataQueriesLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
+        if (areDataQueriesLoading || !monthlyExpenses || !budgets || !categories || !monthlyIncomes || !pendingInstallments) {
             return;
         }
 
@@ -75,7 +112,9 @@ export default function InsightsPage() {
             setError(null);
             
             const result = await generateInsightsAction({
-                expenses: JSON.stringify(expenses),
+                monthlyExpenses: JSON.stringify(monthlyExpenses),
+                monthlyIncomes: JSON.stringify(monthlyIncomes),
+                pendingInstallments: JSON.stringify(pendingInstallments),
                 budgets: JSON.stringify(budgets),
                 categories: JSON.stringify(categories.map(c => ({id: c.id, name: c.name}))),
                 baseCurrency: 'ARS',
@@ -91,7 +130,9 @@ export default function InsightsPage() {
 
         generateInsights();
 
-    }, [isAuthLoading, isUserDocLoading, isLoadingExpenses, isLoadingBudgets, isLoadingCategories, expenses, budgets, categories]);
+    }, [isAuthLoading, isUserDocLoading, isLoadingExpenses, isLoadingBudgets, isLoadingCategories, isLoadingIncomes, monthlyExpenses, budgets, categories, monthlyIncomes, pendingInstallments]);
+
+    const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
 
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">
@@ -107,7 +148,7 @@ export default function InsightsPage() {
             </header>
 
             <main className="flex-1 p-4 md:p-8">
-                 <div className="mx-auto max-w-3xl">
+                 <div className="mx-auto max-w-4xl">
                     {isLoading ? (
                         <Card className="flex flex-col items-center justify-center p-12">
                             <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -127,16 +168,17 @@ export default function InsightsPage() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Resumen General</CardTitle>
+                                    <CardDescription>Tu situación financiera del mes actual.</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <p className="text-muted-foreground">{insightsData.summary}</p>
+                                    <p className="text-muted-foreground">{insightsData.generalSummary}</p>
                                 </CardContent>
                             </Card>
                             
                             <div>
                                 <h2 className="text-2xl font-headline font-bold mb-4">Recomendaciones Clave</h2>
                                 <div className="space-y-6">
-                                    {insightsData.insights.map((insight, index) => (
+                                    {insightsData.keyRecommendations.map((insight, index) => (
                                         <Card key={index} className="flex flex-col md:flex-row items-start gap-6 p-6">
                                              <div className="bg-primary/10 p-3 rounded-lg">
                                                 <InsightIcon emoji={insight.emoji} />
@@ -152,6 +194,49 @@ export default function InsightsPage() {
                                     ))}
                                 </div>
                             </div>
+                            
+                            <Separator />
+                            
+                            <div>
+                                <h2 className="text-2xl font-headline font-bold mb-4">Ajustes de Presupuesto Sugeridos</h2>
+                                 <Card>
+                                     <CardContent className="pt-6 space-y-4">
+                                         {insightsData.budgetAdjustments.map((adj, index) => (
+                                            <div key={index} className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-secondary p-2 rounded-lg"><Wallet className="h-6 w-6 text-secondary-foreground" /></div>
+                                                    <div>
+                                                        <p className="font-semibold">{adj.categoryName}</p>
+                                                        <p className="text-xs text-muted-foreground">{adj.reasoning}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm font-mono">
+                                                    <span className="text-muted-foreground line-through">{formatCurrency(adj.currentAmount)}</span>
+                                                    <ChevronsRight className="h-4 w-4 text-muted-foreground" />
+                                                    <span className="font-bold text-primary">{formatCurrency(adj.suggestedAmount)}</span>
+                                                </div>
+                                            </div>
+                                         ))}
+                                     </CardContent>
+                                 </Card>
+                            </div>
+                            
+                             <div>
+                                <h2 className="text-2xl font-headline font-bold mb-4">Consejos de Ahorro</h2>
+                                 <Card>
+                                     <CardContent className="pt-6 space-y-4">
+                                        {insightsData.savingsTips.map((tip, index) => (
+                                            <div key={index} className="flex items-start gap-4">
+                                                <div className="bg-green-100 dark:bg-green-900/50 p-2 rounded-full mt-1">
+                                                    <PiggyBank className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                                </div>
+                                                <p className="flex-1 text-sm text-muted-foreground">{tip}</p>
+                                            </div>
+                                        ))}
+                                     </CardContent>
+                                 </Card>
+                            </div>
+
                         </div>
 
                     ) : null}

@@ -11,23 +11,34 @@ import {ai} from '@/ai/genkit';
 import {z} from 'zod';
 
 const GenerateFinancialInsightsInputSchema = z.object({
-  expenses: z.string().describe('A JSON string of the user\'s expenses for a given period.'),
-  budgets: z.string().describe('A JSON string of the user\'s budgets for the same period.'),
+  monthlyExpenses: z.string().describe("A JSON string of the user's expenses for the selected month."),
+  monthlyIncomes: z.string().describe("A JSON string of the user's incomes for the selected month."),
+  pendingInstallments: z.string().describe("A JSON string of future pending installment payments."),
+  budgets: z.string().describe("A JSON string of the user's budgets for the same period."),
   categories: z.string().describe('A JSON string of available categories.'),
   baseCurrency: z.string().describe('The base currency (e.g., ARS).'),
 });
 export type GenerateFinancialInsightsInput = z.infer<typeof GenerateFinancialInsightsInputSchema>;
 
-const InsightSchema = z.object({
-    title: z.string().describe('A short, catchy title for the insight.'),
-    description: z.string().describe('A detailed paragraph explaining the finding and its context.'),
+const RecommendationSchema = z.object({
+    title: z.string().describe('A short, catchy title for the recommendation.'),
+    description: z.string().describe('A detailed paragraph explaining the finding and its context (e.g., overspending in a category).'),
     suggestion: z.string().describe('A concrete, actionable suggestion for the user.'),
     emoji: z.string().optional().describe('An emoji that represents the insight (e.g., 💡, 💸, 📈).'),
 });
 
+const BudgetAdjustmentSchema = z.object({
+    categoryName: z.string().describe('The name of the category for the budget adjustment.'),
+    currentAmount: z.number().describe('The current budgeted amount for this category.'),
+    suggestedAmount: z.number().describe('The newly suggested budget amount for the next period.'),
+    reasoning: z.string().describe('A brief explanation for the suggested adjustment.'),
+});
+
 const GenerateFinancialInsightsOutputSchema = z.object({
-  summary: z.string().describe('A brief, one-paragraph summary of the user\'s overall financial health for the period.'),
-  insights: z.array(InsightSchema).describe('An array of specific, actionable insights.'),
+  generalSummary: z.string().describe("A brief, one-paragraph summary of the user's overall financial health for the period, in Spanish."),
+  keyRecommendations: z.array(RecommendationSchema).describe('An array of key recommendations, including savings opportunities and areas of overspending.'),
+  budgetAdjustments: z.array(BudgetAdjustmentSchema).describe('An array of suggested budget adjustments for the next period.'),
+  savingsTips: z.array(z.string()).describe('A list of general, actionable savings tips relevant to the user.'),
 });
 export type GenerateFinancialInsightsOutput = z.infer<typeof GenerateFinancialInsightsOutputSchema>;
 
@@ -42,25 +53,24 @@ const prompt = ai.definePrompt({
   name: 'generateFinancialInsightsPrompt',
   input: {schema: GenerateFinancialInsightsInputSchema},
   output: {schema: GenerateFinancialInsightsOutputSchema},
-  prompt: `You are an expert financial advisor for users in Argentina. Your tone is encouraging, clear, and professional.
-Analyze the user's financial data for the given period and provide a summary and a list of actionable insights.
+  prompt: `Actúas como un asesor financiero experto para usuarios en Argentina. Tu tono es encouraging, claro y profesional. Analiza los datos financieros del usuario para el período seleccionado y proporciona un informe estructurado en español.
 
-The base currency is {{{baseCurrency}}}. All monetary values are in this currency.
+La moneda base es {{{baseCurrency}}}. Todos los valores monetarios están en esta moneda.
 
-Here is the user's data:
-- Categories: {{{categories}}}
-- Budgets: {{{budgets}}}
-- Expenses: {{{expenses}}}
+Aquí están los datos del usuario:
+- Categorías y Subcategorías: {{{categories}}}
+- Presupuestos del mes: {{{budgets}}}
+- Ingresos del mes: {{{monthlyIncomes}}}
+- Gastos del mes: {{{monthlyExpenses}}}
+- Cuotas futuras pendientes: {{{pendingInstallments}}}
 
-Your task is to:
-1.  Write a concise, one-paragraph summary of the user's financial situation. Mention the total income vs. total expenses, and the main category of spending.
-2.  Generate 2-4 specific, actionable insights. For each insight:
-    - Provide a short, clear title.
-    - An emoji to visually represent the insight.
-    - A description explaining the 'what' and 'why' of the insight based on the data.
-    - A concrete suggestion on what the user can do. Be specific (e.g., "Consider reducing your 'Delivery' spending by $5,000" instead of "Spend less on food").
+Tu tarea es generar un informe con las siguientes secciones:
+1.  **generalSummary**: Escribe un resumen conciso de un párrafo sobre la situación financiera general del usuario. Menciona el total de ingresos vs. el total de gastos, el ahorro neto (o déficit) y la principal categoría de gasto.
+2.  **keyRecommendations**: Genera 2-4 recomendaciones clave. Identifica los puntos de ahorro más importantes, los excesos de gastos significativos en comparación con los presupuestos y oportunidades de mejora. Para cada recomendación, proporciona un título, una descripción, una sugerencia concreta y un emoji.
+3.  **budgetAdjustments**: Sugiere 2-3 ajustes de presupuesto para el próximo período basados en los gastos actuales. Para cada ajuste, especifica el nombre de la categoría, el monto actual, el monto sugerido y una breve justificación.
+4.  **savingsTips**: Proporciona una lista de 3 consejos de ahorro generales y accionables que sean relevantes para el contexto del usuario (por ejemplo, si gasta mucho en delivery, un consejo relacionado).
 
-Focus on identifying patterns, areas of overspending compared to budgets, and opportunities for reallocation or savings. Make sure your suggestions are realistic and helpful.
+Sé específico y realista en tus sugerencias. Por ejemplo, en lugar de "gasta menos en comida", sugiere "considera reducir tus gastos en 'Delivery' en $5,000, ya que representa el 60% de tus gastos en 'Comestibles'".
 `,
 });
 
@@ -72,7 +82,9 @@ const generateFinancialInsightsFlow = ai.defineFlow(
   },
   async input => {
     try {
-      JSON.parse(input.expenses);
+      JSON.parse(input.monthlyExpenses);
+      JSON.parse(input.monthlyIncomes);
+      JSON.parse(input.pendingInstallments);
       JSON.parse(input.budgets);
       JSON.parse(input.categories);
     } catch (e: any) {
