@@ -195,6 +195,7 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
     cumulativeBalance: true,
     expenseAnalysis: true,
     budgets: true,
+    pendingInstallments: true,
   });
 
   const toggleChartVisibility = (chartKey: keyof typeof chartVisibility) => {
@@ -590,6 +591,7 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
                     <DropdownMenuContent>
                         <DropdownMenuLabel>Gráficos Visibles</DropdownMenuLabel>
                         <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem checked={chartVisibility.pendingInstallments} onCheckedChange={() => toggleChartVisibility('pendingInstallments')}>Cuotas Pendientes</DropdownMenuCheckboxItem>
                         <DropdownMenuCheckboxItem checked={chartVisibility.monthlyFlow} onCheckedChange={() => toggleChartVisibility('monthlyFlow')}>Flujo de Caja Mensual</DropdownMenuCheckboxItem>
                         <DropdownMenuCheckboxItem checked={chartVisibility.cumulativeBalance} onCheckedChange={() => toggleChartVisibility('cumulativeBalance')}>Balance Acumulado</DropdownMenuCheckboxItem>
                         <DropdownMenuCheckboxItem checked={chartVisibility.expenseAnalysis} onCheckedChange={() => toggleChartVisibility('expenseAnalysis')}>Análisis de Gastos</DropdownMenuCheckboxItem>
@@ -600,46 +602,59 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
             </div>
         </div>
         
-        <Card>
-            <CardHeader>
-                <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
-                <CardDescription>
-                    Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={processedData.installmentsChartData.monthlyTotals}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
-                        <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                        <Tooltip
-                            content={({ active, payload, label }) => {
-                                if (active && payload && payload.length) {
-                                    return (
-                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                            <p className="font-bold">{label}</p>
-                                            <p style={{ color: 'hsl(var(--chart-2))' }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            }}
-                        />
-                        <Bar dataKey="total" name="Total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]}>
-                            <LabelList
-                                dataKey="total"
-                                position="top"
-                                offset={8}
-                                className="fill-foreground"
-                                fontSize={12}
-                                formatter={(value: number) => processedData.formatCurrency(value)}
+        {chartVisibility.pendingInstallments && (
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
+                        <CardDescription>
+                            Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
+                        </CardDescription>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleExport(processedData.installmentsChartData.monthlyTotals, "cuotas_pendientes")}>Exportar a Excel</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleChartVisibility('pendingInstallments')}>Cerrar</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={processedData.installmentsChartData.monthlyTotals}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <Tooltip
+                                content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                        return (
+                                            <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                <p className="font-bold">{label}</p>
+                                                <p style={{ color: 'hsl(var(--chart-2))' }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
                             />
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-            </CardContent>
-        </Card>
+                            <Bar dataKey="total" name="Total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]}>
+                                <LabelList
+                                    dataKey="total"
+                                    position="top"
+                                    offset={8}
+                                    className="fill-foreground"
+                                    fontSize={12}
+                                    formatter={(value: number) => processedData.formatCurrency(value)}
+                                />
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {chartVisibility.monthlyFlow && (
