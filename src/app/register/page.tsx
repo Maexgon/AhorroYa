@@ -17,6 +17,7 @@ import { getFirestore, writeBatch, doc } from "firebase/firestore";
 import { FirebaseError } from 'firebase/app';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
 import { defaultCategories } from '@/lib/default-categories';
+import { createDemoLicenseAction } from './actions';
 
 
 export default function RegisterPage() {
@@ -158,62 +159,37 @@ export default function RegisterPage() {
         });
       });
       
-      // If account is personal, create a DEMO license and activate tenant
+      await batch.commit();
+
+      // If account is personal, call server action to create DEMO license and activate tenant
       if (accountType === 'personal') {
-          const licenseRef = doc(firestore, "licenses", crypto.randomUUID());
-          const startDate = new Date();
-          const endDate = new Date();
-          endDate.setDate(endDate.getDate() + 15); // 15 day demo
-
-          const licenseData = {
-              id: licenseRef.id,
-              tenantId: tenantRef.id,
-              plan: 'demo',
-              status: 'active',
-              startDate: startDate.toISOString(),
-              endDate: endDate.toISOString(),
-              maxUsers: 1,
-          };
-          batch.set(licenseRef, licenseData);
-          writes.push({path: licenseRef.path, data: licenseData});
-
-          batch.update(tenantRef, { status: "active" });
-          writes.push({path: tenantRef.path, data: { status: "active" }});
-      }
-
-
-      await batch.commit()
-        .then(() => {
-          if (accountType === 'personal') {
-             toast({
+          const licenseResult = await createDemoLicenseAction(tenantRef.id);
+          if (licenseResult.success) {
+            toast({
                 title: "¡Cuenta Creada!",
                 description: "Tu plan DEMO está activo. Bienvenido a Ahorro Ya.",
             });
             router.push('/dashboard');
           } else {
-            toast({
-              title: "¡Cuenta creada!",
-              description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
+             toast({
+                variant: 'destructive',
+                title: "Error al activar DEMO",
+                description: licenseResult.error || "No se pudo crear la licencia de demostración. Por favor contacta a soporte.",
             });
-            router.push('/subscribe');
           }
-        })
-        .catch(error => {
-            errorEmitter.emit(
-              'permission-error',
-              new FirestorePermissionError({
-                path: 'batch-write',
-                operation: 'write', 
-                requestResourceData: writes,
-              })
-            );
+      } else {
+        toast({
+          title: "¡Cuenta creada!",
+          description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
         });
-
+        router.push('/subscribe');
+      }
 
     } catch (error) {
       let title = "Error al crear la cuenta";
       let description = "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.";
       if (error instanceof FirebaseError) {
+        // Handle Firebase Auth specific errors
         switch (error.code) {
           case 'auth/email-already-in-use':
             title = "Email en uso";
@@ -228,7 +204,19 @@ export default function RegisterPage() {
             description = "La contraseña debe tener al menos 6 caracteres.";
             break;
           default:
-            description = error.message;
+            // Handle Firestore permission errors from batch commit
+            if (error.code === 'permission-denied') {
+                title = 'Error de Permisos';
+                description = 'No tienes permisos para realizar esta acción. Verifica las reglas de seguridad.';
+                // We can still emit our custom error for detailed logging if we want
+                errorEmitter.emit('permission-error', new FirestorePermissionError({
+                    path: 'batch-write',
+                    operation: 'write',
+                    requestResourceData: 'User Registration Batch',
+                }));
+            } else {
+                description = error.message;
+            }
             break;
         }
       }
@@ -381,16 +369,4 @@ export default function RegisterPage() {
       </Card>
     </div>
   );
-
-    
-
-
-
-    
-
-
-    
-
-    
-
-
+}
