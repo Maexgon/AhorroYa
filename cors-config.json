@@ -6,7 +6,7 @@
     "responseHeader": [
       "Content-Type",
       "Access-Control-Allow-Origin",
-      "X-Goog-Upload-Protocol"
+      "x-goog-resumable"
     ],
     "maxAgeSeconds": 3600
   }
