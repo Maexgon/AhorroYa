@@ -119,10 +119,17 @@ export default function ProfilePage() {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("[DEBUG] handleFileChange triggered");
     const file = event.target.files?.[0];
     const auth = getAuth();
     const currentUser = auth.currentUser;
-    if (!file || !currentUser) return;
+    
+    if (!file || !currentUser) {
+        console.log("[DEBUG] No file selected or user not logged in.");
+        return;
+    }
+    console.log("[DEBUG] File selected:", { name: file.name, size: file.size, type: file.type });
+
 
     if (file.size > 2 * 1024 * 1024) { // 2MB limit
         toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 2MB.' });
@@ -135,9 +142,12 @@ export default function ProfilePage() {
     try {
         const storage = getStorage();
         const storageRef = ref(storage, `avatars/${currentUser.uid}/${file.name}`);
+        console.log("[DEBUG] Uploading to storageRef path:", storageRef.fullPath);
 
         const snapshot = await uploadBytes(storageRef, file);
+        console.log("[DEBUG] Upload successful, snapshot:", snapshot);
         const downloadURL = await getDownloadURL(snapshot.ref);
+        console.log("[DEBUG] Got download URL:", downloadURL);
 
         // Update Auth and Firestore with the new URL
         await updateProfile(currentUser, { photoURL: downloadURL });
@@ -146,8 +156,8 @@ export default function ProfilePage() {
 
         toast({ title: '¡Foto actualizada!', description: 'Tu nueva foto de perfil está lista.' });
     } catch (error) {
-         toast({ variant: 'destructive', title: 'Error al subir', description: 'No se pudo subir la imagen. Inténtalo de nuevo.' });
-         console.error("Error uploading avatar:", error);
+         console.error("[DEBUG] Full error object during upload:", error);
+         toast({ variant: 'destructive', title: 'Error al subir', description: 'No se pudo subir la imagen. Revisa la consola para más detalles.' });
     } finally {
         setIsUploading(false);
     }
