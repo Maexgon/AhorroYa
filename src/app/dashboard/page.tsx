@@ -468,7 +468,8 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
+                  <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
+                     <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} />
                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
                         <LabelList
                             dataKey="total"
