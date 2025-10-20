@@ -12,12 +12,12 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View, Banknote, GripVertical, User as UserIcon, LogOut } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
@@ -183,7 +183,7 @@ const CurrencyRates = () => {
 };
 
 
-function OwnerDashboard({ tenantId }: { tenantId: string }) {
+function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, licenseStatus: 'active' | 'grace_period' | 'expired' | 'loading' }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -215,9 +215,6 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
   const tenantRef = useMemoFirebase(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
-  const licenseQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
-  const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
-  
   const categoriesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
   
@@ -230,7 +227,7 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
   const budgetsQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
+  const isLoading = isLoadingTenant || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
   
  const processedData = useMemo(() => {
     if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user) {
@@ -744,47 +741,34 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
   }
 
   const showSeedButton = !isLoadingCategories && (!categories || categories.length === 0) && !!activeTenant;
-  const activeLicense = licenses?.[0];
+  
+  if (licenseStatus !== 'active') {
+    return (
+        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+            <Card className="border-destructive">
+                <CardHeader className="text-center">
+                    <div className="mx-auto bg-destructive/10 p-3 rounded-full w-fit">
+                        <ShieldAlert className="h-10 w-10 text-destructive" />
+                    </div>
+                    <CardTitle className="text-destructive mt-4">Tu Licencia ha Expirado</CardTitle>
+                    <CardDescription>
+                        El acceso completo a tu dashboard está restringido. Por favor, renueva tu licencia para continuar.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter className="flex justify-center">
+                    <Button asChild>
+                        <Link href="/dashboard/settings">
+                            Administrar Licencia
+                        </Link>
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
+    )
+  }
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-        <div className="bg-card shadow rounded-lg p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <AhorroYaLogo className="h-10 w-10 text-primary" />
-                <div>
-                    <h2 className="text-lg font-bold text-foreground">
-                        {activeLicense ? `Licencia ${activeLicense.plan.charAt(0).toUpperCase() + activeLicense.plan.slice(1)} - Hasta ${activeLicense.maxUsers} usuarios.` : 'No se pudo cargar la licencia'}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                        Vencimiento: {activeLicense ? format(new Date(activeLicense.endDate), 'P', { locale: es }) : 'N/A'}
-                    </p>
-                </div>
-            </div>
-            <div className="flex items-center gap-4">
-                {activeLicense && (
-                  <Badge variant={activeLicense?.status === 'active' ? 'default' : 'destructive'} className={activeLicense?.status === 'active' ? 'bg-green-500 hover:bg-green-600' : ''}>
-                      {activeLicense?.status === 'active' ? 'Activa' : 'Inactiva'}
-                  </Badge>
-                )}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-5 w-5" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        {processedData.isOwner && (
-                            <DropdownMenuItem asChild>
-                                <Link href="/dashboard/settings">
-                                    <FileText className="mr-2 h-4 w-4" />Administrar
-                                </Link>
-                            </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><XCircle className="mr-2 h-4 w-4" />Cancelar Licencia</DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-        </div>
         
         <CurrencyRates />
 
@@ -990,7 +974,7 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
   );
 }
 
-function MemberDashboard({ tenantId }: { tenantId: string }) {
+function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licenseStatus: 'active' | 'grace_period' | 'expired' | 'loading' }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -1056,6 +1040,25 @@ function MemberDashboard({ tenantId }: { tenantId: string }) {
 
   const isLoading = isLoadingExpenses || isLoadingCategories;
 
+  if (licenseStatus !== 'active') {
+    return (
+        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+            <Card className="border-destructive">
+                <CardHeader className="text-center">
+                    <div className="mx-auto bg-destructive/10 p-3 rounded-full w-fit">
+                        <ShieldAlert className="h-10 w-10 text-destructive" />
+                    </div>
+                    <CardTitle className="text-destructive mt-4">La Licencia del Grupo ha Expirado</CardTitle>
+                    <CardDescription>
+                       El acceso está restringido. Por favor, contacta al propietario de la cuenta para que renueve la licencia.
+                    </CardDescription>
+                </CardHeader>
+            </Card>
+        </div>
+    )
+  }
+
+
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
       <Card>
@@ -1119,6 +1122,8 @@ function MemberDashboard({ tenantId }: { tenantId: string }) {
   )
 }
 
+type LicenseStatus = 'active' | 'grace_period' | 'expired' | 'loading';
+
 export default function DashboardPageContainer() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
@@ -1127,36 +1132,81 @@ export default function DashboardPageContainer() {
 
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'owner' | 'member' | null>(null);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
   const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Get user's memberships
+  // Get user's membership to find tenantId and role
   const membershipsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
   }, [user, firestore]);
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
+  const derivedTenantId = memberships?.[0]?.tenantId;
+  const derivedUserRole = memberships?.[0]?.role as 'owner' | 'member';
+  
+  // Get license once we have a tenantId
+  const licenseQuery = useMemoFirebase(() => {
+    if (!derivedTenantId || !firestore) return null;
+    return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
+  }, [derivedTenantId, firestore]);
+  const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
+
+
   useEffect(() => {
-    if (isUserLoading || isLoadingMemberships) {
+    const isDataLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses;
+    
+    if (isDataLoading) {
       setIsLoading(true);
       return;
     }
-
+    
     if (!user) {
       router.push('/login');
       return;
     }
     
     if (memberships && memberships.length > 0) {
-      const firstMembership = memberships[0];
-      setTenantId(firstMembership.tenantId);
-      setUserRole(firstMembership.role as 'owner' | 'member');
+      setTenantId(derivedTenantId);
+      setUserRole(derivedUserRole);
+
+      if (licenses && licenses.length > 0) {
+        const license = licenses[0];
+        const endDate = new Date(license.endDate);
+        const now = new Date();
+        const daysDiff = differenceInDays(endDate, now);
+        
+        if (daysDiff >= 0) {
+            setLicenseStatus('active');
+        } else if (daysDiff < 0 && daysDiff >= -15) {
+            setLicenseStatus('grace_period');
+            toast({
+                variant: 'destructive',
+                title: 'Tu licencia ha expirado',
+                description: `Tienes ${15 + daysDiff} días para renovarla antes de que tus datos sean eliminados.`,
+                duration: Infinity,
+            });
+        } else {
+            setLicenseStatus('expired');
+            toast({
+                variant: 'destructive',
+                title: 'Licencia Expirada Definitivamente',
+                description: 'El acceso a tu cuenta está restringido. Renueva para continuar.',
+                duration: Infinity,
+            });
+        }
+      } else {
+          // No license found, treat as expired
+          setLicenseStatus('expired');
+      }
+
       setIsLoading(false);
+
     } else if (!isLoadingMemberships) {
-      // User is authenticated but has no memberships, maybe they need to subscribe
+      // User is authenticated but has no memberships
       router.push('/subscribe');
     }
-  }, [user, isUserLoading, memberships, isLoadingMemberships, router]);
+  }, [user, isUserLoading, memberships, isLoadingMemberships, licenses, isLoadingLicenses, router, derivedTenantId, derivedUserRole, toast]);
 
 
   const getInitials = (name: string = "") => {
@@ -1194,7 +1244,6 @@ export default function DashboardPageContainer() {
   }
 
   if (!user || !tenantId || !userRole) {
-    // This state should be brief as the useEffect will redirect.
     return (
          <div className="flex h-screen items-center justify-center">
             <AhorroYaLogo className="h-12 w-12 animate-spin text-primary" />
@@ -1211,6 +1260,11 @@ export default function DashboardPageContainer() {
             <span className="font-bold font-headline text-foreground">Ahorro Ya</span>
           </div>
           <div className="flex flex-1 items-center justify-end space-x-4">
+             {licenses && licenses.length > 0 && userRole === 'owner' && (
+                <Badge variant={licenseStatus === 'active' ? 'default' : 'destructive'} className={licenseStatus === 'active' ? 'bg-green-500 hover:bg-green-600' : ''}>
+                    {licenseStatus === 'active' ? 'Licencia Activa' : (licenseStatus === 'grace_period' ? 'Período de Gracia' : 'Licencia Expirada')}
+                </Badge>
+            )}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -1232,6 +1286,13 @@ export default function DashboardPageContainer() {
                             <span>Perfil</span>
                         </Link>
                     </DropdownMenuItem>
+                    {userRole === 'owner' && (
+                        <DropdownMenuItem asChild>
+                            <Link href="/dashboard/settings">
+                                <FileText className="mr-2 h-4 w-4" />Administrar
+                            </Link>
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={handleLogout}>
                         <LogOut className="mr-2 h-4 w-4" />
                         <span>Cerrar Sesión</span>
@@ -1242,9 +1303,10 @@ export default function DashboardPageContainer() {
         </div>
       </header>
       <main className="flex-1">
-        {userRole === 'owner' && tenantId && <OwnerDashboard tenantId={tenantId} />}
-        {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} />}
+        {userRole === 'owner' && tenantId && <OwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
+        {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
       </main>
     </div>
   );
 }
+

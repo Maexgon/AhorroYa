@@ -366,47 +366,48 @@ export default function SettingsPage() {
   
   const firestore = useFirestore();
 
-  // Step 1: Get user's membership to find tenantId and role
   const membershipsQuery = useMemoFirebase(() => {
-    if (!user) return null;
+    if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
-  }, [user]);
+  }, [user, firestore]);
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
+  const derivedTenantId = memberships?.[0]?.tenantId;
+  const derivedUserRole = memberships?.[0]?.role as 'owner' | 'member';
+  
   useEffect(() => {
-    if (!isLoadingMemberships && memberships) {
-      if (memberships.length > 0) {
-        const firstMembership = memberships[0];
-        setTenantId(firstMembership.tenantId);
-        setIsOwner(firstMembership.role === 'owner');
+    if (!isLoadingMemberships) {
+      if (memberships && memberships.length > 0) {
+        setTenantId(derivedTenantId);
+        setIsOwner(derivedUserRole === 'owner');
       }
-      setIsLoading(false); // We have our answer, stop loading
+      setIsLoading(false);
     }
-  }, [memberships, isLoadingMemberships]);
+  }, [memberships, isLoadingMemberships, derivedTenantId, derivedUserRole]);
 
-  // Step 2: Fetch tenant-specific data once tenantId is known
+
   const membersQuery = useMemoFirebase(() => {
-    if (!tenantId) return null;
-    return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-  }, [tenantId]);
+    if (!derivedTenantId) return null;
+    return query(collection(firestore, 'memberships'), where('tenantId', '==', derivedTenantId));
+  }, [derivedTenantId]);
   const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(membersQuery);
 
   const tenantDocRef = useMemoFirebase(() => {
-    if (!tenantId) return null;
-    return doc(firestore, 'tenants', tenantId);
-  }, [tenantId]);
+    if (!derivedTenantId) return null;
+    return doc(firestore, 'tenants', derivedTenantId);
+  }, [derivedTenantId]);
   const { data: tenantData } = useDoc<Tenant>(tenantDocRef);
   
   const licenseQuery = useMemoFirebase(() => {
-    if (!tenantId) return null;
-    return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
-  }, [tenantId]);
+    if (!derivedTenantId) return null;
+    return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
+  }, [derivedTenantId]);
   const { data: licenses } = useCollection<License>(licenseQuery);
 
   const activeLicense = licenses?.[0];
   
   const handleInviteUser = async (data: any) => {
-    if (!user || !firestore || !tenantId || !activeLicense) {
+    if (!user || !firestore || !derivedTenantId || !activeLicense) {
         toast({ variant: "destructive", title: "Error", description: "No se pueden cargar los datos del tenant o la licencia." });
         return;
     }
@@ -418,7 +419,6 @@ export default function SettingsPage() {
 
     try {
         const auth = getAuth();
-        // This is a temporary solution. In a real app, this should be done via a secure backend function.
         const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
         const newUser = userCredential.user;
         const displayName = `${data.firstName} ${data.lastName}`;
@@ -434,7 +434,7 @@ export default function SettingsPage() {
         batch.set(doc(firestore, 'users', newUser.uid), userDocData);
 
         const membershipData: Membership = {
-            tenantId: tenantId,
+            tenantId: derivedTenantId,
             uid: newUser.uid,
             displayName: displayName,
             email: data.email,
@@ -442,7 +442,7 @@ export default function SettingsPage() {
             status: 'active',
             joinedAt: new Date().toISOString(),
         };
-        batch.set(doc(firestore, 'memberships', `${tenantId}_${newUser.uid}`), membershipData);
+        batch.set(doc(firestore, 'memberships', `${derivedTenantId}_${newUser.uid}`), membershipData);
 
         await batch.commit();
 
@@ -461,7 +461,7 @@ export default function SettingsPage() {
   };
 
   const handleDeleteMember = async () => {
-    if (!memberToDelete || !tenantId || !user || !firestore) {
+    if (!memberToDelete || !derivedTenantId || !user || !firestore) {
         toast({ variant: "destructive", title: "Error", description: "No se ha seleccionado ningún miembro para eliminar." });
         return;
     }
@@ -470,11 +470,9 @@ export default function SettingsPage() {
     toast({ title: "Eliminando miembro..." });
 
     try {
-        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${memberToDelete.uid}`);
+        const membershipRef = doc(firestore, 'memberships', `${derivedTenantId}_${memberToDelete.uid}`);
         await deleteDoc(membershipRef);
 
-        // This is not ideal, as deleting users from the client is risky.
-        // A proper implementation would use a Cloud Function.
         toast({ title: "Advertencia", description: "La membresía fue eliminada. La eliminación de la cuenta de Auth debe hacerse desde la consola de Firebase por seguridad." });
         
         if (members && setMembers) {
@@ -483,7 +481,7 @@ export default function SettingsPage() {
     } catch (error: any) {
         console.error("Error deleting member:", error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `memberships/${tenantId}_${memberToDelete.uid}`, 
+            path: `memberships/${derivedTenantId}_${memberToDelete.uid}`, 
             operation: 'delete',
         }));
     } finally {
@@ -517,6 +515,7 @@ export default function SettingsPage() {
   }
 
   const isCollaborativePlan = activeLicense?.plan === 'familiar' || activeLicense?.plan === 'empresa';
+  const isLicenseActive = activeLicense?.status === 'active';
 
   return (
     <>
@@ -533,13 +532,13 @@ export default function SettingsPage() {
         </header>
 
         <main className="flex-1 p-4 md:p-8">
-             <Tabs defaultValue="categories" className="w-full">
-                <TabsList className={cn("grid w-full", isCollaborativePlan ? "grid-cols-3" : "grid-cols-2")}>
-                    {isCollaborativePlan && <TabsTrigger value="members">Miembros</TabsTrigger>}
-                    <TabsTrigger value="categories">Categorías</TabsTrigger>
+             <Tabs defaultValue="license" className="w-full">
+                <TabsList className={cn("grid w-full", (isCollaborativePlan && isLicenseActive) ? "grid-cols-3" : (isLicenseActive ? "grid-cols-2" : "grid-cols-1"))}>
+                    {isCollaborativePlan && isLicenseActive && <TabsTrigger value="members">Miembros</TabsTrigger>}
+                    {isLicenseActive && <TabsTrigger value="categories">Categorías</TabsTrigger>}
                     <TabsTrigger value="license">Licencia</TabsTrigger>
                 </TabsList>
-                 {isCollaborativePlan && (
+                 {isCollaborativePlan && isLicenseActive && (
                     <TabsContent value="members">
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between">
@@ -563,9 +562,11 @@ export default function SettingsPage() {
                         </Card>
                     </TabsContent>
                  )}
-                <TabsContent value="categories">
-                   {tenantId && <ManageCategories tenantId={tenantId} />}
-                </TabsContent>
+                {isLicenseActive && (
+                    <TabsContent value="categories">
+                       {tenantId && <ManageCategories tenantId={tenantId} />}
+                    </TabsContent>
+                )}
                 <TabsContent value="license">
                     <Card>
                         <CardHeader>
@@ -620,3 +621,4 @@ export default function SettingsPage() {
     </>
   );
 }
+
