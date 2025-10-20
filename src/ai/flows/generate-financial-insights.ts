@@ -17,6 +17,10 @@ const GenerateFinancialInsightsInputSchema = z.object({
   budgets: z.string().describe("A JSON string of the user's budgets for the same period."),
   categories: z.string().describe('A JSON string of available categories.'),
   baseCurrency: z.string().describe('The base currency (e.g., ARS).'),
+  reportDate: z.string().describe('The date the report is being generated (e.g., YYYY-MM-DD).'),
+  userName: z.string().describe("The name of the user requesting the report."),
+  reportMonth: z.string().describe("The name of the month the report covers (e.g., 'Octubre')."),
+  reportYear: z.string().describe("The year the report covers (e.g., '2024')."),
 });
 export type GenerateFinancialInsightsInput = z.infer<typeof GenerateFinancialInsightsInputSchema>;
 
@@ -55,7 +59,11 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateFinancialInsightsOutputSchema},
   prompt: `Actúas como un asesor financiero experto para usuarios en Argentina. Tu tono es encouraging, claro y profesional. Analiza los datos financieros del usuario para el período seleccionado y proporciona un informe estructurado en español.
 
-La moneda base es {{{baseCurrency}}}. Todos los valores monetarios están en esta moneda.
+Datos del informe:
+- Fecha de Generación: {{{reportDate}}}
+- Generado para: {{{userName}}}
+- Período del Reporte: {{{reportMonth}}} de {{{reportYear}}}
+- Moneda Base: {{{baseCurrency}}}
 
 Aquí están los datos del usuario:
 - Categorías y Subcategorías: {{{categories}}}
@@ -65,7 +73,7 @@ Aquí están los datos del usuario:
 - Cuotas futuras pendientes: {{{pendingInstallments}}}
 
 Tu tarea es generar un informe con las siguientes secciones:
-1.  **generalSummary**: Escribe un resumen conciso de un párrafo sobre la situación financiera general del usuario. Menciona el total de ingresos vs. el total de gastos, el ahorro neto (o déficit) y la principal categoría de gasto.
+1.  **generalSummary**: Escribe un resumen conciso de un párrafo sobre la situación financiera general del usuario. **IMPORTANTE: Incluye al principio del resumen la fecha del reporte, el nombre del usuario y el período que cubre el reporte.** Luego, menciona el total de ingresos vs. el total de gastos, el ahorro neto (o déficit) y la principal categoría de gasto.
 2.  **keyRecommendations**: Genera 2-4 recomendaciones clave. Identifica los puntos de ahorro más importantes, los excesos de gastos significativos en comparación con los presupuestos y oportunidades de mejora. Para cada recomendación, proporciona un título, una descripción, una sugerencia concreta y un emoji.
 3.  **budgetAdjustments**: Sugiere 2-3 ajustes de presupuesto para el próximo período basados en los gastos actuales. Para cada ajuste, especifica el nombre de la categoría, el monto actual, el monto sugerido y una breve justificación.
 4.  **savingsTips**: Proporciona una lista de 3 consejos de ahorro generales y accionables que sean relevantes para el contexto del usuario (por ejemplo, si gasta mucho en delivery, un consejo relacionado).

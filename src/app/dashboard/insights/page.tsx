@@ -15,7 +15,8 @@ import { generateInsightsAction } from './actions';
 import { type GenerateFinancialInsightsOutput } from '@/ai/flows/generate-financial-insights';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-
+import { format as formatDate } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 function InsightIcon({ emoji }: { emoji?: string }) {
     switch (emoji) {
@@ -118,12 +119,14 @@ export default function InsightsPage() {
 
     // --- AI Insights Generation ---
     React.useEffect(() => {
-        const canGenerate = !isLoadingData && !!tenantId && allExpenses && budgets && categories && allIncomes;
+        const canGenerate = !isLoadingData && !!tenantId && allExpenses && budgets && categories && allIncomes && user;
         
         if (canGenerate && !insightsData && !error) {
             const generateInsights = async () => {
                 setIsGenerating(true);
                 setError(null);
+                
+                const currentMonthName = formatDate(fromDate, 'LLLL', { locale: es });
                 
                 const result = await generateInsightsAction({
                     monthlyExpenses: JSON.stringify(monthlyExpenses),
@@ -132,6 +135,10 @@ export default function InsightsPage() {
                     budgets: JSON.stringify(budgets),
                     categories: JSON.stringify(categories.map(c => ({id: c.id, name: c.name}))),
                     baseCurrency: 'ARS',
+                    reportDate: formatDate(new Date(), 'yyyy-MM-dd'),
+                    userName: user.displayName || 'Usuario',
+                    reportMonth: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1),
+                    reportYear: fromDate.getFullYear().toString(),
                 });
 
                 if (result.success && result.data) {
@@ -148,7 +155,7 @@ export default function InsightsPage() {
             setIsGenerating(false);
         }
 
-    }, [isLoadingData, monthlyExpenses, budgets, categories, monthlyIncomes, pendingInstallments, insightsData, error, tenantId, allExpenses, allIncomes]);
+    }, [isLoadingData, allExpenses, budgets, categories, allIncomes, fromDate, insightsData, error, tenantId, user, monthlyExpenses, monthlyIncomes, pendingInstallments]);
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
 
