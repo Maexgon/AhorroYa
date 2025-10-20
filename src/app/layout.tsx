@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase';
 import Footer from '@/components/shared/footer';
 
+
 export const metadata: Metadata = {
   title: 'Ahorro Ya',
   description: 'Toma el control de tus finanzas.',
