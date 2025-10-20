@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useUser, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError, useFirebase } from '@/firebase';
 import { getAuth, updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
-import { getSignedUploadUrlAction } from './actions';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'El nombre es requerido.'),
@@ -30,7 +30,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function ProfilePage() {
   const { user, isUserLoading } = useUser();
-  const firestore = useFirestore();
+  const { firestore, storage } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -123,7 +123,7 @@ export default function ProfilePage() {
     const file = event.target.files?.[0];
     const currentUser = user;
     
-    if (!file || !currentUser) return;
+    if (!file || !currentUser || !storage) return;
     
     console.log("[DEBUG] File selected:", { name: file.name, size: file.size, type: file.type });
     
@@ -133,33 +133,18 @@ export default function ProfilePage() {
     }
 
     setIsUploading(true);
-    toast({ title: 'Preparando subida...' });
+    toast({ title: 'Subiendo imagen...' });
+
+    const filePath = `avatars/${currentUser.uid}/${file.name}`;
+    const fileRef = storageRef(storage, filePath);
+    console.log("[DEBUG] Uploading to storageRef path:", fileRef.fullPath);
 
     try {
-      // 1. Get signed URL from our server action
-      const signedUrlResult = await getSignedUploadUrlAction(currentUser.uid, file.name, file.type);
-
-      if (!signedUrlResult.success || !signedUrlResult.data) {
-        throw new Error(signedUrlResult.error || 'Could not get signed URL.');
-      }
-      
-      const { uploadUrl, publicUrl } = signedUrlResult.data;
-      console.log("[DEBUG] Got signed URL:", uploadUrl);
-      
-      // 2. Upload the file directly to GCS using the signed URL
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Upload to GCS failed.');
-      }
+      await uploadBytes(fileRef, file);
+      const publicUrl = await getDownloadURL(fileRef);
       
       console.log("[DEBUG] Upload successful. Public URL:", publicUrl);
 
-      // 3. Update user profile
       const auth = getAuth();
       const userDocRef = doc(firestore, 'users', currentUser.uid);
 
