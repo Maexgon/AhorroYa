@@ -1,7 +1,7 @@
+
 'use server';
 
-import { initializeFirebaseServer } from '@/firebase/server-init';
-import { doc, writeBatch, collection } from 'firebase/firestore';
+import { initializeAdminApp } from '@/firebase/admin-config';
 import { defaultCategories } from '@/lib/default-categories';
 
 interface SubscribeToPlanParams {
@@ -12,8 +12,9 @@ interface SubscribeToPlanParams {
 }
 
 /**
- * Handles the subscription process using two sequential client SDK write batches
- * to avoid security rule race conditions.
+ * Handles the complete subscription and tenant setup process using the Firebase Admin SDK.
+ * This Server Action is responsible for creating a user's entire environment in a single,
+ * privileged, and atomic operation.
  *
  * @param params - The user and plan details.
  * @returns An object indicating success or failure.
@@ -26,29 +27,28 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
     }
 
     try {
-        const { firestore } = initializeFirebaseServer();
+        const adminApp = await initializeAdminApp();
+        const adminFirestore = adminApp.firestore();
 
-        // --- BATCH 1: Create Tenant, Membership, and update User ---
-        const tenantRef = doc(collection(firestore, "tenants"));
-        const userRef = doc(firestore, "users", userId);
-        const membershipRef = doc(firestore, "memberships", `${tenantRef.id}_${userId}`);
-        
-        const initialBatch = writeBatch(firestore);
+        // Start a Firestore batch write.
+        const batch = adminFirestore.batch();
 
-        // 1. Create Tenant
+        // 1. Create the Tenant document
+        const tenantRef = adminFirestore.collection("tenants").doc();
         const tenantData = {
             id: tenantRef.id,
-            type: 'PERSONAL',
+            type: 'PERSONAL', // Default to PERSONAL
             name: `${userDisplayName}'s Space`,
             baseCurrency: 'ARS',
             createdAt: new Date().toISOString(),
             ownerUid: userId,
-            status: 'pending', // Start as pending, activate in second batch
+            status: 'active', // Activate immediately
             settings: JSON.stringify({})
         };
-        initialBatch.set(tenantRef, tenantData);
+        batch.set(tenantRef, tenantData);
 
-        // 2. Create Membership
+        // 2. Create the Membership document
+        const membershipRef = adminFirestore.collection("memberships").doc(`${tenantRef.id}_${userId}`);
         const membershipData = {
             tenantId: tenantRef.id,
             uid: userId,
@@ -58,20 +58,14 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             status: 'active',
             joinedAt: new Date().toISOString(),
         };
-        initialBatch.set(membershipRef, membershipData);
+        batch.set(membershipRef, membershipData);
 
-        // 3. Update User with Tenant ID
-        initialBatch.update(userRef, { tenantIds: [tenantRef.id] });
+        // 3. Update the User document with the new tenantId
+        const userRef = adminFirestore.collection("users").doc(userId);
+        batch.update(userRef, { tenantIds: [tenantRef.id] });
 
-        // Commit the first batch to establish membership
-        await initialBatch.commit();
-
-
-        // --- BATCH 2: Create License, Categories, and activate Tenant ---
-        const setupBatch = writeBatch(firestore);
-        
-        // 4. Create License
-        const licenseRef = doc(collection(firestore, "licenses"));
+        // 4. Create the License document
+        const licenseRef = adminFirestore.collection("licenses").doc();
         const startDate = new Date();
         const endDate = new Date();
         if (planId === 'demo') {
@@ -88,29 +82,27 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             endDate: endDate.toISOString(),
             maxUsers: planId === 'familiar' ? 4 : (planId === 'empresa' ? 10 : 1),
         };
-        setupBatch.set(licenseRef, licenseData);
+        batch.set(licenseRef, licenseData);
 
         // 5. Create Default Categories and Subcategories
         defaultCategories.forEach((category, catIndex) => {
-            const categoryRef = doc(collection(firestore, "categories"));
-            setupBatch.set(categoryRef, { id: categoryRef.id, tenantId: tenantRef.id, name: category.name, color: category.color, order: catIndex });
+            const categoryRef = adminFirestore.collection("categories").doc();
+            batch.set(categoryRef, { id: categoryRef.id, tenantId: tenantRef.id, name: category.name, color: category.color, order: catIndex });
+            
             category.subcategories.forEach((subcategoryName, subCatIndex) => {
-                const subcategoryRef = doc(collection(firestore, "subcategories"));
-                setupBatch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantRef.id, categoryId: categoryRef.id, name: subcategoryName, order: subCatIndex });
+                const subcategoryRef = adminFirestore.collection("subcategories").doc();
+                batch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantRef.id, categoryId: categoryRef.id, name: subcategoryName, order: subCatIndex });
             });
         });
-        
-        // 6. Activate Tenant
-        setupBatch.update(tenantRef, { status: "active" });
 
-        // Commit the second batch
-        await setupBatch.commit();
+        // Commit all operations atomically
+        await batch.commit();
 
         return { success: true };
 
     } catch (error: any) {
         console.error("Error in subscribeToPlanAction:", error);
-        // The error from Firestore will be more useful here
-        return { success: false, error: `Error de Firestore: ${error.message}` };
+        // Provide a more generic but helpful error message to the client
+        return { success: false, error: `Ocurrió un error en el servidor al configurar tu cuenta. Código: ${error.code || 'UNKNOWN'}` };
     }
 }

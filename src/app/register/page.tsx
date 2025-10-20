@@ -13,7 +13,7 @@ import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirestore } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 
@@ -81,12 +81,11 @@ export default function RegisterPage() {
           displayName: displayName,
           email: user.email,
           photoURL: user.photoURL || null,
-          tenantIds: [],
+          tenantIds: [], // Start with an empty array
           isSuperadmin: false,
       };
 
-      // Create user document in Firestore. This is a critical step.
-      // This operation must be allowed by security rules for a newly authenticated user.
+      // Create user document in Firestore.
       await setDoc(userRef, userData);
       
       toast({
@@ -109,13 +108,7 @@ export default function RegisterPage() {
             title = "Contraseña débil";
             description = "La contraseña debe tener al menos 8 caracteres.";
         } else {
-            // It might be a Firestore permission error from the setDoc call
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: `users/${(getAuth().currentUser?.uid || 'unknown_uid')}`,
-                operation: 'create',
-                requestResourceData: { email, displayName: `${firstName} ${lastName}` }
-            }));
-            return; // Emitter handles the toast
+           description = error.message;
         }
       }
       toast({
