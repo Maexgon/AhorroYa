@@ -516,6 +516,8 @@ export default function SettingsPage() {
     )
   }
 
+  const isCollaborativePlan = activeLicense?.plan === 'familiar' || activeLicense?.plan === 'empresa';
+
   return (
     <>
     <div className="flex min-h-screen flex-col bg-secondary/50">
@@ -531,34 +533,36 @@ export default function SettingsPage() {
         </header>
 
         <main className="flex-1 p-4 md:p-8">
-             <Tabs defaultValue="members" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="members">Miembros</TabsTrigger>
+             <Tabs defaultValue="categories" className="w-full">
+                <TabsList className={cn("grid w-full", isCollaborativePlan ? "grid-cols-3" : "grid-cols-2")}>
+                    {isCollaborativePlan && <TabsTrigger value="members">Miembros</TabsTrigger>}
                     <TabsTrigger value="categories">Categorías</TabsTrigger>
                     <TabsTrigger value="license">Licencia</TabsTrigger>
                 </TabsList>
-                <TabsContent value="members">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle>Miembros del Tenant</CardTitle>
-                                <CardDescription>
-                                    Administra los usuarios que tienen acceso a este espacio de trabajo.
-                                </CardDescription>
-                            </div>
-                            <Button 
-                                onClick={() => setIsInviteDialogOpen(true)}
-                                disabled={isLoadingLicenses || !activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
-                            >
-                                <UserPlus className="mr-2 h-4 w-4" />
-                                Invitar usuarios
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                           {isLoadingMembers ? <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : <MembersDataTable columns={columns} data={members || []} />}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                 {isCollaborativePlan && (
+                    <TabsContent value="members">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle>Miembros del Tenant</CardTitle>
+                                    <CardDescription>
+                                        Administra los usuarios que tienen acceso a este espacio de trabajo.
+                                    </CardDescription>
+                                </div>
+                                <Button 
+                                    onClick={() => setIsInviteDialogOpen(true)}
+                                    disabled={isLoadingLicenses || !activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
+                                >
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    Invitar usuarios
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                            {isLoadingMembers ? <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : <MembersDataTable columns={columns} data={members || []} />}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                 )}
                 <TabsContent value="categories">
                    {tenantId && <ManageCategories tenantId={tenantId} />}
                 </TabsContent>
