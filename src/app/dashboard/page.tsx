@@ -12,8 +12,8 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
@@ -106,6 +106,16 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
     to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [chartVisibility, setChartVisibility] = useState({
+    monthlyFlow: true,
+    cumulativeBalance: true,
+    expenseAnalysis: true,
+    budgets: true,
+  });
+
+  const toggleChartVisibility = (chartKey: keyof typeof chartVisibility) => {
+    setChartVisibility(prev => ({ ...prev, [chartKey]: !prev[chartKey] }));
+  };
   
   // --- Data Fetching ---
   const tenantRef = useMemo(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [tenantId, firestore]);
@@ -406,7 +416,7 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
 
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                  <DropdownCat
                     options={categoryOptions}
                     value={selectedCategoryId}
@@ -456,205 +466,251 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
                         />
                     </PopoverContent>
                 </Popover>
+
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full md:w-auto">
+                            <View className="mr-2 h-4 w-4" />
+                            Mostrar/Ocultar Gráficos
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuLabel>Gráficos Visibles</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem checked={chartVisibility.monthlyFlow} onCheckedChange={() => toggleChartVisibility('monthlyFlow')}>Flujo de Caja Mensual</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={chartVisibility.cumulativeBalance} onCheckedChange={() => toggleChartVisibility('cumulativeBalance')}>Balance Acumulado</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={chartVisibility.expenseAnalysis} onCheckedChange={() => toggleChartVisibility('expenseAnalysis')}>Análisis de Gastos</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={chartVisibility.budgets} onCheckedChange={() => toggleChartVisibility('budgets')}>Presupuestos</DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+
             </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-            <CardHeader>
-                <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
-                <CardDescription>Ingresos vs. Gastos de los últimos 12 meses.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={processedData.monthlyOverviewData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
-                    <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                    <Tooltip
-                        content={({ active, payload, label }) => {
-                            if (active && payload && payload.length) {
-                                return (
-                                    <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                        <p className="font-bold">{label}</p>
-                                        <p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
-                                        <p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p>
-                                    </div>
-                                );
-                            }
-                            return null;
-                        }}
-                    />
-                    <Legend />
-                    <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-                </ResponsiveContainer>
-            </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Balance Acumulado Anual</CardTitle>
-                    <CardDescription>Evolución de ingresos y gastos acumulados.</CardDescription>
+            {chartVisibility.monthlyFlow && (
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
+                        <CardDescription>Ingresos vs. Gastos de los últimos 12 meses.</CardDescription>
+                    </div>
+                     <DropdownMenu>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleExport(processedData.monthlyOverviewData, "flujo_de_caja_mensual")}>Exportar a Excel</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleChartVisibility('monthlyFlow')}>Cerrar</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
-                        <ComposedChart data={processedData.cumulativeChartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
-                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                            <Tooltip
-                                content={({ active, payload, label }) => {
-                                    if (active && payload && payload.length) {
-                                        const income = payload.find(p => p.dataKey === 'ingresosAcumulados')?.value || 0;
-                                        const expense = payload.find(p => p.dataKey === 'gastosAcumulados')?.value || 0;
-                                        return (
-                                            <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                                <p className="font-bold">{label}</p>
-                                                <p style={{ color: 'hsl(var(--chart-3))' }}>Ing. Acum: {processedData.formatCurrency(income as number)}</p>
-                                                <p style={{ color: 'hsl(var(--destructive))' }}>Gas. Acum: {processedData.formatCurrency(expense as number)}</p>
-                                                <p className="font-semibold mt-1">Balance: {processedData.formatCurrency(income as number - (expense as number))}</p>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                }}
-                            />
-                            <Legend />
-                             <Area type="monotone" dataKey="gastosAcumulados" fill="hsl(var(--destructive) / 0.1)" stroke="transparent" name="Gastos Acumulados" />
-                            <Area type="monotone" dataKey="ingresosAcumulados" fill="hsl(var(--chart-3) / 0.1)" stroke="transparent" name="Ingresos Acumulados" />
-                            <Line type="monotone" dataKey="ingresosAcumulados" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} name="Ingresos Acum." />
-                            <Line type="monotone" dataKey="gastosAcumulados" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} name="Gastos Acum." />
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </CardContent>
-            </Card>
-        </div>
-        
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="lg:col-span-4">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                    <div>
-                        <CardTitle>Análisis de Gastos</CardTitle>
-                        <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
-                    </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-                 <div className="text-2xl font-bold font-headline text-primary pt-2">
-                    {processedData.formatCurrency(processedData.totalExpenses)}
-                    <p className="text-xs font-normal text-muted-foreground">Total de Gastos en {processedData.toCurrencyCode}</p>
-                </div>
-              </CardHeader>
-              <CardContent className="pl-2">
-                 <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
-                     <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                     <YAxis hide={true} />
-                     <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                        <LabelList
-                            dataKey="total"
-                            position="top"
-                            offset={8}
-                            className="fill-foreground"
-                            fontSize={12}
-                            formatter={(value: number) => processedData.formatCurrency(value)}
-                        />
-                      {processedData.barData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-            <Card className="lg:col-span-3">
-              <CardHeader>
-                 <div className="flex items-start justify-between">
-                    <div>
-                        <CardTitle>Presupuestos</CardTitle>
-                        <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
-                    </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuestos")}>Exportar a Excel</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-                 <div className={`text-2xl font-bold font-headline pt-2 ${processedData.budgetBalance >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                    {processedData.formatCurrency(processedData.budgetBalance)}
-                    <p className="text-xs font-normal text-muted-foreground">
-                        {processedData.budgetBalance >= 0 ? 'Restante del presupuesto' : 'Excedido del presupuesto'}
-                    </p>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barCategoryGap="20%">
-                        <XAxis type="number" hide />
-                        <YAxis 
-                            type="category" 
-                            dataKey="name" 
-                            tickLine={false} 
-                            axisLine={false} 
-                            width={100}
-                            tick={<CustomizedYAxisTick />}
-                        />
+                    <BarChart data={processedData.monthlyOverviewData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                        <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                         <Tooltip
-                            cursor={{ fill: 'hsl(var(--secondary))' }}
-                            content={({ active, payload }) => {
+                            content={({ active, payload, label }) => {
                                 if (active && payload && payload.length) {
-                                  const data = payload[0].payload;
-                                return (
-                                    <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                        <p className="font-bold">{data.name}</p>
-                                        <p>Gastado: {processedData.formatCurrency(data.Gastado)}</p>
-                                        <p>Presupuestado: {processedData.formatCurrency(data.Presupuestado)}</p>
-                                    </div>
-                                );
+                                    return (
+                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                            <p className="font-bold">{label}</p>
+                                            <p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                            <p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p>
+                                        </div>
+                                    );
                                 }
                                 return null;
                             }}
                         />
-                        <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3) / 0.2)" radius={[0, 8, 8, 0]} barSize={40}>
-                            <LabelList 
-                                dataKey="Presupuestado" 
-                                position="insideLeft" 
-                                offset={15}
-                                style={{ fill: 'hsl(var(--foreground))' }}
-                                fontSize={13}
-                                fontWeight="600"
+                        <Legend />
+                        <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+                </Card>
+            )}
+            {chartVisibility.cumulativeBalance && (
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Balance Acumulado Anual</CardTitle>
+                            <CardDescription>Evolución de ingresos y gastos acumulados.</CardDescription>
+                        </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleExport(processedData.cumulativeChartData, "balance_acumulado")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleChartVisibility('cumulativeBalance')}>Cerrar</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={350}>
+                            <ComposedChart data={processedData.cumulativeChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                                <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                                <Tooltip
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            const income = payload.find(p => p.dataKey === 'ingresosAcumulados')?.value || 0;
+                                            const expense = payload.find(p => p.dataKey === 'gastosAcumulados')?.value || 0;
+                                            return (
+                                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                    <p className="font-bold">{label}</p>
+                                                    <p style={{ color: 'hsl(var(--chart-3))' }}>Ing. Acum: {processedData.formatCurrency(income as number)}</p>
+                                                    <p style={{ color: 'hsl(var(--destructive))' }}>Gas. Acum: {processedData.formatCurrency(expense as number)}</p>
+                                                    <p className="font-semibold mt-1">Balance: {processedData.formatCurrency(income as number - (expense as number))}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Legend />
+                                <Area type="monotone" dataKey="gastosAcumulados" fill="hsl(var(--destructive) / 0.1)" stroke="transparent" name="Gastos Acumulados" />
+                                <Area type="monotone" dataKey="ingresosAcumulados" fill="hsl(var(--chart-3) / 0.1)" stroke="transparent" name="Ingresos Acumulados" />
+                                <Line type="monotone" dataKey="ingresosAcumulados" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} name="Ingresos Acum." />
+                                <Line type="monotone" dataKey="gastosAcumulados" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} name="Gastos Acum." />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+        
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+            {chartVisibility.expenseAnalysis && (
+                <Card className="lg:col-span-4">
+                <CardHeader>
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <CardTitle>Análisis de Gastos</CardTitle>
+                            <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
+                        </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleChartVisibility('expenseAnalysis')}>Cerrar</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    <div className="text-2xl font-bold font-headline text-primary pt-2">
+                        {processedData.formatCurrency(processedData.totalExpenses)}
+                        <p className="text-xs font-normal text-muted-foreground">Total de Gastos en {processedData.toCurrencyCode}</p>
+                    </div>
+                </CardHeader>
+                <CardContent className="pl-2">
+                    <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
+                        <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis hide={true} />
+                        <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                            <LabelList
+                                dataKey="total"
+                                position="top"
+                                offset={8}
+                                className="fill-foreground"
+                                fontSize={12}
                                 formatter={(value: number) => processedData.formatCurrency(value)}
                             />
-                        </Bar>
-                        <Bar dataKey="Gastado" fill="hsl(var(--chart-3))" radius={[0, 8, 8, 0]} barSize={40}>
-                            <LabelList
-                                dataKey="percentage"
-                                position="center"
-                                style={{ fill: 'white' }}
-                                fontSize={13}
-                                fontWeight="700"
-                                formatter={(value: number) => `${value}%`}
-                            />
+                        {processedData.barData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
                         </Bar>
                     </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+                    </ResponsiveContainer>
+                </CardContent>
+                </Card>
+            )}
+            {chartVisibility.budgets && (
+                <Card className="lg:col-span-3">
+                <CardHeader>
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <CardTitle>Presupuestos</CardTitle>
+                            <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
+                        </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuestos")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleChartVisibility('budgets')}>Cerrar</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    <div className={`text-2xl font-bold font-headline pt-2 ${processedData.budgetBalance >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                        {processedData.formatCurrency(processedData.budgetBalance)}
+                        <p className="text-xs font-normal text-muted-foreground">
+                            {processedData.budgetBalance >= 0 ? 'Restante del presupuesto' : 'Excedido del presupuesto'}
+                        </p>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barCategoryGap="20%">
+                            <XAxis type="number" hide />
+                            <YAxis 
+                                type="category" 
+                                dataKey="name" 
+                                tickLine={false} 
+                                axisLine={false} 
+                                width={100}
+                                tick={<CustomizedYAxisTick />}
+                            />
+                            <Tooltip
+                                cursor={{ fill: 'hsl(var(--secondary))' }}
+                                content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                    const data = payload[0].payload;
+                                    return (
+                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                            <p className="font-bold">{data.name}</p>
+                                            <p>Gastado: {processedData.formatCurrency(data.Gastado)}</p>
+                                            <p>Presupuestado: {processedData.formatCurrency(data.Presupuestado)}</p>
+                                        </div>
+                                    );
+                                    }
+                                    return null;
+                                }}
+                            />
+                            <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3) / 0.2)" radius={[0, 8, 8, 0]} barSize={40}>
+                                <LabelList 
+                                    dataKey="Presupuestado" 
+                                    position="insideLeft" 
+                                    offset={15}
+                                    style={{ fill: 'hsl(var(--foreground))' }}
+                                    fontSize={13}
+                                    fontWeight="600"
+                                    formatter={(value: number) => processedData.formatCurrency(value)}
+                                />
+                            </Bar>
+                            <Bar dataKey="Gastado" fill="hsl(var(--chart-3))" radius={[0, 8, 8, 0]} barSize={40}>
+                                <LabelList
+                                    dataKey="percentage"
+                                    position="center"
+                                    style={{ fill: 'white' }}
+                                    fontSize={13}
+                                    fontWeight="700"
+                                    formatter={(value: number) => `${value}%`}
+                                />
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+                </Card>
+            )}
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-4">
