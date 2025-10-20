@@ -11,14 +11,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError, useStorage } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud, X } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Image as ImageIcon } from 'lucide-react';
+import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
@@ -45,15 +47,21 @@ const expenseFormSchema = z.object({
 
 type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
 
+interface FilePreview {
+    file: File;
+    previewUrl: string;
+    base64?: string;
+}
+
 export default function NewExpensePage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useUser();
   const firestore = useFirestore();
+  const storage = useStorage();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
-  const [receiptPreview, setReceiptPreview] = React.useState<string | null>(null);
-  const [receiptBase64, setReceiptBase64] = React.useState<string | null>(null);
+  
+  const [receiptFiles, setReceiptFiles] = React.useState<FilePreview[]>([]);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(null);
 
@@ -139,86 +147,128 @@ export default function NewExpensePage() {
 
 
   const handleReceiptChange = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file || !user || !tenantId || !categoriesForAI) return;
-
-    if (file.size > 1024 * 1024) {
-      toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 1MB.' });
-      return;
+    if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) return;
+    
+    const isPdfUpload = files[0].type === 'application/pdf';
+    if (isPdfUpload && files.length > 1) {
+        toast({ variant: 'destructive', title: 'Carga no válida', description: 'Solo puedes subir un PDF a la vez.' });
+        return;
+    }
+    if (!isPdfUpload && receiptFiles.some(f => f.file.type === 'application/pdf')) {
+        toast({ variant: 'destructive', title: 'Carga no válida', description: 'No puedes mezclar PDFs con imágenes.' });
+        return;
     }
 
-    setReceiptFile(file);
     setIsProcessingReceipt(true);
+    toast({ title: 'Procesando recibo(s)...' });
 
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        setReceiptPreview(URL.createObjectURL(file));
-        setReceiptBase64(base64String);
-
-        const fileType = file.type.startsWith('image/') ? 'image' : 'pdf';
-        
-        const result = await processReceiptAction(base64String, tenantId, user.uid, fileType, categoriesForAI);
-        
-        setIsProcessingReceipt(false);
-
-        if (!result.success || !result.data) {
-            toast({
-                variant: "destructive",
-                title: 'Error de IA',
-                description: result.error || 'No se pudo procesar el recibo. Intente con una imagen más clara.',
-            });
-             setReceiptFile(null);
-             setReceiptPreview(null);
-             setReceiptBase64(null);
-            return;
-        }
-        
-        const processedData = result.data;
-        
-        toast({
-          title: 'Recibo procesado!',
-          description: 'Los datos extraídos se han cargado en el formulario.',
-        });
-        
-        if (processedData.razonSocial) setValue('entityName', processedData.razonSocial);
-        if (processedData.cuit) setValue('entityCuit', processedData.cuit.replace(/[^0-9]/g, ''));
-        if (processedData.total) setValue('amount', processedData.total);
-        if (processedData.fecha) {
-            const parsedDate = parseISO(processedData.fecha);
-            if (!isNaN(parsedDate.getTime())) {
-                setValue('date', parsedDate);
+        if (isPdfUpload) {
+            const file = files[0];
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit for PDF
+                toast({ variant: 'destructive', title: 'PDF demasiado grande', description: 'El tamaño máximo para PDFs es 5MB.' });
+                setIsProcessingReceipt(false);
+                return;
             }
-        }
-        if (processedData.categoryId) setValue('categoryId', processedData.categoryId);
-        if (processedData.subcategoryId) setValue('subcategoryId', processedData.subcategoryId);
-        if(processedData.medioPago) {
-            const paymentMethodMap: { [key: string]: string } = {
-                'efectivo': 'cash',
-                'tarjeta de debito': 'debit',
-                'tarjeta de credito': 'credit',
-                'transferencia': 'transfer'
-            };
-            const mappedMethod = paymentMethodMap[processedData.medioPago.toLowerCase()];
-            if (mappedMethod) setValue('paymentMethod', mappedMethod);
-        }
-      };
-      reader.onerror = () => {
-          setIsProcessingReceipt(false);
-          toast({ variant: 'destructive', title: 'Error de Lectura', description: 'No se pudo leer el archivo seleccionado.' });
-      }
+            // Handle PDF upload to storage
+            const storageRef = ref(storage, `receipts/${tenantId}/${user.uid}/${Date.now()}-${file.name}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const gsUrl = `gs://${snapshot.metadata.bucket}/${snapshot.metadata.fullPath}`;
 
+            setReceiptFiles([{ file, previewUrl: URL.createObjectURL(file) }]);
+            
+            const result = await processReceiptAction({
+                receiptId: `temp-${crypto.randomUUID()}`,
+                fileUrl: gsUrl,
+                tenantId,
+                userId: user.uid,
+                fileType: 'pdf',
+                categories: categoriesForAI
+            });
+            handleAIResult(result);
+
+        } else {
+            // Handle image uploads
+            const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+            const filePreviews: FilePreview[] = [];
+            const base64Promises = imageFiles.map(file => {
+                return new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = (error) => reject(error);
+                });
+            });
+
+            const base64Contents = await Promise.all(base64Promises);
+            imageFiles.forEach((file, index) => {
+                filePreviews.push({ file, previewUrl: URL.createObjectURL(file), base64: base64Contents[index] });
+            });
+            setReceiptFiles(prev => [...prev, ...filePreviews]);
+
+            const result = await processReceiptAction({
+                receiptId: `temp-${crypto.randomUUID()}`,
+                base64Contents: base64Contents,
+                tenantId,
+                userId: user.uid,
+                fileType: 'image',
+                categories: categoriesForAI
+            });
+            handleAIResult(result);
+        }
     } catch (error: any) {
         console.error("Error processing receipt:", error);
         toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
-        setReceiptFile(null);
-        setReceiptPreview(null);
-        setReceiptBase64(null);
+        setReceiptFiles([]);
+    } finally {
         setIsProcessingReceipt(false);
     }
   };
+  
+  const handleAIResult = (result: { success: boolean; data?: ProcessReceiptOutput; error?: string; }) => {
+    if (!result.success || !result.data) {
+        toast({
+            variant: "destructive",
+            title: 'Error de IA',
+            description: result.error || 'No se pudo procesar el recibo. Intente con una imagen más clara.',
+        });
+        setReceiptFiles([]);
+        return;
+    }
+    
+    const processedData = result.data;
+    
+    toast({
+      title: '¡Recibo procesado!',
+      description: 'Los datos extraídos se han cargado en el formulario.',
+    });
+    
+    if (processedData.razonSocial) setValue('entityName', processedData.razonSocial);
+    if (processedData.cuit) setValue('entityCuit', processedData.cuit.replace(/[^0-9]/g, ''));
+    if (processedData.total) setValue('amount', processedData.total);
+    if (processedData.fecha) {
+        const parsedDate = parseISO(processedData.fecha);
+        if (!isNaN(parsedDate.getTime())) {
+            setValue('date', parsedDate);
+        }
+    }
+    if (processedData.categoryId) setValue('categoryId', processedData.categoryId);
+    if (processedData.subcategoryId) setValue('subcategoryId', processedData.subcategoryId);
+    if(processedData.medioPago) {
+        const paymentMethodMap: { [key: string]: string } = {
+            'efectivo': 'cash',
+            'tarjeta de debito': 'debit',
+            'tarjeta de credito': 'credit',
+            'transferencia': 'transfer'
+        };
+        const mappedMethod = paymentMethodMap[processedData.medioPago.toLowerCase()];
+        if (mappedMethod) setValue('paymentMethod', mappedMethod);
+    }
+  };
+
+  const removeReceiptFile = (index: number) => {
+      setReceiptFiles(files => files.filter((_, i) => i !== index));
+  }
   
   const onSubmit = async (data: ExpenseFormValues) => {
     if (!tenantId || !user || !firestore) {
@@ -269,7 +319,7 @@ export default function NewExpensePage() {
                 paymentMethod: data.paymentMethod,
                 isRecurring: false,
                 notes: notesWithInstallment,
-                source: receiptBase64 ? 'ocr' : 'manual',
+                source: receiptFiles.length > 0 ? 'ocr' : 'manual',
                 status: 'posted',
                 deleted: false,
                 createdAt: new Date().toISOString(),
@@ -317,20 +367,25 @@ export default function NewExpensePage() {
             }
 
             // Handle Receipt - only once
-            if (i === 0 && receiptBase64 && receiptFile) {
-                const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
-                const receiptData = {
-                    id: newReceiptRef.id,
-                    tenantId: tenantId,
-                    userId: user.uid,
-                    expenseId: newExpenseRef.id, // Associate with the first installment
-                    base64Content: receiptBase64,
-                    fileType: receiptFile.type.startsWith('image/') ? 'image' : 'pdf',
-                    status: 'processed',
-                    createdAt: new Date().toISOString(),
-                };
-                batch.set(newReceiptRef, receiptData);
-                writes.push({path: newReceiptRef.path, data: receiptData});
+            if (i === 0 && receiptFiles.length > 0) {
+                const receipt = receiptFiles[0];
+                const base64Content = receipt.base64; // Assuming base64 is stored for images
+
+                if (base64Content) {
+                    const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
+                    const receiptData = {
+                        id: newReceiptRef.id,
+                        tenantId: tenantId,
+                        userId: user.uid,
+                        expenseId: newExpenseRef.id, // Associate with the first installment
+                        base64Content: base64Content, // Just store the first image for now
+                        fileType: receipt.file.type.startsWith('image/') ? 'image' : 'pdf',
+                        status: 'processed',
+                        createdAt: new Date().toISOString(),
+                    };
+                    batch.set(newReceiptRef, receiptData);
+                    writes.push({path: newReceiptRef.path, data: receiptData});
+                }
             }
         }
         
@@ -386,40 +441,52 @@ export default function NewExpensePage() {
                 <Card className="mb-6">
                     <CardHeader>
                         <CardTitle>Cargar Recibo (Opcional)</CardTitle>
-                        <CardDescription>Sube una imagen o PDF de tu recibo para autocompletar los datos con IA.</CardDescription>
+                        <CardDescription>Sube imágenes o un PDF de tu recibo para autocompletar los datos con IA.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {isProcessingReceipt ? (
-                             <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-primary/50 rounded-md bg-primary/10">
+                             <div className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-primary/50 rounded-md bg-primary/10">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 <p className="mt-4 text-sm text-primary">Procesando con IA...</p>
                             </div>
-                        ) : receiptPreview ? (
-                            <div className="relative">
-                                <img src={receiptPreview} alt="Vista previa del recibo" className="w-full h-auto max-h-60 object-contain rounded-md border" />
-                                <Button
-                                    variant="destructive"
-                                    size="icon"
-                                    className="absolute top-2 right-2 h-6 w-6"
-                                    onClick={() => {
-                                        setReceiptFile(null);
-                                        setReceiptPreview(null);
-                                        setReceiptBase64(null);
-                                        reset(watch()); // Keep existing form values
-                                    }}
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
+                        ) : receiptFiles.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                {receiptFiles.map((file, index) => (
+                                    <div key={index} className="relative group aspect-square">
+                                        {file.file.type.startsWith('image/') ? (
+                                            <Image src={file.previewUrl} alt={`Vista previa ${index + 1}`} fill className="object-cover rounded-md border" />
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center h-full bg-muted rounded-md border">
+                                                <FileIcon className="h-10 w-10 text-muted-foreground" />
+                                                <p className="text-xs text-center text-muted-foreground mt-2 px-1 truncate">{file.file.name}</p>
+                                            </div>
+                                        )}
+                                        <Button
+                                            variant="destructive"
+                                            size="icon"
+                                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => removeReceiptFile(index)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                <label htmlFor="dropzone-file-extra" className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                    <div className="flex flex-col items-center justify-center">
+                                        <Plus className="w-8 h-8 text-muted-foreground" />
+                                    </div>
+                                    <input id="dropzone-file-extra" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg" disabled={receiptFiles.some(f => f.file.type === 'application/pdf')}/>
+                                </label>
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full">
-                                <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Haz clic para subir</span> o arrastra y suelta</p>
-                                        <p className="text-xs text-muted-foreground">PNG, JPG, PDF (MAX. 1MB)</p>
+                                        <p className="text-xs text-muted-foreground">Imágenes o un PDF (MAX 5MB)</p>
                                     </div>
-                                    <input id="dropzone-file" type="file" className="hidden" onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" />
+                                    <input id="dropzone-file" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" />
                                 </label>
                             </div>
                         )}
@@ -442,7 +509,7 @@ export default function NewExpensePage() {
                                         options={entityOptions}
                                         value={field.value}
                                         onSelect={(value) => {
-                                            const selectedEntity = entityOptions.find(e => e.value === value);
+                                            const selectedEntity = entityOptions.find(e => e.value === value || e.label === value);
                                             if (selectedEntity) {
                                                 setValue('entityName', selectedEntity.label);
                                                 setValue('entityCuit', selectedEntity.cuit || '');

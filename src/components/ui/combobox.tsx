@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -20,7 +21,7 @@ import { Input } from "@/components/ui/input"
 
 
 interface ComboboxProps {
-    options: { label: string; value: string; cuit: string; }[];
+    options: { label: string; value: string; cuit?: string; }[];
     value: string;
     onSelect: (value: string) => void;
     placeholder?: string;
@@ -59,9 +60,8 @@ export function Combobox({
     setSearch(newValue);
     onSelect(newValue);
 
-    if (newValue.length >= 5) {
-        const matchingOptions = options.filter(opt => opt.label.toLowerCase().includes(newValue.toLowerCase()));
-        setOpen(matchingOptions.length > 0);
+    if (newValue.length > 0) {
+        setOpen(true);
     } else {
         setOpen(false);
     }
@@ -75,6 +75,7 @@ export function Combobox({
                 placeholder={placeholder}
                 value={inputValue}
                 onChange={handleInputChange}
+                onFocus={() => setOpen(true)}
                 className={cn("w-full justify-between", className)}
             />
             <ChevronsUpDown 
@@ -103,9 +104,15 @@ export function Combobox({
                       </CommandItem>
                   ))}
                 </CommandGroup>
-                {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).length === 0 && (
-                    <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
+                {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).length === 0 && search.length > 0 && (
+                    <CommandItem onSelect={() => handleSelect(search)}>
+                         <Plus className="mr-2 h-4 w-4" />
+                         Crear "{search}"
+                    </CommandItem>
                 )}
+                 {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).length === 0 && search.length === 0 && (
+                    <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
+                 )}
             </CommandList>
           </Command>
       </PopoverContent>

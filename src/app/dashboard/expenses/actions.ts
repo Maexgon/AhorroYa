@@ -4,34 +4,16 @@
 import { processReceipt, type ProcessReceiptOutput, type ProcessReceiptInput } from '@/ai/flows/ocr-receipt-processing';
 
 /**
- * Processes a receipt image using an AI flow without writing to the database.
- * This action is designed to be called from the client. It only orchestrates
- * the call to the AI flow and returns the extracted data.
+ * Processes a receipt using an AI flow. It can handle multiple image
+ * content as base64 strings or a single file URL from Firebase Storage (for PDFs).
  *
- * @param {string} base64Content - The Base64 encoded string of the receipt image.
- * @param {string} tenantId - The ID of the tenant.
- * @param {string} userId - The ID of the user.
- * @param {'image' | 'pdf'} fileType - The type of the file.
- * @param {string} categoriesJson - A JSON string of available categories for the AI to use.
+ * @param {ProcessReceiptInput} input - The input for the AI flow, containing either base64 contents or a file URL.
  * @returns {Promise<{success: boolean; data?: ProcessReceiptOutput; error?: string}>} - The result of the AI processing.
  */
 export async function processReceiptAction(
-    base64Content: string,
-    tenantId: string,
-    userId: string,
-    fileType: 'image' | 'pdf',
-    categoriesJson: string
+    input: ProcessReceiptInput
 ): Promise<{ success: boolean; data?: ProcessReceiptOutput; error?: string; }> {
     try {
-        const input: ProcessReceiptInput = {
-            receiptId: `temp-${crypto.randomUUID()}`,
-            base64Content,
-            tenantId,
-            userId,
-            fileType,
-            categories: categoriesJson
-        };
-
         const result = await processReceipt(input);
         
         if (!result || Object.keys(result).length === 0) {
