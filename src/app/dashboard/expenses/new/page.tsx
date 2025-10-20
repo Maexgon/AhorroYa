@@ -19,7 +19,7 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Image as ImageIcon } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Image as ImageIcon, Plus } from 'lucide-react';
 import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -170,13 +170,16 @@ export default function NewExpensePage() {
                 setIsProcessingReceipt(false);
                 return;
             }
+            console.log('[CLIENT] PDF selected. Uploading to storage...');
             // Handle PDF upload to storage
             const storageRef = ref(storage, `receipts/${tenantId}/${user.uid}/${Date.now()}-${file.name}`);
             const snapshot = await uploadBytes(storageRef, file);
             const gsUrl = `gs://${snapshot.metadata.bucket}/${snapshot.metadata.fullPath}`;
+            console.log(`[CLIENT] PDF uploaded. gsUrl: ${gsUrl}`);
 
             setReceiptFiles([{ file, previewUrl: URL.createObjectURL(file) }]);
             
+            console.log('[CLIENT] Calling processReceiptAction for PDF...');
             const result = await processReceiptAction({
                 receiptId: `temp-${crypto.randomUUID()}`,
                 fileUrl: gsUrl,
@@ -185,9 +188,11 @@ export default function NewExpensePage() {
                 fileType: 'pdf',
                 categories: categoriesForAI
             });
+            console.log('[CLIENT] Received result from action:', result);
             handleAIResult(result);
 
         } else {
+            console.log('[CLIENT] Images selected. Reading as Base64...');
             // Handle image uploads
             const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
             const filePreviews: FilePreview[] = [];
@@ -201,11 +206,14 @@ export default function NewExpensePage() {
             });
 
             const base64Contents = await Promise.all(base64Promises);
+            console.log(`[CLIENT] Converted ${base64Contents.length} images to Base64.`);
+
             imageFiles.forEach((file, index) => {
                 filePreviews.push({ file, previewUrl: URL.createObjectURL(file), base64: base64Contents[index] });
             });
             setReceiptFiles(prev => [...prev, ...filePreviews]);
 
+            console.log('[CLIENT] Calling processReceiptAction for images...');
             const result = await processReceiptAction({
                 receiptId: `temp-${crypto.randomUUID()}`,
                 base64Contents: base64Contents,
@@ -214,6 +222,7 @@ export default function NewExpensePage() {
                 fileType: 'image',
                 categories: categoriesForAI
             });
+            console.log('[CLIENT] Received result from action:', result);
             handleAIResult(result);
         }
     } catch (error: any) {

@@ -14,7 +14,9 @@ export async function processReceiptAction(
     input: ProcessReceiptInput
 ): Promise<{ success: boolean; data?: ProcessReceiptOutput; error?: string; }> {
     try {
+        console.log('[ACTION] Calling processReceipt with input:', { ...input, base64Contents: input.base64Contents ? `${input.base64Contents.length} images` : 'none' });
         const result = await processReceipt(input);
+        console.log('[ACTION] Received result from processReceipt:', result);
         
         if (!result || Object.keys(result).length === 0) {
             console.warn('AI flow returned empty or null result.');

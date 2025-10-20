@@ -82,37 +82,32 @@ const processReceiptFlow = ai.defineFlow(
     outputSchema: ProcessReceiptOutputSchema,
   },
   async input => {
-    console.log('Starting processReceiptFlow for receiptId:', input.receiptId);
+    console.log('[FLOW] Starting processReceiptFlow for receiptId:', input.receiptId);
     if (!input.fileUrl && (!input.base64Contents || input.base64Contents.length === 0)) {
+        console.error('[FLOW] No content provided.');
         throw new Error('No receipt content provided. Either fileUrl or base64Contents must be present.');
     }
     
     try {
+      console.log('[FLOW] Calling processReceiptPrompt...');
       const {output} = await processReceiptPrompt(input);
-      console.log('processReceiptPrompt output:', output);
+      console.log('[FLOW] Received output from prompt:', output);
       
       if (!output) {
+        console.error('[FLOW] The AI prompt did not return any output.');
         throw new Error('The AI prompt did not return any output.');
       }
       // Basic validation to check if at least one key has a value
       const hasData = Object.values(output).some(v => v !== undefined && v !== null && v !== '');
       if (!hasData) {
-         console.warn('AI output was generated but all fields are empty.');
+         console.warn('[FLOW] AI output was generated but all fields are empty.');
       }
 
       return output;
     } catch (e: any) {
-      console.error('Error in processReceiptFlow:', e);
-      // Return a structured error or empty values to avoid crashing the client
-      return {
-        cuit: '',
-        razonSocial: '',
-        fecha: '',
-        total: 0,
-        iva: 0,
-        nFactura: '',
-        medioPago: '',
-      };
+      console.error('[FLOW] Error in processReceiptFlow:', e);
+      // Re-throw the error so the action can catch it and report it to the client.
+      throw e;
     }
   }
 );
