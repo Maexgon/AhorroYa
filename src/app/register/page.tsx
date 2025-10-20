@@ -159,7 +159,7 @@ export default function RegisterPage() {
       });
       
       // If account is personal, create a DEMO license and activate tenant
-      if(accountType === 'personal') {
+      if (accountType === 'personal') {
           const licenseRef = doc(firestore, "licenses", crypto.randomUUID());
           const startDate = new Date();
           const endDate = new Date();
@@ -392,4 +392,5 @@ export default function RegisterPage() {
     
 
     
+
 
