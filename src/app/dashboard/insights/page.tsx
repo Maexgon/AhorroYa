@@ -10,12 +10,10 @@ import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import type { Budget, Category, Expense, User as UserType, Income } from '@/lib/types';
-import { generateInsightsAction } from './actions';
+import { generateInsightsAction, exportToDocxAction } from './actions';
 import { type GenerateFinancialInsightsOutput } from '@/ai/flows/generate-financial-insights';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import htmlToDocx from 'html-to-docx';
-import { saveAs } from 'file-saver';
 
 function InsightIcon({ emoji }: { emoji?: string }) {
     switch (emoji) {
@@ -36,6 +34,7 @@ export default function InsightsPage() {
     const [insightsData, setInsightsData] = React.useState<GenerateFinancialInsightsOutput | null>(null);
     const [isGenerating, setIsGenerating] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
+    const [isExporting, setIsExporting] = React.useState(false);
 
     // --- Data Fetching ---
     const userDocRef = useMemoFirebase(() => {
@@ -113,7 +112,7 @@ export default function InsightsPage() {
 
     // --- AI Insights Generation ---
     React.useEffect(() => {
-        const canGenerate = !isLoadingData && monthlyExpenses && budgets && categories && monthlyIncomes && pendingInstallments;
+        const canGenerate = !isLoadingData && !!monthlyExpenses && !!budgets && !!categories && !!monthlyIncomes && !!pendingInstallments;
         
         if (canGenerate && !insightsData && !error) {
             const generateInsights = async () => {
@@ -157,61 +156,41 @@ export default function InsightsPage() {
             return;
         }
 
+        setIsExporting(true);
+        toast({ title: 'Exportando...', description: 'Generando el documento de Word.' });
+
         try {
-            let htmlString = `
-                <h1>Análisis Financiero - Ahorro Ya</h1>
-                <h2>Resumen General</h2>
-                <p>${insightsData.generalSummary}</p>
-                <br />
-                <h2>Recomendaciones Clave</h2>
-            `;
+            const result = await exportToDocxAction(insightsData, 'ARS');
 
-            insightsData.keyRecommendations.forEach(rec => {
-                htmlString += `
-                    <h3>${rec.emoji || ''} ${rec.title}</h3>
-                    <p><strong>Descripción:</strong> ${rec.description}</p>
-                    <p><strong>Sugerencia:</strong> ${rec.suggestion}</p>
-                    <br />
-                `;
-            });
-
-            htmlString += '<h2>Ajustes de Presupuesto Sugeridos</h2>';
-            insightsData.budgetAdjustments.forEach(adj => {
-                htmlString += `
-                    <p><strong>Categoría:</strong> ${adj.categoryName}</p>
-                    <p>Monto Actual: ${formatCurrency(adj.currentAmount)}</p>
-                    <p>Monto Sugerido: ${formatCurrency(adj.suggestedAmount)}</p>
-                    <p><i>Razón: ${adj.reasoning}</i></p>
-                    <br />
-                `;
-            });
-
-            htmlString += '<h2>Consejos de Ahorro</h2><ul>';
-            insightsData.savingsTips.forEach(tip => {
-                htmlString += `<li>${tip}</li>`;
-            });
-            htmlString += '</ul>';
-
-            const fileBuffer = await htmlToDocx(htmlString, undefined, {
-                table: { row: { cantSplit: true } },
-                footer: true,
-                pageNumber: true,
-            });
-
-            saveAs(fileBuffer as Blob, 'analisis-financiero.docx');
-
-            toast({
-                title: '¡Éxito!',
-                description: 'El informe se ha exportado a Word.',
-            });
-
-        } catch (e) {
+            if (result.success && result.fileContent) {
+                const byteCharacters = atob(result.fileContent);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+                
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'analisis-financiero.docx';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                toast({ title: '¡Éxito!', description: 'El informe se ha descargado.' });
+            } else {
+                throw new Error(result.error || 'Error desconocido al exportar.');
+            }
+        } catch (e: any) {
             console.error('Error exporting to DOCX:', e);
             toast({
                 variant: 'destructive',
                 title: 'Error de Exportación',
-                description: 'No se pudo generar el documento de Word.',
+                description: e.message || 'No se pudo generar el documento de Word.',
             });
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -225,9 +204,9 @@ export default function InsightsPage() {
                         </Link>
                     </Button>
                     <h1 className="ml-4 font-headline text-xl font-bold">Análisis Financiero con IA</h1>
-                     <Button variant="outline" size="sm" className="ml-auto" onClick={handleExportToDocx} disabled={!insightsData || isGenerating}>
-                        <FileDown className="mr-2 h-4 w-4" />
-                        Exportar a DOCX
+                     <Button variant="outline" size="sm" className="ml-auto" onClick={handleExportToDocx} disabled={!insightsData || isGenerating || isExporting}>
+                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                        {isExporting ? 'Exportando...' : 'Exportar a DOCX'}
                     </Button>
                 </div>
             </header>
