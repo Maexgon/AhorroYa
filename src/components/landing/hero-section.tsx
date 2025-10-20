@@ -20,6 +20,11 @@ export default function HeroSection() {
               Empezar Gratis <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
+           <Button asChild variant="outline" size="lg">
+            <Link href="#pricing">
+              Precio
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="lg">
             <Link href="#features">
               Conocer más
