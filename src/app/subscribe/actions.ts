@@ -82,26 +82,6 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
     }
 
     try {
-        const { firestore } = initializeFirebaseServer(); // Uses client SDK context
-        const userDocRef = doc(firestore, 'users', userId);
-        
-        // Check if user already has a tenant. If so, something is wrong.
-        const userDocSnap = await getDocs(query(collection(firestore, 'users'), where('uid', '==', userId)));
-        if (!userDocSnap.empty) {
-            const userData = userDocSnap.docs[0].data();
-            if (userData.tenantIds && userData.tenantIds.length > 0) {
-                 // User already has a tenant, so we just need to ensure the license is correct.
-                 // This might happen if the initial creation succeeded but the second part failed.
-                 const tenantId = userData.tenantIds[0];
-                 const licenseQuery = query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
-                 const licenseSnap = await getDocs(licenseQuery);
-                 if (!licenseSnap.empty) {
-                     console.log("User already has a tenant and license. Skipping creation.");
-                     return { success: true };
-                 }
-            }
-        }
-        
         // Step 1: Create Tenant and Membership with Admin privileges
         const initialResult = await createInitialTenantAndMembershipAction(params);
         if (!initialResult.success || !initialResult.tenantId) {
@@ -110,6 +90,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         const tenantId = initialResult.tenantId;
 
         // Step 2: Create the rest of the resources with user's permissions
+        const { firestore } = initializeFirebaseServer();
         const batch = writeBatch(firestore);
 
         // Create Categories & Subcategories
