@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, subMonths } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, subSemesters } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 
 const SAFE_DEFAULTS = {
     barData: [],
@@ -295,6 +296,28 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
     toast({ title: "Exportación exitosa", description: `${fileName}.xlsx ha sido descargado.`});
   };
 
+  const setDateRange = (preset: string) => {
+    const now = new Date();
+    switch (preset) {
+        case 'currentMonth':
+            setDate({ from: startOfMonth(now), to: endOfMonth(now) });
+            break;
+        case 'currentYear':
+            setDate({ from: startOfYear(now), to: endOfYear(now) });
+            break;
+        case 'ytd':
+            setDate({ from: startOfYear(now), to: now });
+            break;
+        case 'lastQuarter':
+            setDate({ from: startOfMonth(subMonths(now, 3)), to: endOfMonth(subMonths(now, 1)) });
+            break;
+        case 'lastSemester':
+            setDate({ from: startOfMonth(subMonths(now, 5)), to: endOfMonth(now) });
+            break;
+    }
+  };
+
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -414,14 +437,21 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
                             )}
                         </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 flex" align="start">
+                        <div className="flex flex-col space-y-2 border-r p-4">
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('currentMonth')}>Mes Actual</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('currentYear')}>Año Actual</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('ytd')}>Year-to-Date</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('lastQuarter')}>Último Cuatrimestre</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('lastSemester')}>Último Semestre</Button>
+                        </div>
                         <Calendar
                             initialFocus
                             mode="range"
                             defaultMonth={date?.from}
                             selected={date}
                             onSelect={setDate}
-                            numberOfMonths={2}
+                            numberOfMonths={1}
                             locale={es}
                         />
                     </PopoverContent>
@@ -757,7 +787,7 @@ function MemberDashboard({ tenantId }: { tenantId: string }) {
     });
   };
 
-  const columns = React.useMemo(() => expenseColumns(false).filter(c => c.id !== 'select' && c.id !== 'actions'), []);
+  const columns = useMemo(() => expenseColumns(false).filter(c => c.id !== 'select' && c.id !== 'actions'), []);
 
   const isLoading = isLoadingExpenses || isLoadingCategories;
 
