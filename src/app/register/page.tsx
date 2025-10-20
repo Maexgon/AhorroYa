@@ -81,6 +81,7 @@ export default function RegisterPage() {
       await sendEmailVerification(user);
 
       const batch = writeBatch(firestore);
+      let writes: any[] = [];
 
       const userRef = doc(firestore, "users", user.uid);
       const tenantRef = doc(firestore, "tenants", crypto.randomUUID());
@@ -95,6 +96,7 @@ export default function RegisterPage() {
         isSuperadmin: false,
       };
       batch.set(userRef, userData);
+      writes.push({path: userRef.path, data: userData});
       
       const tenantNameMapping = {
         personal: `Espacio de ${firstName}`,
@@ -113,57 +115,96 @@ export default function RegisterPage() {
         settings: JSON.stringify({ quietHours: true, rollover: false }),
       };
       batch.set(tenantRef, tenantData);
+      writes.push({path: tenantRef.path, data: tenantData});
 
       const membershipData = {
         tenantId: tenantRef.id,
         uid: user.uid,
         displayName: displayName,
+        email: user.email,
         role: 'owner',
         status: 'active',
         joinedAt: new Date().toISOString()
       };
       batch.set(membershipRef, membershipData);
+      writes.push({path: membershipRef.path, data: membershipData});
       
       // Add default categories and subcategories
       defaultCategories.forEach((category, catIndex) => {
         const categoryId = crypto.randomUUID();
         const categoryRef = doc(firestore, "categories", categoryId);
-        batch.set(categoryRef, {
+        const categoryData = {
             id: categoryId,
             tenantId: tenantRef.id,
             name: category.name,
             color: category.color,
             order: catIndex
-        });
+        };
+        batch.set(categoryRef, categoryData);
+        writes.push({path: categoryRef.path, data: categoryData});
 
         category.subcategories.forEach((subcategoryName, subCatIndex) => {
             const subcategoryId = crypto.randomUUID();
             const subcategoryRef = doc(firestore, "subcategories", subcategoryId);
-            batch.set(subcategoryRef, {
+            const subcategoryData = {
                 id: subcategoryId,
                 tenantId: tenantRef.id,
                 categoryId: categoryId,
                 name: subcategoryName,
                 order: subCatIndex
-            });
+            };
+            batch.set(subcategoryRef, subcategoryData);
+            writes.push({path: subcategoryRef.path, data: subcategoryData});
         });
       });
+      
+      // If account is personal, create a DEMO license and activate tenant
+      if(accountType === 'personal') {
+          const licenseRef = doc(firestore, "licenses", crypto.randomUUID());
+          const startDate = new Date();
+          const endDate = new Date();
+          endDate.setFullYear(endDate.getFullYear() + 1); // 1 year demo
+
+          const licenseData = {
+              id: licenseRef.id,
+              tenantId: tenantRef.id,
+              plan: 'demo',
+              status: 'active',
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              maxUsers: 1,
+          };
+          batch.set(licenseRef, licenseData);
+          writes.push({path: licenseRef.path, data: licenseData});
+
+          batch.update(tenantRef, { status: "active" });
+          writes.push({path: tenantRef.path, data: { status: "active" }});
+      }
+
 
       await batch.commit()
         .then(() => {
-          toast({
-            title: "¡Cuenta creada!",
-            description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
-          });
-          router.push('/subscribe');
+          if (accountType === 'personal') {
+             toast({
+                title: "¡Cuenta Creada!",
+                description: "Tu plan DEMO está activo. Bienvenido a Ahorro Ya.",
+            });
+            router.push('/dashboard');
+          } else {
+            toast({
+              title: "¡Cuenta creada!",
+              description: "Te hemos enviado un correo de verificación. Ahora elige tu plan.",
+            });
+            router.push('/subscribe');
+          }
         })
         .catch(error => {
-             // We don't have a good way to represent the batch write data for the error
             errorEmitter.emit(
               'permission-error',
               new FirestorePermissionError({
                 path: 'batch-write',
                 operation: 'write', 
+                requestResourceData: writes,
               })
             );
         });

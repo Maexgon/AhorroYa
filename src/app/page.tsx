@@ -4,6 +4,8 @@ import { ArrowRight } from 'lucide-react';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import HeroSection from '@/components/landing/hero-section';
 import FeaturesSection from '@/components/landing/features-section';
+import PricingSection from '@/components/landing/pricing-section';
+import Footer from '@/components/landing/footer';
 
 export default function Home() {
   return (
@@ -29,7 +31,9 @@ export default function Home() {
       <main className="flex-1">
         <HeroSection />
         <FeaturesSection />
+        <PricingSection />
       </main>
+      <Footer />
     </div>
   );
 }
