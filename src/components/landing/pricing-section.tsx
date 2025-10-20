@@ -59,6 +59,8 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
 
         try {
             const token = await user.getIdToken();
+            
+            // The Server Action now reads the token from the headers automatically.
             const result = await subscribeToPlanAction({ planId });
 
             if (result.success) {
