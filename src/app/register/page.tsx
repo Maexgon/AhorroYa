@@ -9,13 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AhorroYaLogo } from '@/components/shared/icons';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { useFirestore } from '@/firebase';
-
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -23,8 +20,7 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName] = React.useState('');
   const [email, setEmail] = React.useState('');
-  const [accountType, setAccountType] = React.useState('personal');
-
+  
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
 
@@ -37,8 +33,6 @@ export default function RegisterPage() {
 
   const [isLoading, setIsLoading] = React.useState(false);
   
-  const firestore = useFirestore(); // Get firestore instance for use in handleRegister
-
   React.useEffect(() => {
     setNum1(Math.floor(Math.random() * 10) + 1);
     setNum2(Math.floor(Math.random() * 10) + 1);
@@ -75,10 +69,7 @@ export default function RegisterPage() {
       const displayName = `${firstName} ${lastName}`;
 
       await updateProfile(user, { displayName });
-      // await sendEmailVerification(user); // Temporarily disabled for smoother testing flow
-
-      // After successful authentication, redirect to the subscription page
-      // The subscription page will handle the creation of tenants, licenses, etc.
+      
       toast({
         title: "¡Cuenta Creada!",
         description: "Ahora, por favor elige tu plan.",
@@ -100,7 +91,7 @@ export default function RegisterPage() {
             break;
           case 'auth/weak-password':
             title = "Contraseña débil";
-            description = "La contraseña debe tener al menos 6 caracteres.";
+            description = "La contraseña debe tener al menos 8 caracteres.";
             break;
           default:
             description = error.message;
@@ -197,38 +188,7 @@ export default function RegisterPage() {
                 {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-            <div className="space-y-3">
-              <Label>Tipo de cuenta</Label>
-              <RadioGroup value={accountType} onValueChange={setAccountType} className="grid grid-cols-3 gap-4">
-                <div>
-                  <RadioGroupItem value="personal" id="personal" className="peer sr-only" />
-                  <Label
-                    htmlFor="personal"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                  >
-                    Personal
-                  </Label>
-                </div>
-                <div>
-                  <RadioGroupItem value="familiar" id="familiar" className="peer sr-only" />
-                  <Label
-                    htmlFor="familiar"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                  >
-                    Familiar
-                  </Label>
-                </div>
-                <div>
-                  <RadioGroupItem value="empresa" id="empresa" className="peer sr-only" />
-                  <Label
-                    htmlFor="empresa"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                  >
-                    Empresa
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
+           
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="captcha">¿Cuánto es {num1} + {num2}?</Label>
