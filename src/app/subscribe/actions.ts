@@ -1,10 +1,9 @@
 'use server';
 
-import { initializeFirebase, getSdks } from '@/firebase';
-import { collection, doc, writeBatch, getDoc, getDocs, query, where, updateDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDoc, updateDoc } from 'firebase/firestore';
 import { defaultCategories } from '@/lib/default-categories';
 import type { User as UserType } from '@/lib/types';
-
+import { initializeFirebaseServer } from '@/firebase/server-init'; // Use the new server-side initializer
 
 interface SubscribeToPlanParams {
     planId: string;
@@ -14,7 +13,8 @@ interface SubscribeToPlanParams {
 export async function subscribeToPlanAction(params: SubscribeToPlanParams): Promise<{ success: boolean; error?: string; }> {
     const { planId, userId } = params;
 
-    const { firestore } = getSdks(initializeFirebase());
+    // Initialize Firebase using the server-side function
+    const { firestore } = initializeFirebaseServer();
 
     try {
         const userRef = doc(firestore, "users", userId);
@@ -27,51 +27,48 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         const userData = userSnap.data() as UserType;
         const batch = writeBatch(firestore);
 
-        let tenantId = userData.tenantIds?.[0];
+        const newTenantRef = doc(collection(firestore, "tenants"));
+        const tenantId = newTenantRef.id;
 
-        if (!tenantId) {
-            const newTenantRef = doc(collection(firestore, "tenants"));
-            tenantId = newTenantRef.id;
+        // A) Create Tenant
+        batch.set(newTenantRef, {
+            id: tenantId,
+            type: planId.toUpperCase(),
+            name: `Espacio de ${userData.displayName?.split(' ')[0] || 'Usuario'}`,
+            baseCurrency: "ARS",
+            createdAt: new Date().toISOString(),
+            ownerUid: userId,
+            status: "pending", // Will be activated at the end
+            settings: JSON.stringify({ quietHours: true, rollover: false }),
+        });
 
-            // A) Create Tenant
-            batch.set(newTenantRef, {
-                id: tenantId,
-                type: planId.toUpperCase(),
-                name: `Espacio de ${userData.displayName.split(' ')[0]}`,
-                baseCurrency: "ARS",
-                createdAt: new Date().toISOString(),
-                ownerUid: userId,
-                status: "pending",
-                settings: JSON.stringify({ quietHours: true, rollover: false }),
+        // B) Create Membership
+        const membershipRef = doc(firestore, "memberships", `${tenantId}_${userId}`);
+        batch.set(membershipRef, {
+            tenantId: tenantId,
+            uid: userId,
+            displayName: userData.displayName,
+            email: userData.email,
+            role: 'owner',
+            status: 'active',
+            joinedAt: new Date().toISOString()
+        });
+
+        // C) Update User with Tenant ID
+        batch.update(userRef, { tenantIds: [tenantId] });
+
+        // D) Create Categories
+        defaultCategories.forEach((category, catIndex) => {
+            const categoryRef = doc(collection(firestore, "categories"));
+            batch.set(categoryRef, { id: categoryRef.id, tenantId: tenantId, name: category.name, color: category.color, order: catIndex });
+
+            category.subcategories.forEach((subcategoryName, subCatIndex) => {
+                const subcategoryRef = doc(collection(firestore, "subcategories"));
+                batch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantId, categoryId: categoryRef.id, name: subcategoryName, order: subCatIndex });
             });
-
-            // B) Create Membership
-            const membershipRef = doc(firestore, "memberships", `${tenantId}_${userId}`);
-            batch.set(membershipRef, {
-                tenantId: tenantId,
-                uid: userId,
-                displayName: userData.displayName,
-                email: userData.email,
-                role: 'owner',
-                status: 'active',
-                joinedAt: new Date().toISOString()
-            });
-
-            // C) Update User with Tenant ID
-            batch.update(userRef, { tenantIds: [tenantId] });
-
-            // D) Create Categories
-            defaultCategories.forEach((category, catIndex) => {
-                const categoryRef = doc(collection(firestore, "categories"));
-                batch.set(categoryRef, { id: categoryRef.id, tenantId: tenantId, name: category.name, color: category.color, order: catIndex });
-
-                category.subcategories.forEach((subcategoryName, subCatIndex) => {
-                    const subcategoryRef = doc(collection(firestore, "subcategories"));
-                    batch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantId, categoryId: categoryRef.id, name: subcategoryName, order: subCatIndex });
-                });
-            });
-        }
+        });
         
+        // E) Create License
         const licenseRef = doc(collection(firestore, "licenses"));
         const startDate = new Date();
         const endDate = new Date();
@@ -90,8 +87,8 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             maxUsers: maxUsersMapping[planId] ?? 1
         });
         
-        const tenantRefToUpdate = doc(firestore, "tenants", tenantId);
-        batch.update(tenantRefToUpdate, { status: "active" });
+        // F) Activate Tenant
+        batch.update(newTenantRef, { status: "active" });
 
         await batch.commit();
 
