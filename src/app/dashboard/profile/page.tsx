@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { useUser, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { getAuth, updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -18,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
+import { getSignedUploadUrlAction } from './actions';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'El nombre es requerido.'),
@@ -123,9 +123,7 @@ export default function ProfilePage() {
     const file = event.target.files?.[0];
     const currentUser = user;
     
-    if (!file || !currentUser) {
-        return;
-    }
+    if (!file || !currentUser) return;
     
     console.log("[DEBUG] File selected:", { name: file.name, size: file.size, type: file.type });
     
@@ -135,24 +133,42 @@ export default function ProfilePage() {
     }
 
     setIsUploading(true);
-    toast({ title: 'Subiendo imagen...' });
-    
-    const storage = getStorage();
-    const storageRef = ref(storage, `avatars/${currentUser.uid}/${file.name}`);
-    console.log("[DEBUG] Uploading to storageRef path:", storageRef.fullPath);
+    toast({ title: 'Preparando subida...' });
 
     try {
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(snapshot.ref);
+      // 1. Get signed URL from our server action
+      const signedUrlResult = await getSignedUploadUrlAction(currentUser.uid, file.name, file.type);
 
+      if (!signedUrlResult.success || !signedUrlResult.data) {
+        throw new Error(signedUrlResult.error || 'Could not get signed URL.');
+      }
+      
+      const { uploadUrl, publicUrl } = signedUrlResult.data;
+      console.log("[DEBUG] Got signed URL:", uploadUrl);
+      
+      // 2. Upload the file directly to GCS using the signed URL
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload to GCS failed.');
+      }
+      
+      console.log("[DEBUG] Upload successful. Public URL:", publicUrl);
+
+      // 3. Update user profile
       const auth = getAuth();
       const userDocRef = doc(firestore, 'users', currentUser.uid);
 
-      await updateProfile(currentUser, { photoURL: downloadURL });
-      await updateDoc(userDocRef, { photoURL: downloadURL });
+      await updateProfile(currentUser, { photoURL: publicUrl });
+      await updateDoc(userDocRef, { photoURL: publicUrl });
 
       toast({ title: '¡Foto actualizada!', description: 'Tu nueva foto de perfil está lista.' });
       setAvatarKey(Date.now());
+      
     } catch (error: any) {
         console.error("[DEBUG] Full error object during upload:", error);
         toast({ variant: 'destructive', title: 'Error al subir', description: error.message || 'No se pudo subir la imagen. Revisa la consola para más detalles.' });
