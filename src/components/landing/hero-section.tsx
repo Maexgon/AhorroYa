@@ -27,7 +27,7 @@ export default function HeroSection() {
           </Button>
            <Button asChild variant="outline" size="lg">
             <Link href="#pricing">
-              Precio
+              Precios
             </Link>
           </Button>
         </div>
