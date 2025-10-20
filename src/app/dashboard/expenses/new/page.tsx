@@ -23,7 +23,7 @@ import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceiptAction, uploadAndProcessPdfAction } from '../actions';
+import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, FxRate, Currency, Entity } from '@/lib/types';
 import { Combobox } from '@/components/ui/combobox';
@@ -145,72 +145,50 @@ export default function NewExpensePage() {
   }, [categories, allSubcategories]);
 
 
+  const fileToBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = (error) => reject(error);
+      });
+  };
+
   const handleReceiptChange = async (files: FileList | null) => {
     if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) return;
     
-    const isPdfUpload = files[0].type === 'application/pdf';
-    if (isPdfUpload && files.length > 1) {
-        toast({ variant: 'destructive', title: 'Carga no válida', description: 'Solo puedes subir un PDF a la vez.' });
-        return;
-    }
-    if (!isPdfUpload && receiptFiles.some(f => f.file.type === 'application/pdf')) {
-        toast({ variant: 'destructive', title: 'Carga no válida', description: 'No puedes mezclar PDFs con imágenes.' });
-        return;
-    }
-
     setIsProcessingReceipt(true);
     toast({ title: 'Procesando recibo(s)...' });
-
+    console.log('[CLIENT] Files selected. Reading as Base64...');
+    
     try {
-        if (isPdfUpload) {
-            console.log('[CLIENT] PDF selected. Uploading to server action...');
-            const file = files[0];
-            const formData = new FormData();
-            formData.append('pdf', file);
-            formData.append('tenantId', tenantId);
-            formData.append('userId', user.uid);
-            formData.append('categories', categoriesForAI);
-
-            setReceiptFiles([{ file, previewUrl: URL.createObjectURL(file) }]);
-
-            const result = await uploadAndProcessPdfAction(formData);
-            console.log('[CLIENT] Received result from PDF action:', result);
-            handleAIResult(result);
-
-        } else {
-            console.log('[CLIENT] Images selected. Reading as Base64...');
-            // Handle image uploads
-            const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
-            const filePreviews: FilePreview[] = [];
-            const base64Promises = imageFiles.map(file => {
-                return new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(file);
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.onerror = (error) => reject(error);
-                });
-            });
-
-            const base64Contents = await Promise.all(base64Promises);
-            console.log(`[CLIENT] Converted ${base64Contents.length} images to Base64.`);
-
-            imageFiles.forEach((file, index) => {
-                filePreviews.push({ file, previewUrl: URL.createObjectURL(file), base64: base64Contents[index] });
-            });
-            setReceiptFiles(prev => [...prev, ...filePreviews]);
-
-            console.log('[CLIENT] Calling processReceiptAction for images...');
-            const result = await processReceiptAction({
-                receiptId: `temp-${crypto.randomUUID()}`,
-                base64Contents: base64Contents,
-                tenantId,
-                userId: user.uid,
-                fileType: 'image',
-                categories: categoriesForAI
-            });
-            console.log('[CLIENT] Received result from action:', result);
-            handleAIResult(result);
+        const filePreviews: FilePreview[] = [];
+        const base64Promises: Promise<string>[] = [];
+        
+        for (const file of Array.from(files)) {
+            base64Promises.push(fileToBase64(file));
+            filePreviews.push({ file, previewUrl: URL.createObjectURL(file) });
         }
+        
+        setReceiptFiles(prev => [...prev, ...filePreviews]);
+        
+        const base64Contents = await Promise.all(base64Promises);
+        const fileType = files[0].type.startsWith('image/') ? 'image' : 'pdf';
+        
+        console.log(`[CLIENT] Converted ${base64Contents.length} files to Base64. Calling server action.`);
+
+        const result = await processReceiptAction({
+            receiptId: `temp-${crypto.randomUUID()}`,
+            base64Contents: base64Contents,
+            tenantId,
+            userId: user.uid,
+            fileType,
+            categories: categoriesForAI
+        });
+
+        console.log('[CLIENT] Received result from action:', result);
+        handleAIResult(result);
+        
     } catch (error: any) {
         console.error("Error processing receipt:", error);
         toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
@@ -364,7 +342,7 @@ export default function NewExpensePage() {
             // Handle Receipt - only once
             if (i === 0 && receiptFiles.length > 0) {
                 const receipt = receiptFiles[0];
-                const base64Content = receipt.base64; // Assuming base64 is stored for images
+                 const base64Content = await fileToBase64(receipt.file);
 
                 if (base64Content) {
                     const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
@@ -373,7 +351,7 @@ export default function NewExpensePage() {
                         tenantId: tenantId,
                         userId: user.uid,
                         expenseId: newExpenseRef.id, // Associate with the first installment
-                        base64Content: base64Content, // Just store the first image for now
+                        base64Content: base64Content, // Just store the first image/pdf for now
                         fileType: receipt.file.type.startsWith('image/') ? 'image' : 'pdf',
                         status: 'processed',
                         createdAt: new Date().toISOString(),
@@ -466,7 +444,7 @@ export default function NewExpensePage() {
                                         </Button>
                                     </div>
                                 ))}
-                                {receiptFiles[0]?.file.type.startsWith('image/') && (
+                                {receiptFiles.length > 0 && !receiptFiles.some(f => f.file.type === 'application/pdf') && (
                                 <label htmlFor="dropzone-file-extra" className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center">
                                         <Plus className="w-8 h-8 text-muted-foreground" />
