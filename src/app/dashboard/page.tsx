@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View, Banknote } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -92,6 +92,86 @@ const CustomizedYAxisTick = (props: any) => {
       ))}
     </g>
   );
+};
+
+const CurrencyRates = () => {
+    const [rates, setRates] = useState<any>({});
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchRates = async () => {
+            try {
+                const endpoints = {
+                    oficial: 'https://dolarapi.com/v1/dolares/oficial',
+                    tarjeta: 'https://dolarapi.com/v1/dolares/tarjeta',
+                    real: 'https://dolarapi.com/v1/cotizaciones/brl',
+                    chileno: 'https://dolarapi.com/v1/cotizaciones/clp',
+                    uruguayo: 'https://dolarapi.com/v1/cotizaciones/uyu',
+                };
+
+                const responses = await Promise.all(
+                    Object.values(endpoints).map(url => fetch(url).then(res => res.json()))
+                );
+
+                const newRates = {
+                    oficial: responses[0],
+                    tarjeta: responses[1],
+                    real: responses[2],
+                    chileno: responses[3],
+                    uruguayo: responses[4],
+                };
+                
+                setRates(newRates);
+            } catch (error) {
+                console.error("Failed to fetch currency rates:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRates();
+    }, []);
+
+    const formatCurrencyValue = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-lg">Cotizaciones de Referencia</CardTitle>
+                <CardDescription>Valores de venta actualizados.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                    <div className="flex justify-center items-center h-24">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
+                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-sm font-medium text-muted-foreground">Dólar Oficial</span>
+                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.oficial.venta)}</span>
+                        </div>
+                         <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-sm font-medium text-muted-foreground">Dólar Tarjeta</span>
+                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.tarjeta.venta)}</span>
+                        </div>
+                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-sm font-medium text-muted-foreground">Real Brasileño</span>
+                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.real.venta)}</span>
+                        </div>
+                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-sm font-medium text-muted-foreground">Peso Chileno</span>
+                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.chileno.venta)}</span>
+                        </div>
+                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-sm font-medium text-muted-foreground">Peso Uruguayo</span>
+                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.uruguayo.venta)}</span>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
 };
 
 
@@ -378,6 +458,8 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
                 </DropdownMenu>
             </div>
         </div>
+        
+        <CurrencyRates />
 
         {showSeedButton && (
             <Card>
