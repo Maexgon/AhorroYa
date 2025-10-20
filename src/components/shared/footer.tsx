@@ -24,7 +24,7 @@ export default function Footer() {
   return (
     <footer className="bg-background border-t py-3 mt-auto w-full z-50">
       <div className="container text-center text-sm text-muted-foreground">
-        {`Copyright Acizer 2025 - AhorroYa - V3.01 | ${getFormattedDate()}`}
+        {`AhorroYa v4.01 - Copyright Acizer 2025 - ${getFormattedDate()}`}
       </div>
     </footer>
   );
