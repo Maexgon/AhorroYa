@@ -1,35 +1,20 @@
-
 'use server';
 
 import { initializeFirebase, getSdks } from '@/firebase';
 import { collection, doc, writeBatch, getDoc, getDocs, query, where, updateDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
 import { defaultCategories } from '@/lib/default-categories';
-import type { User } from 'firebase/auth';
 import type { User as UserType } from '@/lib/types';
 
 
 interface SubscribeToPlanParams {
     planId: string;
-    userId: string; 
+    userId: string;
 }
 
-/**
- * A server action to handle a user's subscription to a plan.
- * This now uses the CLIENT SDK to ensure it runs with the user's permissions.
- */
 export async function subscribeToPlanAction(params: SubscribeToPlanParams): Promise<{ success: boolean; error?: string; }> {
     const { planId, userId } = params;
 
-    // We get the client SDK instances, not the admin ones.
-    const { firestore, auth } = getSdks(initializeFirebase());
-    const currentUser = auth.currentUser;
-
-    if (!currentUser || currentUser.uid !== userId) {
-        return { success: false, error: "Authentication error: User mismatch." };
-    }
-    
-    console.log(`[subscribeToPlanAction] Iniciando para userId: ${userId} y planId: ${planId}`);
+    const { firestore } = getSdks(initializeFirebase());
 
     try {
         const userRef = doc(firestore, "users", userId);
@@ -44,26 +29,32 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
         let tenantId = userData.tenantIds?.[0];
 
-        // STEP 1: Ensure tenant and related entities exist
         if (!tenantId) {
-            console.log('[subscribeToPlanAction] No se encontraron tenants. Creando uno nuevo...');
-            
             const newTenantRef = doc(collection(firestore, "tenants"));
             tenantId = newTenantRef.id;
 
             // A) Create Tenant
             batch.set(newTenantRef, {
-                id: tenantId, type: planId.toUpperCase(), name: `Espacio de ${userData.displayName.split(' ')[0]}`,
-                baseCurrency: "ARS", createdAt: new Date().toISOString(), ownerUid: userId,
-                status: "pending", // Will be activated later
+                id: tenantId,
+                type: planId.toUpperCase(),
+                name: `Espacio de ${userData.displayName.split(' ')[0]}`,
+                baseCurrency: "ARS",
+                createdAt: new Date().toISOString(),
+                ownerUid: userId,
+                status: "pending",
                 settings: JSON.stringify({ quietHours: true, rollover: false }),
             });
 
             // B) Create Membership
             const membershipRef = doc(firestore, "memberships", `${tenantId}_${userId}`);
             batch.set(membershipRef, {
-                tenantId: tenantId, uid: userId, displayName: userData.displayName, email: userData.email,
-                role: 'owner', status: 'active', joinedAt: new Date().toISOString()
+                tenantId: tenantId,
+                uid: userId,
+                displayName: userData.displayName,
+                email: userData.email,
+                role: 'owner',
+                status: 'active',
+                joinedAt: new Date().toISOString()
             });
 
             // C) Update User with Tenant ID
@@ -81,8 +72,6 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             });
         }
         
-        // STEP 2: Create License and activate tenant
-        console.log(`[subscribeToPlanAction] Creando licencia para tenant: ${tenantId}`);
         const licenseRef = doc(collection(firestore, "licenses"));
         const startDate = new Date();
         const endDate = new Date();
@@ -104,9 +93,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         const tenantRefToUpdate = doc(firestore, "tenants", tenantId);
         batch.update(tenantRefToUpdate, { status: "active" });
 
-        console.log('[subscribeToPlanAction] Ejecutando batch final...');
         await batch.commit();
-        console.log('[subscribeToPlanAction] Proceso completado exitosamente!');
 
         return { success: true };
 
