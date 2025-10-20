@@ -60,7 +60,17 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
         try {
             const token = await user.getIdToken();
             
-            // The Server Action now reads the token from the headers automatically.
+            // This is a temporary workaround to pass the token to the server action
+            // The ideal solution is to use a dedicated API route or a library that handles this
+            const tempFetch = fetch('/api/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ planId })
+            });
+
             const result = await subscribeToPlanAction({ planId });
 
             if (result.success) {

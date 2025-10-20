@@ -15,7 +15,7 @@ interface SubscribeToPlanParams {
  * A secure server action to handle a user's subscription to a plan.
  * It performs all necessary checks and database writes with admin privileges.
  * 
- * - Verifies the calling user's authentication token.
+ * - Verifies the calling user's authentication token from the request headers.
  * - Checks if a tenant already exists for the user.
  * - If not, it creates the User, Tenant, Membership, and default Categories.
  * - Creates a License document based on the selected plan.
@@ -134,6 +134,9 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
     } catch (error: any) {
         console.error("Error in subscribeToPlanAction:", error);
+         if (error.code === 'auth/id-token-expired') {
+            return { success: false, error: "Tu sesión ha expirado. Por favor, recarga la página e intenta de nuevo." };
+        }
         return { success: false, error: error.message || 'Ocurrió un error inesperado al suscribirse al plan.' };
     }
 }
