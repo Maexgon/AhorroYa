@@ -358,6 +358,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   
   const [isDeletingMember, setIsDeletingMember] = useState(false);
@@ -365,46 +366,44 @@ export default function SettingsPage() {
   
   const firestore = useFirestore();
 
-  const userDocRef = useMemoFirebase(() => {
-    if (!user || !firestore) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [user, firestore]);
-  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-  
-  useEffect(() => {
-    if (userData?.tenantIds && userData.tenantIds.length > 0) {
-      setTenantId(userData.tenantIds[0]);
-    }
-  }, [userData]);
+  // Step 1: Get user's membership to find tenantId and role
+  const membershipsQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+  }, [user]);
+  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
+  useEffect(() => {
+    if (!isLoadingMemberships && memberships) {
+      if (memberships.length > 0) {
+        const firstMembership = memberships[0];
+        setTenantId(firstMembership.tenantId);
+        setIsOwner(firstMembership.role === 'owner');
+      }
+      setIsLoading(false); // We have our answer, stop loading
+    }
+  }, [memberships, isLoadingMemberships]);
+
+  // Step 2: Fetch tenant-specific data once tenantId is known
   const membersQuery = useMemoFirebase(() => {
-    if (!tenantId || !firestore) return null;
+    if (!tenantId) return null;
     return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-  }, [tenantId, firestore]);
-
+  }, [tenantId]);
   const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(membersQuery);
-  
+
   const tenantDocRef = useMemoFirebase(() => {
-    if (!tenantId || !firestore) return null;
+    if (!tenantId) return null;
     return doc(firestore, 'tenants', tenantId);
-  }, [tenantId, firestore]);
-  const { data: tenantData, isLoading: isTenantLoading } = useDoc<Tenant>(tenantDocRef);
-
-  useEffect(() => {
-    if(tenantData && user) {
-        setIsOwner(tenantData.ownerUid === user.uid);
-    }
-  }, [tenantData, user]);
-
+  }, [tenantId]);
+  const { data: tenantData } = useDoc<Tenant>(tenantDocRef);
+  
   const licenseQuery = useMemoFirebase(() => {
-      if (!tenantId || !firestore) return null;
-      return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
-  }, [tenantId, firestore]);
-  const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
+    if (!tenantId) return null;
+    return query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId));
+  }, [tenantId]);
+  const { data: licenses } = useCollection<License>(licenseQuery);
 
   const activeLicense = licenses?.[0];
-
-  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !tenantId || !activeLicense) {
@@ -496,7 +495,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
-  if (isLoading) {
+  if (isUserLoading || isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -552,7 +551,7 @@ export default function SettingsPage() {
                                 </div>
                                 <Button 
                                     onClick={() => setIsInviteDialogOpen(true)}
-                                    disabled={isLoadingLicenses || !activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
+                                    disabled={!activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
                                 >
                                     <UserPlus className="mr-2 h-4 w-4" />
                                     Invitar usuarios
@@ -576,7 +575,7 @@ export default function SettingsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {isLoadingLicenses || !activeLicense ? <Loader2 className="animate-spin" /> : (
+                            {!activeLicense ? <Loader2 className="animate-spin" /> : (
                                 <>
                                     <div><strong>Plan:</strong> <Badge>{activeLicense.plan}</Badge></div>
                                     <div><strong>Estado:</strong> <Badge variant={activeLicense.status === 'active' ? 'default' : 'destructive'} className={activeLicense.status === 'active' ? 'bg-green-500' : ''}>{activeLicense.status}</Badge></div>
