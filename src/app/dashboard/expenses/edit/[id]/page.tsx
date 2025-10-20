@@ -327,10 +327,13 @@ export default function EditExpensePage() {
                                 name="categoryId"
                                 control={control}
                                 render={({ field }) => (
-                                     <Select onValueChange={(value) => {
-                                        field.onChange(value);
-                                        setValue('subcategoryId', '');
-                                    }} value={field.value}>
+                                     <Select 
+                                        onValueChange={(value) => {
+                                            field.onChange(value);
+                                            setValue('subcategoryId', '');
+                                        }} 
+                                        value={field.value}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Selecciona una categoría" />
                                         </SelectTrigger>
@@ -353,7 +356,11 @@ export default function EditExpensePage() {
                                 name="subcategoryId"
                                 control={control}
                                 render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={!selectedCategoryId || !subcategoriesForSelectedCategory || subcategoriesForSelectedCategory.length === 0}>
+                                    <Select 
+                                        onValueChange={field.onChange} 
+                                        value={field.value ?? ''} 
+                                        disabled={!selectedCategoryId || !subcategoriesForSelectedCategory || subcategoriesForSelectedCategory.length === 0}
+                                    >
                                         <SelectTrigger><SelectValue placeholder="Selecciona una subcategoría" /></SelectTrigger>
                                         <SelectContent>
                                             {subcategoriesForSelectedCategory?.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
