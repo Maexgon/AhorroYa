@@ -50,7 +50,6 @@ export default function EditExpensePage() {
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  // Fetch the expense to edit
   const expenseRef = useMemoFirebase(() => {
     if (!firestore || !expenseId) return null;
     return doc(firestore, 'expenses', expenseId);
@@ -73,7 +72,6 @@ export default function EditExpensePage() {
     }
   });
   
-  // When expense data loads, reset the form with its values
   React.useEffect(() => {
     if (expenseData) {
       reset({
@@ -97,7 +95,6 @@ export default function EditExpensePage() {
   const paymentMethod = watch('paymentMethod');
   const tenantId = expenseData?.tenantId;
 
-  // Fetch categories and subcategories for the tenant
   const categoriesQuery = useMemoFirebase(() => {
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
@@ -270,7 +267,7 @@ export default function EditExpensePage() {
                                 control={control}
                                 render={({ field }) => (
                                     <Select onValueChange={field.onChange} value={field.value}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectTrigger><SelectValue placeholder="Selecciona un método" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="cash">Efectivo</SelectItem>
                                             <SelectItem value="debit">Tarjeta de Débito</SelectItem>
@@ -384,5 +381,3 @@ export default function EditExpensePage() {
     </div>
   );
 }
-
-    
