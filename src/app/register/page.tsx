@@ -13,7 +13,7 @@ import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { useFirestore } from '@/firebase';
+import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 
@@ -75,16 +75,19 @@ export default function RegisterPage() {
 
       await updateProfile(user, { displayName });
       
-      // Create user document in Firestore
       const userRef = doc(firestore, 'users', user.uid);
-      await setDoc(userRef, {
+      const userData = {
           uid: user.uid,
           displayName: displayName,
           email: user.email,
           photoURL: user.photoURL || null,
           tenantIds: [],
           isSuperadmin: false,
-      });
+      };
+
+      // Create user document in Firestore. This is a critical step.
+      // This operation must be allowed by security rules for a newly authenticated user.
+      await setDoc(userRef, userData);
       
       toast({
         title: "¡Cuenta Creada!",
@@ -96,22 +99,23 @@ export default function RegisterPage() {
       let title = "Error al crear la cuenta";
       let description = "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.";
       if (error instanceof FirebaseError) {
-        switch (error.code) {
-          case 'auth/email-already-in-use':
+        if (error.code === 'auth/email-already-in-use') {
             title = "Email en uso";
             description = "El correo electrónico que ingresaste ya está registrado.";
-            break;
-          case 'auth/invalid-email':
+        } else if (error.code === 'auth/invalid-email') {
             title = "Email inválido";
             description = "Por favor, ingresa un correo electrónico válido.";
-            break;
-          case 'auth/weak-password':
+        } else if (error.code === 'auth/weak-password') {
             title = "Contraseña débil";
             description = "La contraseña debe tener al menos 8 caracteres.";
-            break;
-          default:
-            description = error.message;
-            break;
+        } else {
+            // It might be a Firestore permission error from the setDoc call
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: `users/${(getAuth().currentUser?.uid || 'unknown_uid')}`,
+                operation: 'create',
+                requestResourceData: { email, displayName: `${firstName} ${lastName}` }
+            }));
+            return; // Emitter handles the toast
         }
       }
       toast({
