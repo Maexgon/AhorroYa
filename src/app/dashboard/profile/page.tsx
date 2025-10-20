@@ -8,9 +8,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useUser, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
-import { updateProfile } from 'firebase/auth';
+import { getAuth, updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -20,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
+import { uploadAvatarAction } from './actions';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'El nombre es requerido.'),
@@ -39,6 +38,10 @@ export default function ProfilePage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  
+  // State to force re-render of avatar image
+  const [avatarKey, setAvatarKey] = React.useState(Date.now());
+
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -102,6 +105,7 @@ export default function ProfilePage() {
       }
       
       toast({ title: '¡Éxito!', description: 'Tu perfil ha sido actualizado.' });
+      setAvatarKey(Date.now()); // Force avatar refresh
 
     } catch (error) {
        errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -119,18 +123,13 @@ export default function ProfilePage() {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("[DEBUG] handleFileChange triggered");
     const file = event.target.files?.[0];
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
+    const currentUser = user;
     
     if (!file || !currentUser) {
-        console.log("[DEBUG] No file selected or user not logged in.");
         return;
     }
-    console.log("[DEBUG] File selected:", { name: file.name, size: file.size, type: file.type });
-
-
+    
     if (file.size > 2 * 1024 * 1024) { // 2MB limit
         toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 2MB.' });
         return;
@@ -139,25 +138,23 @@ export default function ProfilePage() {
     setIsUploading(true);
     toast({ title: 'Subiendo imagen...' });
 
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('uid', currentUser.uid);
+    
     try {
-        const storage = getStorage();
-        const storageRef = ref(storage, `avatars/${currentUser.uid}/${file.name}`);
-        console.log("[DEBUG] Uploading to storageRef path:", storageRef.fullPath);
+      const result = await uploadAvatarAction(formData);
 
-        const snapshot = await uploadBytes(storageRef, file);
-        console.log("[DEBUG] Upload successful, snapshot:", snapshot);
-        const downloadURL = await getDownloadURL(snapshot.ref);
-        console.log("[DEBUG] Got download URL:", downloadURL);
-
-        // Update Auth and Firestore with the new URL
-        await updateProfile(currentUser, { photoURL: downloadURL });
-        const userDocToUpdateRef = doc(firestore, 'users', currentUser.uid);
-        await updateDoc(userDocToUpdateRef, { photoURL: downloadURL });
-
+      if (result.success && result.url) {
         toast({ title: '¡Foto actualizada!', description: 'Tu nueva foto de perfil está lista.' });
-    } catch (error) {
-         console.error("[DEBUG] Full error object during upload:", error);
-         toast({ variant: 'destructive', title: 'Error al subir', description: 'No se pudo subir la imagen. Revisa la consola para más detalles.' });
+        // Force re-fetch of user data to get the new URL
+        setAvatarKey(Date.now());
+      } else {
+        throw new Error(result.error || 'Error desconocido en la subida.');
+      }
+    } catch (error: any) {
+        console.error("[DEBUG] Full error object during upload:", error);
+        toast({ variant: 'destructive', title: 'Error al subir', description: error.message || 'No se pudo subir la imagen. Revisa la consola para más detalles.' });
     } finally {
         setIsUploading(false);
     }
@@ -196,7 +193,7 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-6">
                   <div className="relative">
                     <Avatar className="h-24 w-24 cursor-pointer" onClick={handleAvatarClick}>
-                      <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "Usuario"} />
+                      <AvatarImage key={avatarKey} src={user?.photoURL || undefined} alt={user?.displayName || "Usuario"} />
                       <AvatarFallback className="text-3xl">
                         {getInitials(user?.displayName || "")}
                       </AvatarFallback>

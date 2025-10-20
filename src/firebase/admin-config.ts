@@ -1,4 +1,3 @@
-
 // src/firebase/admin-config.ts
 import admin from 'firebase-admin';
 
@@ -21,5 +20,6 @@ export async function initializeAdminApp() {
 
   return admin.initializeApp({
     credential,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   });
 }

@@ -22,3 +22,6 @@ export function initializeFirebase() {
   // The config object now safely uses an environment variable for the API key.
   return initializeApp(firebaseConfig);
 }
+
+// Add this environment variable for the admin SDK
+process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = firebaseConfig.storageBucket;
