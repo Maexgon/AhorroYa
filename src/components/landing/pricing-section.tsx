@@ -20,14 +20,14 @@ const plans = [
     },
     {
         name: 'Personal',
-        price: '$1.000',
+        price: 'ARS 25.200',
         description: 'Ideal para empezar a tomar el control de tus finanzas.',
         features: ['1 Usuario', 'Seguimiento de gastos', 'Presupuestos mensuales', 'Análisis IA Básico'],
         planId: 'personal'
     },
     {
         name: 'Familiar',
-        price: '$3.000',
+        price: 'ARS 80.640',
         description: 'Perfecto para gestionar las finanzas de toda la familia.',
         features: ['Hasta 4 usuarios', 'Presupuestos compartidos', 'Reportes consolidados', 'Análisis IA Avanzado'],
         planId: 'familiar',
@@ -35,7 +35,7 @@ const plans = [
     },
     {
         name: 'Empresa',
-        price: '$8.000',
+        price: 'ARS 176.400',
         description: 'La solución para pequeñas empresas y emprendedores.',
         features: ['Hasta 10 usuarios', 'Gestión de recibos con IA', 'Exportación de datos', 'Soporte prioritario'],
         planId: 'empresa'
@@ -158,7 +158,7 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
                                 <CardDescription>{plan.description}</CardDescription>
                             </CardHeader>
                             <CardContent className="flex-1 space-y-6">
-                                <div className="text-4xl font-bold font-headline">{plan.price}<span className="text-sm font-normal text-muted-foreground">{plan.planId !== 'demo' && '/mes'}</span></div>
+                                <div className="text-4xl font-bold font-headline">{plan.price}<span className="text-sm font-normal text-muted-foreground">{plan.planId !== 'demo' && '/año'}</span></div>
                                 <ul className="space-y-3 text-sm">
                                     {plan.features.map((feature, i) => (
                                         <li key={i} className="flex items-center gap-2">
