@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Check, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from '@/firebase';
-import { subscribeToPlanAction } from '@/app/subscribe/actions';
+import { createInitialTenantAndMembershipAction, createLicenseAndCategoriesAction } from '@/app/subscribe/actions';
 
 const plans = [
     {
@@ -58,31 +58,39 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
         setIsLoading(planId);
 
         try {
-            const result = await subscribeToPlanAction({ 
-                planId, 
+            // Step 1: Create Tenant and Membership
+            toast({ title: 'Paso 1: Creando tu espacio de trabajo...' });
+            const initialResult = await createInitialTenantAndMembershipAction({
                 userId: user.uid,
                 userEmail: user.email || '',
                 userDisplayName: user.displayName || 'Usuario'
             });
 
-            if (result.success) {
-                toast({
-                    title: '¡Plan activado!',
-                    description: `Has seleccionado el plan ${planId}. ¡Bienvenido a Ahorro Ya!`,
-                });
-                router.push('/dashboard');
-            } else {
-                toast({
-                    variant: 'destructive',
-                    title: 'Error al suscribirse',
-                    description: result.error || 'No se pudo activar el plan.',
-                });
+            if (!initialResult.success || !initialResult.tenantId) {
+                throw new Error(initialResult.error || 'No se pudo crear el tenant.');
             }
+
+            const { tenantId } = initialResult;
+
+            // Step 2: Create License and Categories
+            toast({ title: 'Paso 2: Configurando tu plan...' });
+            const finalResult = await createLicenseAndCategoriesAction({ planId, tenantId });
+
+            if (!finalResult.success) {
+                throw new Error(finalResult.error || 'No se pudo configurar el plan.');
+            }
+            
+            toast({
+                title: '¡Plan activado!',
+                description: `Has seleccionado el plan ${planId}. ¡Bienvenido a Ahorro Ya!`,
+            });
+            router.push('/dashboard');
+
         } catch (error: any) {
             console.error("Error in handleSelectPlan:", error);
             toast({
                 variant: 'destructive',
-                title: 'Error inesperado',
+                title: 'Error en la suscripción',
                 description: error.message || 'Ocurrió un error al procesar tu solicitud.',
             });
         } finally {
