@@ -53,7 +53,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
         if (querySnapshot.empty) {
             // 3a. If no tenant, create all initial documents
-            tenantRef = adminFirestore.collection("tenants").doc();
+            tenantRef = adminFirestore.collection("tenants").doc(); // Let Firestore generate the ID
             tenantId = tenantRef.id;
 
             // Create User document in Firestore
@@ -80,14 +80,13 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
             // Create default categories and subcategories
             defaultCategories.forEach((category, catIndex) => {
-                const categoryId = crypto.randomUUID();
-                const categoryRef = adminFirestore.collection("categories").doc(categoryId);
+                const categoryRef = adminFirestore.collection("categories").doc(); // Let Firestore generate ID
+                const categoryId = categoryRef.id;
                 batch.set(categoryRef, { id: categoryId, tenantId: tenantId, name: category.name, color: category.color, order: catIndex });
 
                 category.subcategories.forEach((subcategoryName, subCatIndex) => {
-                    const subcategoryId = crypto.randomUUID();
-                    const subcategoryRef = adminFirestore.collection("subcategories").doc(subcategoryId);
-                    batch.set(subcategoryRef, { id: subcategoryId, tenantId: tenantId, categoryId: categoryId, name: subcategoryName, order: subCatIndex });
+                    const subcategoryRef = adminFirestore.collection("subcategories").doc(); // Let Firestore generate ID
+                    batch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantId, categoryId: categoryId, name: subcategoryName, order: subCatIndex });
                 });
             });
 
@@ -102,7 +101,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         }
         
         // 4. Create License and activate Tenant
-        const licenseRef = adminFirestore.collection("licenses").doc();
+        const licenseRef = adminFirestore.collection("licenses").doc(); // Let Firestore generate ID
         const startDate = new Date();
         const endDate = new Date();
         if (planId === 'demo') {
@@ -118,8 +117,8 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         batch.set(licenseRef, {
             id: licenseRef.id, tenantId: tenantId, plan: planId, status: 'active',
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
-            maxUsers: maxUsersMapping[planId as keyof typeof maxUsersMapping],
-            paymentId: `sim_${crypto.randomUUID()}`,
+            maxUsers: maxUsersMapping[planId as keyof typeof maxUsersMapping] ?? 1,
+            paymentId: `sim_${adminFirestore.collection("anything").doc().id}`, // Secure random ID generation
         });
 
         // 5. Activate tenant
@@ -135,6 +134,6 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
          if (error.code === 'auth/user-not-found') {
             return { success: false, error: "El usuario no fue encontrado. Por favor, intenta iniciar sesión de nuevo." };
         }
-        return { success: false, error: error.message || 'Ocurrió un error inesperado al suscribirse al plan.' };
+        return { success: false, error: `Ocurrió un error al crear la licencia. (${error.code || 'INTERNAL'})` };
     }
 }
