@@ -1,6 +1,7 @@
+
 'use server';
 
-import { collection, doc, writeBatch, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 import { defaultCategories } from '@/lib/default-categories';
 import type { User as UserType } from '@/lib/types';
 import { initializeFirebaseServer } from '@/firebase/server-init'; // Use the new server-side initializer
@@ -18,15 +19,10 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
     try {
         const userRef = doc(firestore, "users", userId);
-        const userSnap = await getDoc(userRef);
-
-        if (!userSnap.exists()) {
-            return { success: false, error: "User profile not found. Please try registering again." };
-        }
         
-        const userData = userSnap.data() as UserType;
         const batch = writeBatch(firestore);
 
+        // Generate a new tenant ID
         const newTenantRef = doc(collection(firestore, "tenants"));
         const tenantId = newTenantRef.id;
 
@@ -34,7 +30,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         batch.set(newTenantRef, {
             id: tenantId,
             type: planId.toUpperCase(),
-            name: `Espacio de ${userData.displayName?.split(' ')[0] || 'Usuario'}`,
+            name: `Mi Espacio`, // Generic name
             baseCurrency: "ARS",
             createdAt: new Date().toISOString(),
             ownerUid: userId,
@@ -47,8 +43,6 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         batch.set(membershipRef, {
             tenantId: tenantId,
             uid: userId,
-            displayName: userData.displayName,
-            email: userData.email,
             role: 'owner',
             status: 'active',
             joinedAt: new Date().toISOString()
