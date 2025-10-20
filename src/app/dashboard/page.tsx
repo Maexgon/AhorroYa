@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, subSemesters, isAfter, endOfToday } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
@@ -212,22 +212,22 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
   };
   
   // --- Data Fetching ---
-  const tenantRef = useMemo(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [tenantId, firestore]);
+  const tenantRef = useMemoFirebase(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
-  const licenseQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
+  const licenseQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'licenses'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
   
-  const categoriesQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
+  const categoriesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
   
-  const expensesQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [tenantId, firestore]);
+  const expensesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const incomesQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [tenantId, firestore]);
+  const incomesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
   const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<WithId<Income>>(incomesQuery);
 
-  const budgetsQuery = useMemo(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [tenantId, firestore]);
+  const budgetsQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
   const isLoading = isLoadingTenant || isLoadingLicenses || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
@@ -999,7 +999,7 @@ function MemberDashboard({ tenantId }: { tenantId: string }) {
   const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
   
   // --- Data Fetching ---
-  const expensesQuery = useMemo(() => {
+  const expensesQuery = useMemoFirebase(() => {
       if (!firestore || !tenantId || !user) return null;
       return query(
           collection(firestore, 'expenses'), 
@@ -1010,7 +1010,7 @@ function MemberDashboard({ tenantId }: { tenantId: string }) {
   }, [firestore, tenantId, user]);
   const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
-  const categoriesQuery = useMemo(() => {
+  const categoriesQuery = useMemoFirebase(() => {
       if (!firestore || !tenantId) return null;
       return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
@@ -1138,7 +1138,7 @@ export default function DashboardPageContainer() {
   }
 
   // 1. Get user's tenantId
-  const userDocRef = useMemo(() => {
+  const userDocRef = useMemoFirebase(() => {
     if (!user) return null;
     return doc(firestore, 'users', user.uid);
   }, [user, firestore]);
@@ -1151,7 +1151,7 @@ export default function DashboardPageContainer() {
   }, [userData]);
 
   // 2. Get user's membership to determine role
-  const membershipDocRef = useMemo(() => {
+  const membershipDocRef = useMemoFirebase(() => {
     if (!tenantId || !user) return null;
     return doc(firestore, 'memberships', `${tenantId}_${user.uid}`);
   }, [tenantId, user]);
@@ -1249,4 +1249,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
