@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -25,6 +26,7 @@ import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, FxRate, Currency, Entity } from '@/lib/types';
 import { Combobox } from '@/components/ui/combobox';
+import { logAuditEvent } from '../../audit/actions';
 
 
 const expenseFormSchema = z.object({
@@ -233,9 +235,11 @@ export default function NewExpensePage() {
         const installments = data.paymentMethod === 'credit' ? data.installments || 1 : 1;
         const installmentAmount = data.amount / installments;
         const originalNotes = data.notes || '';
+        const createdExpenseIds: string[] = [];
 
         for (let i = 0; i < installments; i++) {
             const newExpenseRef = doc(collection(firestore, 'expenses'));
+            createdExpenseIds.push(newExpenseRef.id);
             
             let amountARS = installmentAmount;
             if (data.currency === 'USD') {
@@ -331,6 +335,23 @@ export default function NewExpensePage() {
         }
         
         await batch.commit();
+
+        // Audit Log
+        for (const expenseId of createdExpenseIds) {
+            const finalData = writes.find(w => w.path.includes(expenseId))?.data;
+            if (finalData) {
+                logAuditEvent({
+                    tenantId: tenantId,
+                    userId: user.uid,
+                    action: 'create',
+                    entity: 'expense',
+                    entityId: expenseId,
+                    before: null,
+                    after: finalData,
+                });
+            }
+        }
+
 
         toast({ title: "¡Éxito!", description: "El gasto ha sido guardado correctamente." });
         router.push('/dashboard/expenses');

@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -10,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -22,6 +23,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import type { Category, Subcategory, Expense, Currency } from '@/lib/types';
+import { logAuditEvent } from '../../../audit/actions';
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
@@ -44,6 +46,7 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
   const router = useRouter();
   const { toast } = useToast();
   const firestore = useFirestore();
+  const { user } = useUser();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const expenseId = expenseData.id;
 
@@ -92,7 +95,7 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
   }, [allSubcategories, selectedCategoryId]);
 
   const onSubmit = async (data: ExpenseFormValues) => {
-     if (!firestore || !expenseId || !tenantId) {
+     if (!firestore || !expenseId || !tenantId || !user) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar el gasto para actualizar.' });
         return;
     }
@@ -118,6 +121,15 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
 
     updateDoc(expenseToUpdateRef, updatedData)
         .then(() => {
+            logAuditEvent({
+                tenantId: tenantId,
+                userId: user.uid,
+                action: 'update',
+                entity: 'expense',
+                entityId: expenseId,
+                before: expenseData,
+                after: updatedData,
+            });
             toast({ title: "¡Éxito!", description: "El gasto ha sido actualizado correctamente." });
             router.push('/dashboard/expenses');
         })

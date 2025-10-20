@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -25,6 +26,7 @@ import type { Expense, Category, Subcategory, Membership, User as UserType } fro
 import { DataTable } from './data-table';
 import { columns } from './columns';
 import { useDoc } from '@/firebase/firestore/use-doc';
+import { logAuditEvent } from '../audit/actions';
 
 export default function ExpensesPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
@@ -34,7 +36,7 @@ export default function ExpensesPage() {
     const [isOwner, setIsOwner] = React.useState(false);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
-    const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
+    const [expenseToDelete, setExpenseToDelete] = React.useState<Expense | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
 
     const userDocRef = useMemoFirebase(() => {
@@ -103,7 +105,8 @@ export default function ExpensesPage() {
 
 
     const handleOpenDeleteDialog = (expenseId: string) => {
-        setExpenseToDelete(expenseId);
+        const expense = expenses?.find(e => e.id === expenseId) || null;
+        setExpenseToDelete(expense);
         setIsAlertDialogOpen(true);
     };
     
@@ -114,9 +117,9 @@ export default function ExpensesPage() {
     }
 
     const handleDeleteExpense = async () => {
-        if (!expenseToDelete || !firestore) return;
+        if (!expenseToDelete || !firestore || !user || !tenantId) return;
 
-        const expenseRef = doc(firestore, 'expenses', expenseToDelete);
+        const expenseRef = doc(firestore, 'expenses', expenseToDelete.id);
         const updatedData = {
             deleted: true,
             updatedAt: new Date().toISOString()
@@ -124,9 +127,18 @@ export default function ExpensesPage() {
 
         updateDoc(expenseRef, updatedData)
             .then(() => {
+                 logAuditEvent({
+                    tenantId: tenantId,
+                    userId: user.uid,
+                    action: 'soft-delete',
+                    entity: 'expense',
+                    entityId: expenseToDelete.id,
+                    before: expenseToDelete,
+                    after: { ...expenseToDelete, ...updatedData },
+                });
                 toast({ title: 'Gasto eliminado', description: 'El gasto ha sido marcado como eliminado.' });
                 if (expenses && setExpenses) {
-                    setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
+                    setExpenses(expenses.filter(exp => exp.id !== expenseToDelete.id));
                 }
                 resetDeleteDialog();
             })
