@@ -5,7 +5,6 @@ import {
     type GenerateFinancialInsightsInput, 
     type GenerateFinancialInsightsOutput 
 } from '@/ai/flows/generate-financial-insights';
-import { exportToDocxServerAction } from './export-action';
 
 
 /**
@@ -33,17 +32,4 @@ export async function generateInsightsAction(
         console.error('Error in generateInsightsAction:', e);
         return { success: false, error: e.message || 'Ocurrió un error desconocido al generar el análisis.' };
     }
-}
-
-
-/**
- * Orchestrates the export of financial insights to a DOCX file by calling a server-only action.
- * @param {GenerateFinancialInsightsOutput} insightsData - The data to be included in the report.
- * @returns {Promise<{success: boolean; fileContent?: string; error?: string}>}
- */
-export async function exportToDocxAction(
-    insightsData: GenerateFinancialInsightsOutput,
-    baseCurrency: string
-): Promise<{ success: boolean; fileContent?: string; error?: string; }> {
-    return await exportToDocxServerAction(insightsData, baseCurrency);
 }
