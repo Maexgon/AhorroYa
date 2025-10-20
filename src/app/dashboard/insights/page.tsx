@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -52,8 +53,11 @@ export default function InsightsPage() {
         }
     }, [userData]);
     
-    const fromDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const toDate = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+    const { fromDate, toDate } = React.useMemo(() => {
+        const from = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const to = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+        return { fromDate: from, toDate: to };
+    }, []);
 
     const expensesQuery = useMemoFirebase(() => {
         if (!tenantId || !firestore) return null;
