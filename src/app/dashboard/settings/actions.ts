@@ -4,7 +4,8 @@
 import type { Membership } from '@/lib/types';
 import { initializeAdminApp } from '@/firebase/admin-config';
 import { getAuth } from 'firebase-admin/auth';
-import { firebaseConfig } from '@/firebase/config';
+import { getFirestore } from 'firebase-admin/firestore';
+import { headers } from 'next/headers';
 
 
 export async function inviteUserAction(params: {
@@ -99,18 +100,63 @@ export async function sendInvitationEmailAction(email: string): Promise<{ succes
 
 
 export async function deleteMemberAction(params: {
-    adminIdToken: string;
+    tenantId: string;
     memberUid: string;
 }): Promise<{ success: boolean; error?: string; }> {
-    const { adminIdToken, memberUid } = params;
+    const { tenantId, memberUid } = params;
+    const headersList = headers();
+    const idToken = headersList.get('Authorization')?.split('Bearer ')[1];
+
+    if (!idToken) {
+        return { success: false, error: "No autorizado. Token de autenticación no proporcionado." };
+    }
 
     try {
         const adminApp = await initializeAdminApp();
         const adminAuth = getAuth(adminApp);
+        const adminFirestore = getFirestore(adminApp);
         
-        // This action now only handles Auth deletion.
-        // Firestore deletions are handled client-side before this is called.
+        // 1. Verify the caller's token and get their UID
+        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        const callerUid = decodedToken.uid;
 
+        // 2. Fetch tenant to verify ownership
+        const tenantRef = adminFirestore.collection('tenants').doc(tenantId);
+        const tenantSnap = await tenantRef.get();
+
+        if (!tenantSnap.exists) {
+            return { success: false, error: "El tenant especificado no existe." };
+        }
+        const tenantData = tenantSnap.data();
+
+        // 3. SECURITY CHECK: Ensure the caller is the owner of the tenant
+        if (tenantData?.ownerUid !== callerUid) {
+            return { success: false, error: "Permiso denegado. Solo el propietario puede eliminar miembros." };
+        }
+
+        // 4. SECURITY CHECK: Prevent owner from deleting themselves
+        if (callerUid === memberUid) {
+            return { success: false, error: "No puedes eliminarte a ti mismo como propietario." };
+        }
+
+        // 5. Fetch the membership to ensure the member belongs to this tenant
+        const membershipRef = adminFirestore.collection('memberships').doc(`${tenantId}_${memberUid}`);
+        const membershipSnap = await membershipRef.get();
+        if (!membershipSnap.exists) {
+            return { success: false, error: "El miembro no pertenece a este tenant." };
+        }
+
+        // --- If all checks pass, proceed with deletion ---
+        const batch = adminFirestore.batch();
+        const userRef = adminFirestore.collection('users').doc(memberUid);
+        
+        // Delete Firestore documents
+        batch.delete(membershipRef);
+        batch.delete(userRef);
+        
+        await batch.commit();
+
+        // Delete from Firebase Auth
         await adminAuth.deleteUser(memberUid);
         
         return { success: true };
@@ -119,9 +165,11 @@ export async function deleteMemberAction(params: {
         console.error('Error in deleteMemberAction:', error);
          if (error.code === 'auth/user-not-found') {
             console.warn(`User ${memberUid} not found in Firebase Auth. May have been already deleted.`);
-            // Return success because the desired state (user doesn't exist in Auth) is achieved.
-            return { success: true }; 
+            return { success: true }; // Consider it a success if the user is already gone
         }
-        return { success: false, error: error.message || 'Ocurrió un error desconocido al eliminar al miembro de Authentication.' };
+        if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
+            return { success: false, error: "Tu sesión ha expirado o es inválida. Por favor, inicia sesión de nuevo." };
+        }
+        return { success: false, error: error.message || 'Ocurrió un error desconocido al eliminar al miembro.' };
     }
 }

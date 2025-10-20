@@ -479,52 +479,37 @@ export default function SettingsPage() {
   };
 
   const handleDeleteMember = async () => {
-    if (!memberToDelete || !tenantId || !firestore || !user) return;
-
+    if (!memberToDelete || !tenantId || !user) {
+        toast({ variant: "destructive", title: "Error", description: "No se ha seleccionado ningún miembro para eliminar." });
+        return;
+    }
+    
     setIsDeletingMember(true);
     toast({ title: "Eliminando miembro..." });
 
     try {
-        const adminIdToken = await user.getIdToken();
-
-        // First, delete from Firestore
-        const batch = writeBatch(firestore);
-        const userRef = doc(firestore, 'users', memberToDelete.uid);
-        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${memberToDelete.uid}`);
-
-        batch.delete(userRef);
-        batch.delete(membershipRef);
-        
-        await batch.commit();
-
-        // Then, delete from Firebase Auth
-        const deleteResult = await deleteMemberAction({
+        const result = await deleteMemberAction({ 
+            tenantId, 
             memberUid: memberToDelete.uid,
-            adminIdToken: adminIdToken,
         });
-        
-        if (deleteResult.success) {
+
+        if (result.success) {
             toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
             if (members && setMembers) {
                 setMembers(members.filter(m => m.uid !== memberToDelete.uid));
             }
         } else {
-           console.error("Failed to delete user from Auth:", deleteResult.error);
-           toast({ variant: "destructive", title: "Error de Autenticación", description: deleteResult.error || "El usuario fue eliminado de la app, pero no se pudo eliminar de la autenticación. Contacte a soporte." });
+            toast({ variant: "destructive", title: "Error al eliminar", description: result.error });
         }
-
     } catch (error: any) {
         console.error("Error deleting member:", error);
-         errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: 'batch-write-delete',
-            operation: 'delete',
-            requestResourceData: `Deleting user ${memberToDelete.uid}`
-        }));
+        toast({ variant: "destructive", title: "Error inesperado", description: "No se pudo completar la eliminación." });
     } finally {
         setIsDeletingMember(false);
         setMemberToDelete(null);
     }
   };
+
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
