@@ -30,7 +30,7 @@ export default function InsightsPage() {
     const firestore = useFirestore();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
     const [insightsData, setInsightsData] = React.useState<GenerateFinancialInsightsOutput | null>(null);
-    const [isLoading, setIsLoading] = React.useState(true);
+    const [isGenerating, setIsGenerating] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
     // --- Data Fetching ---
@@ -106,15 +106,22 @@ export default function InsightsPage() {
     }, [tenantId, firestore]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
+    const isDataLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
+
     // --- AI Insights Generation ---
     React.useEffect(() => {
-        const areDataQueriesLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
-        if (areDataQueriesLoading || !monthlyExpenses || !budgets || !categories || !monthlyIncomes || !pendingInstallments) {
+        // Do not run if data is still loading or if we already have insights/error.
+        if (isDataLoading || insightsData || error) {
+            return;
+        }
+
+        // Ensure we have the minimum required data to proceed.
+        if (!monthlyExpenses || !budgets || !categories || !monthlyIncomes || !pendingInstallments) {
             return;
         }
 
         const generateInsights = async () => {
-            setIsLoading(true);
+            setIsGenerating(true);
             setError(null);
             
             const result = await generateInsightsAction({
@@ -131,12 +138,12 @@ export default function InsightsPage() {
             } else {
                 setError(result.error || 'No se pudieron generar los insights.');
             }
-            setIsLoading(false);
+            setIsGenerating(false);
         };
 
         generateInsights();
 
-    }, [isAuthLoading, isUserDocLoading, isLoadingExpenses, isLoadingBudgets, isLoadingCategories, isLoadingIncomes, monthlyExpenses, budgets, categories, monthlyIncomes, pendingInstallments]);
+    }, [isDataLoading, monthlyExpenses, budgets, categories, monthlyIncomes, pendingInstallments, insightsData, error]);
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
 
@@ -155,7 +162,7 @@ export default function InsightsPage() {
 
             <main className="flex-1 p-4 md:p-8">
                  <div className="mx-auto max-w-4xl">
-                    {isLoading ? (
+                    {isGenerating ? (
                         <Card className="flex flex-col items-center justify-center p-12">
                             <Loader2 className="h-12 w-12 animate-spin text-primary" />
                             <p className="mt-4 text-lg text-muted-foreground">Nuestros analistas de IA están trabajando en tu informe...</p>
