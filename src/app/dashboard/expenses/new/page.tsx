@@ -13,18 +13,17 @@ import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError, useStorage } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Image as ImageIcon, Plus } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Plus } from 'lucide-react';
 import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceiptAction } from '../actions';
+import { processReceiptAction, uploadAndProcessPdfAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, FxRate, Currency, Entity } from '@/lib/types';
 import { Combobox } from '@/components/ui/combobox';
@@ -164,31 +163,18 @@ export default function NewExpensePage() {
 
     try {
         if (isPdfUpload) {
+            console.log('[CLIENT] PDF selected. Uploading to server action...');
             const file = files[0];
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit for PDF
-                toast({ variant: 'destructive', title: 'PDF demasiado grande', description: 'El tamaño máximo para PDFs es 5MB.' });
-                setIsProcessingReceipt(false);
-                return;
-            }
-            console.log('[CLIENT] PDF selected. Uploading to storage...');
-            // Handle PDF upload to storage
-            const storageRef = ref(storage, `receipts/${tenantId}/${user.uid}/${Date.now()}-${file.name}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            const gsUrl = `gs://${snapshot.metadata.bucket}/${snapshot.metadata.fullPath}`;
-            console.log(`[CLIENT] PDF uploaded. gsUrl: ${gsUrl}`);
+            const formData = new FormData();
+            formData.append('pdf', file);
+            formData.append('tenantId', tenantId);
+            formData.append('userId', user.uid);
+            formData.append('categories', categoriesForAI);
 
             setReceiptFiles([{ file, previewUrl: URL.createObjectURL(file) }]);
-            
-            console.log('[CLIENT] Calling processReceiptAction for PDF...');
-            const result = await processReceiptAction({
-                receiptId: `temp-${crypto.randomUUID()}`,
-                fileUrl: gsUrl,
-                tenantId,
-                userId: user.uid,
-                fileType: 'pdf',
-                categories: categoriesForAI
-            });
-            console.log('[CLIENT] Received result from action:', result);
+
+            const result = await uploadAndProcessPdfAction(formData);
+            console.log('[CLIENT] Received result from PDF action:', result);
             handleAIResult(result);
 
         } else {
@@ -480,12 +466,14 @@ export default function NewExpensePage() {
                                         </Button>
                                     </div>
                                 ))}
+                                {receiptFiles[0]?.file.type.startsWith('image/') && (
                                 <label htmlFor="dropzone-file-extra" className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center">
                                         <Plus className="w-8 h-8 text-muted-foreground" />
                                     </div>
-                                    <input id="dropzone-file-extra" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg" disabled={receiptFiles.some(f => f.file.type === 'application/pdf')}/>
+                                    <input id="dropzone-file-extra" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg"/>
                                 </label>
+                                )}
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full">
@@ -707,3 +695,4 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
