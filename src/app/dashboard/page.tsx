@@ -20,7 +20,7 @@ import { DateRange } from 'react-day-picker';
 import { format, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -51,6 +51,7 @@ const SAFE_DEFAULTS = {
     formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
     toCurrencyCode: 'ARS',
     monthlyOverviewData: [],
+    cumulativeChartData: [],
     isOwner: false,
 };
 
@@ -204,30 +205,49 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
             }).slice(0, 5);
     })();
     
-    const monthlyOverviewData = Array.from({ length: 12 }).map((_, i) => {
-      const monthDate = subMonths(new Date(), i);
-      const month = monthDate.getMonth();
-      const year = monthDate.getFullYear();
-      
-      const monthlyExpenses = allExpenses
-        .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
-        .reduce((sum, e) => sum + e.amountARS, 0);
+    let cumulativeExpenses = 0;
+    let cumulativeIncomes = 0;
+    
+    const monthlyData = Array.from({ length: 12 }).map((_, i) => {
+        const monthDate = subMonths(new Date(), 11 - i); // Iterate from 12 months ago to now
+        const month = monthDate.getMonth();
+        const year = monthDate.getFullYear();
         
-      const monthlyIncomes = allIncomes
-        .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
-        .reduce((sum, inc) => sum + inc.amountARS, 0);
+        const monthlyExpenses = allExpenses
+          .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
+          .reduce((sum, e) => sum + e.amountARS, 0);
+          
+        const monthlyIncomes = allIncomes
+          .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
+          .reduce((sum, inc) => sum + inc.amountARS, 0);
 
-      return {
-        month: format(monthDate, 'MMM', { locale: es }),
-        ingresos: monthlyIncomes,
-        gastos: monthlyExpenses,
-      };
-    }).reverse();
+        cumulativeExpenses += monthlyExpenses;
+        cumulativeIncomes += monthlyIncomes;
+
+        return {
+          month: format(monthDate, 'MMM', { locale: es }),
+          ingresos: monthlyIncomes,
+          gastos: monthlyExpenses,
+          ingresosAcumulados: cumulativeIncomes,
+          gastosAcumulados: cumulativeExpenses,
+        };
+    });
 
     const isOwner = activeTenant?.ownerUid === user.uid;
 
 
-    return { barData, recentExpenses, budgetChartData, totalExpenses, budgetBalance, formatCurrency: finalFormatCurrency, toCurrencyCode: 'ARS', monthlyOverviewData, isOwner };
+    return { 
+        barData, 
+        recentExpenses, 
+        budgetChartData, 
+        totalExpenses, 
+        budgetBalance, 
+        formatCurrency: finalFormatCurrency, 
+        toCurrencyCode: 'ARS', 
+        monthlyOverviewData: monthlyData, // Use the enriched monthly data
+        cumulativeChartData: monthlyData, // Use the same data for the new chart
+        isOwner 
+    };
   }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user]);
   
   const handleSeedCategories = async () => {
@@ -409,38 +429,77 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
             </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
-            <CardDescription>Comparación de ingresos y gastos de los últimos 12 meses.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={processedData.monthlyOverviewData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
-                <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                <Tooltip
-                    content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                            return (
-                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                    <p className="font-bold">{label}</p>
-                                    <p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
-                                    <p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p>
-                                </div>
-                            );
-                        }
-                        return null;
-                    }}
-                />
-                <Legend />
-                <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+            <CardHeader>
+                <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
+                <CardDescription>Ingresos vs. Gastos de los últimos 12 meses.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={processedData.monthlyOverviewData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                    <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                    <Tooltip
+                        content={({ active, payload, label }) => {
+                            if (active && payload && payload.length) {
+                                return (
+                                    <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                        <p className="font-bold">{label}</p>
+                                        <p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                        <p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        }}
+                    />
+                    <Legend />
+                    <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+                </ResponsiveContainer>
+            </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Balance Acumulado Anual</CardTitle>
+                    <CardDescription>Evolución de ingresos y gastos acumulados.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                        <ComposedChart data={processedData.cumulativeChartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <Tooltip
+                                content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                        const income = payload.find(p => p.dataKey === 'ingresosAcumulados')?.value || 0;
+                                        const expense = payload.find(p => p.dataKey === 'gastosAcumulados')?.value || 0;
+                                        return (
+                                            <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                <p className="font-bold">{label}</p>
+                                                <p style={{ color: 'hsl(var(--chart-3))' }}>Ing. Acum: {processedData.formatCurrency(income as number)}</p>
+                                                <p style={{ color: 'hsl(var(--destructive))' }}>Gas. Acum: {processedData.formatCurrency(expense as number)}</p>
+                                                <p className="font-semibold mt-1">Balance: {processedData.formatCurrency(income as number - (expense as number))}</p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
+                            />
+                            <Legend />
+                             <Area type="monotone" dataKey="gastosAcumulados" fill="hsl(var(--destructive) / 0.1)" stroke="transparent" name="Gastos Acumulados" />
+                            <Area type="monotone" dataKey="ingresosAcumulados" fill="hsl(var(--chart-3) / 0.1)" stroke="transparent" name="Ingresos Acumulados" />
+                            <Line type="monotone" dataKey="ingresosAcumulados" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} name="Ingresos Acum." />
+                            <Line type="monotone" dataKey="gastosAcumulados" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} name="Gastos Acum." />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+        </div>
         
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-4">
@@ -468,8 +527,9 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
               </CardHeader>
               <CardContent className="pl-2">
                  <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
+                  <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
                      <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                     <YAxis hide={true} />
                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
                         <LabelList
                             dataKey="total"
