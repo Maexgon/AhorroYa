@@ -59,6 +59,18 @@ export default function EditExpensePage() {
 
   const { control, handleSubmit, watch, formState: { errors }, reset, setValue } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
+    defaultValues: {
+        entityName: '',
+        entityCuit: '',
+        amount: 0,
+        currency: 'ARS',
+        categoryId: '',
+        subcategoryId: '',
+        paymentMethod: 'cash',
+        notes: '',
+        installments: 1,
+        cardType: '',
+    }
   });
   
   // When expense data loads, reset the form with its values
@@ -70,8 +82,8 @@ export default function EditExpensePage() {
         notes: expenseData.notes || '',
         entityCuit: expenseData.entityCuit || '',
         subcategoryId: expenseData.subcategoryId || '',
-        installments: expenseData.installments,
-        cardType: expenseData.cardType,
+        installments: expenseData.installments || 1,
+        cardType: expenseData.cardType || '',
       });
     }
   }, [expenseData, reset]);
@@ -368,5 +380,7 @@ export default function EditExpensePage() {
     </div>
   );
 }
+
+    
 
     
