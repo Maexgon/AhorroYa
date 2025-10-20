@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
@@ -5,6 +6,7 @@ import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissi
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, doc, writeBatch, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { getAuth, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,7 +36,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { inviteUserAction, sendInvitationEmailAction, deleteMemberAction } from './actions';
 
 
 function ManageCategories({ tenantId }: { tenantId: string }) {
@@ -99,34 +100,26 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
     setIsProcessing(true);
 
     try {
+      const batch = writeBatch(firestore);
       if (dialogMode === 'newCat') {
         const newCatRef = doc(collection(firestore, 'categories'));
         const newCategoryData = { id: newCatRef.id, tenantId, name, color, order: categories.length };
-        await writeBatch(firestore).set(newCatRef, newCategoryData).commit();
+        batch.set(newCatRef, newCategoryData);
       } else if (dialogMode === 'editCat' && currentCategory) {
         const catRef = doc(firestore, 'categories', currentCategory.id);
-        const updatedData = { name, color };
-        updateDoc(catRef, updatedData)
-        .catch(e => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: catRef.path, operation: 'update', requestResourceData: updatedData,
-            }))
-        });
+        batch.update(catRef, { name, color });
       } else if (dialogMode === 'newSub' && currentCategory) {
         const newSubRef = doc(collection(firestore, 'subcategories'));
         const newSubData = { id: newSubRef.id, tenantId, categoryId: currentCategory.id, name, order: currentCategory.subcategories.length };
-        await writeBatch(firestore).set(newSubRef, newSubData).commit();
+        batch.set(newSubRef, newSubData);
       } else if (dialogMode === 'editSub' && currentSubCategory) {
         const subCatRef = doc(firestore, 'subcategories', currentSubCategory.id);
-        const updatedData = { name };
-        updateDoc(subCatRef, updatedData).catch(e => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: subCatRef.path, operation: 'update', requestResourceData: updatedData,
-            }))
-        });
+        batch.update(subCatRef, { name });
       }
+      await batch.commit();
       toast({ title: "¡Éxito!", description: "La operación se completó correctamente." });
     } catch(e) {
+      console.error("Error saving category/subcategory", e);
       toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar el cambio." });
     } finally {
       setIsProcessing(false);
@@ -163,11 +156,12 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
         await deleteDoc(docRef);
         
         toast({ title: "Eliminado", description: "El elemento ha sido eliminado." });
-      } catch (e) {
-         const pathToDelete = itemToDelete.type === 'category' ? `categories/${itemToDelete.id}` : `subcategories/${itemToDelete.id}`;
-         errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: pathToDelete, operation: 'delete',
-         }));
+      } catch (e: any) {
+        console.error("Error deleting item:", e);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: itemToDelete.type === 'category' ? `categories/${itemToDelete.id}` : `subcategories/${itemToDelete.id}`, 
+            operation: 'delete',
+        }));
       } finally {
         setIsProcessing(false);
         setIsAlertOpen(false);
@@ -421,65 +415,53 @@ export default function SettingsPage() {
         toast({ variant: "destructive", title: "Límite alcanzado", description: "Has alcanzado el número máximo de usuarios para tu plan." });
         return;
     }
-    
-    const actionResult = await inviteUserAction({
-        email: data.email,
-        password: data.password,
-        tenantId: tenantId,
-        firstName: data.firstName,
-        lastName: data.lastName,
-    });
-    
-    if (actionResult.success && actionResult.data) {
-        const newUserData = actionResult.data;
-        try {
-            const batch = writeBatch(firestore);
-            
-            const userRef = doc(firestore, 'users', newUserData.uid);
-            batch.set(userRef, newUserData);
 
-            const membershipData: Membership = {
-                tenantId: tenantId,
-                uid: newUserData.uid,
-                displayName: newUserData.displayName,
-                email: newUserData.email,
-                role: 'member',
-                status: 'active',
-                joinedAt: new Date().toISOString(),
-            };
-            const membershipRef = doc(firestore, 'memberships', `${tenantId}_${newUserData.uid}`);
-            batch.set(membershipRef, membershipData);
-            
-            await batch.commit();
-            
-            toast({ title: "¡Usuario Creado!", description: "El usuario ha sido creado correctamente. Ahora enviando invitación..." });
+    try {
+        const auth = getAuth();
+        // This is a temporary solution. In a real app, this should be done via a secure backend function.
+        const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+        const newUser = userCredential.user;
+        const displayName = `${data.firstName} ${data.lastName}`;
+        await updateProfile(newUser, { displayName });
 
-            const emailResult = await sendInvitationEmailAction(data.email);
-            if (emailResult.success) {
-                toast({ title: "¡Invitación Enviada!", description: "Se ha enviado un correo al nuevo miembro para que establezca su contraseña." });
-            } else {
-                 toast({ variant: "destructive", title: "Error al enviar correo", description: emailResult.error });
-            }
+        const batch = writeBatch(firestore);
 
-            setIsInviteDialogOpen(false);
-            if (members && setMembers) {
-                setMembers([...members, membershipData]);
-            }
+        const userDocData = {
+            uid: newUser.uid,
+            displayName,
+            email: newUser.email,
+        };
+        batch.set(doc(firestore, 'users', newUser.uid), userDocData);
 
-        } catch (error) {
-             errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: 'batch-write',
-                operation: 'write',
-                requestResourceData: 'Creating new user and membership'
-            }));
+        const membershipData: Membership = {
+            tenantId: tenantId,
+            uid: newUser.uid,
+            displayName: displayName,
+            email: data.email,
+            role: 'member',
+            status: 'active',
+            joinedAt: new Date().toISOString(),
+        };
+        batch.set(doc(firestore, 'memberships', `${tenantId}_${newUser.uid}`), membershipData);
+
+        await batch.commit();
+
+        await sendPasswordResetEmail(auth, data.email);
+
+        toast({ title: "¡Usuario Creado!", description: "Se ha enviado un correo al nuevo miembro para que establezca su contraseña." });
+        setIsInviteDialogOpen(false);
+        if (members && setMembers) {
+            setMembers([...members, membershipData]);
         }
-    } else {
-        toast({ variant: "destructive", title: "Error en la invitación", description: actionResult.error });
+
+    } catch (e: any) {
+        console.error("Error inviting user:", e);
+        toast({ variant: "destructive", title: "Error en la invitación", description: e.message });
     }
   };
 
   const handleDeleteMember = async () => {
-    if (!memberToDelete || !tenantId || !user) {
+    if (!memberToDelete || !tenantId || !user || !firestore) {
         toast({ variant: "destructive", title: "Error", description: "No se ha seleccionado ningún miembro para eliminar." });
         return;
     }
@@ -488,22 +470,22 @@ export default function SettingsPage() {
     toast({ title: "Eliminando miembro..." });
 
     try {
-        const result = await deleteMemberAction({ 
-            tenantId, 
-            memberUid: memberToDelete.uid,
-        });
+        const membershipRef = doc(firestore, 'memberships', `${tenantId}_${memberToDelete.uid}`);
+        await deleteDoc(membershipRef);
 
-        if (result.success) {
-            toast({ title: "Éxito", description: `El miembro ${memberToDelete.displayName} ha sido eliminado.` });
-            if (members && setMembers) {
-                setMembers(members.filter(m => m.uid !== memberToDelete.uid));
-            }
-        } else {
-            toast({ variant: "destructive", title: "Error al eliminar", description: result.error });
+        // This is not ideal, as deleting users from the client is risky.
+        // A proper implementation would use a Cloud Function.
+        toast({ title: "Advertencia", description: "La membresía fue eliminada. La eliminación de la cuenta de Auth debe hacerse desde la consola de Firebase por seguridad." });
+        
+        if (members && setMembers) {
+            setMembers(members.filter(m => m.uid !== memberToDelete.uid));
         }
     } catch (error: any) {
         console.error("Error deleting member:", error);
-        toast({ variant: "destructive", title: "Error inesperado", description: "No se pudo completar la eliminación." });
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: `memberships/${tenantId}_${memberToDelete.uid}`, 
+            operation: 'delete',
+        }));
     } finally {
         setIsDeletingMember(false);
         setMemberToDelete(null);
@@ -513,7 +495,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
-  if (isUserLoading || isUserDocLoading) { // Removed other loading states to let individual components handle it
+  if (isUserLoading || isUserDocLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -619,8 +601,8 @@ export default function SettingsPage() {
             <AlertDialogHeader>
                 <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    Esta acción eliminará permanentemente a <span className="font-bold">{memberToDelete?.displayName}</span>. 
-                    Se borrará su cuenta y todos sus datos asociados. Esta acción no se puede deshacer.
+                    Esta acción eliminará la membresía de <span className="font-bold">{memberToDelete?.displayName}</span> del tenant.
+                    La cuenta del usuario no se borrará de Firebase Authentication.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
