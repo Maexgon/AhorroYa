@@ -1127,8 +1127,38 @@ export default function DashboardPageContainer() {
 
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'owner' | 'member' | null>(null);
-  const [isLoadingRole, setIsLoadingRole] = useState(true);
-  
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 1. Get user's memberships
+  const membershipsQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+  }, [user, firestore]);
+  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
+
+  useEffect(() => {
+    if (isUserLoading || isLoadingMemberships) {
+      setIsLoading(true);
+      return;
+    }
+
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    
+    if (memberships && memberships.length > 0) {
+      const firstMembership = memberships[0];
+      setTenantId(firstMembership.tenantId);
+      setUserRole(firstMembership.role as 'owner' | 'member');
+      setIsLoading(false);
+    } else if (!isLoadingMemberships) {
+      // User is authenticated but has no memberships, maybe they need to subscribe
+      router.push('/subscribe');
+    }
+  }, [user, isUserLoading, memberships, isLoadingMemberships, router]);
+
+
   const getInitials = (name: string = "") => {
     const names = name.split(' ');
     if (names.length > 1) {
@@ -1136,42 +1166,6 @@ export default function DashboardPageContainer() {
     }
     return name.substring(0, 2).toUpperCase();
   }
-
-  // 1. Get user's tenantId
-  const userDocRef = useMemoFirebase(() => {
-    if (!user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [user, firestore]);
-  const { data: userData } = useDoc<UserType>(userDocRef);
-
-  useEffect(() => {
-    if (userData?.tenantIds?.[0]) {
-      setTenantId(userData.tenantIds[0]);
-    }
-  }, [userData]);
-
-  // 2. Get user's membership to determine role
-  const membershipDocRef = useMemoFirebase(() => {
-    if (!tenantId || !user) return null;
-    return doc(firestore, 'memberships', `${tenantId}_${user.uid}`);
-  }, [tenantId, user]);
-  const { data: membershipData, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
-
-  useEffect(() => {
-    if (!isLoadingMembership) {
-      if (membershipData?.role) {
-        setUserRole(membershipData.role as 'owner' | 'member');
-      }
-      setIsLoadingRole(false);
-    }
-  }, [membershipData, isLoadingMembership]);
-
-
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, isUserLoading, router]);
 
   const handleLogout = async () => {
     const auth = getAuth();
@@ -1191,7 +1185,7 @@ export default function DashboardPageContainer() {
     }
   };
 
-  if (isUserLoading || isLoadingRole) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <AhorroYaLogo className="h-12 w-12 animate-spin text-primary" />
@@ -1199,8 +1193,13 @@ export default function DashboardPageContainer() {
     );
   }
 
-  if (!user) {
-    return null;
+  if (!user || !tenantId || !userRole) {
+    // This state should be brief as the useEffect will redirect.
+    return (
+         <div className="flex h-screen items-center justify-center">
+            <AhorroYaLogo className="h-12 w-12 animate-spin text-primary" />
+        </div>
+    );
   }
   
   return (
