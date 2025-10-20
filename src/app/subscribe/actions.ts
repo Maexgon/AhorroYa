@@ -35,25 +35,18 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             photoURL: userRecord.photoURL || null,
         };
 
-        // --- Step 1: Find or Create the Tenant, User, and Membership ---
-        const tenantsRef = adminFirestore.collection("tenants");
         const userRef = adminFirestore.collection("users").doc(user.uid);
         const userSnap = await userRef.get();
         const existingTenantIds = userSnap.data()?.tenantIds || [];
 
         let tenantId: string;
-        let isNewTenant = false;
         
         if (existingTenantIds.length === 0) {
-            isNewTenant = true;
-            
-            // Create Tenant
-            const tenantRef = tenantsRef.doc();
+            const tenantRef = adminFirestore.collection("tenants").doc();
             tenantId = tenantRef.id;
 
             const initialBatch = adminFirestore.batch();
             
-            // Associate tenant with user
             initialBatch.update(userRef, { tenantIds: FieldValue.arrayUnion(tenantId) });
 
             initialBatch.set(tenantRef, {
@@ -63,7 +56,6 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
                 settings: JSON.stringify({ quietHours: true, rollover: false }),
             });
 
-            // Create Membership (using a predictable ID)
             const membershipRef = adminFirestore.collection("memberships").doc(`${tenantId}_${user.uid}`);
             initialBatch.set(membershipRef, {
                 tenantId: tenantId, uid: user.uid, displayName: user.displayName, email: user.email,
@@ -71,16 +63,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             });
 
             await initialBatch.commit();
-        } else {
-            tenantId = existingTenantIds[0];
-            const tenantSnap = await tenantsRef.doc(tenantId).get();
-            if (tenantSnap.data()?.status === 'active') {
-                 return { success: false, error: 'Ya tienes un plan activo.' };
-            }
-        }
-        
-        // --- Step 2: If it was a new tenant, create default categories ---
-        if (isNewTenant) {
+            
             const categoriesBatch = adminFirestore.batch();
             const categoriesCol = adminFirestore.collection("categories");
             const subcategoriesCol = adminFirestore.collection("subcategories");
@@ -95,9 +78,14 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
                 });
             });
             await categoriesBatch.commit();
+        } else {
+            tenantId = existingTenantIds[0];
+            const tenantSnap = await adminFirestore.collection("tenants").doc(tenantId).get();
+            if (tenantSnap.data()?.status === 'active') {
+                 return { success: false, error: 'Ya tienes un plan activo.' };
+            }
         }
-
-        // --- Step 3: Create License and activate Tenant ---
+        
         const finalBatch = adminFirestore.batch();
         const licenseRef = adminFirestore.collection("licenses").doc();
         const startDate = new Date();
