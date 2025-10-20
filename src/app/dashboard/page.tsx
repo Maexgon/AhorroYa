@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, subSemesters } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, subSemesters, isAfter, endOfToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
@@ -54,6 +54,10 @@ const SAFE_DEFAULTS = {
     monthlyOverviewData: [],
     cumulativeChartData: [],
     isOwner: false,
+    installmentsChartData: {
+      totalPending: 0,
+      monthlyTotals: [],
+    },
 };
 
 const CustomizedYAxisTick = (props: any) => {
@@ -324,6 +328,33 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
         };
     });
 
+    const installmentsChartData = (() => {
+      const pendingInstallments = allExpenses.filter(e => 
+        e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday())
+      );
+    
+      const monthlyTotals = pendingInstallments.reduce((acc, expense) => {
+        const monthKey = format(new Date(expense.date), 'yyyy-MM');
+        if (!acc[monthKey]) {
+          acc[monthKey] = 0;
+        }
+        acc[monthKey] += expense.amountARS;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const sortedMonthlyTotals = Object.entries(monthlyTotals)
+        .map(([key, total]) => ({
+          name: format(new Date(key), 'MMM yy', { locale: es }),
+          total,
+        }))
+        .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime())
+        .slice(0, 6); // Show next 6 months
+      
+      const totalPending = pendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
+
+      return { totalPending, monthlyTotals: sortedMonthlyTotals };
+    })();
+
     const isOwner = activeTenant?.ownerUid === user.uid;
 
 
@@ -337,7 +368,8 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
         toCurrencyCode: 'ARS', 
         monthlyOverviewData: monthlyData, // Use the enriched monthly data
         cumulativeChartData: monthlyData, // Use the same data for the new chart
-        isOwner 
+        isOwner,
+        installmentsChartData
     };
   }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user]);
   
@@ -494,6 +526,47 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
                 </Link>
             </Button>
         </div>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
+                <CardDescription>
+                    Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={processedData.installmentsChartData.monthlyTotals}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
+                        <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                        <Tooltip
+                            content={({ active, payload, label }) => {
+                                if (active && payload && payload.length) {
+                                    return (
+                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                            <p className="font-bold">{label}</p>
+                                            <p style={{ color: 'hsl(var(--chart-2))' }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            }}
+                        />
+                        <Bar dataKey="total" name="Total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]}>
+                            <LabelList
+                                dataKey="total"
+                                position="top"
+                                offset={8}
+                                className="fill-foreground"
+                                fontSize={12}
+                                formatter={(value: number) => processedData.formatCurrency(value)}
+                            />
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
 
 
         <div className="bg-card shadow rounded-lg p-4">
