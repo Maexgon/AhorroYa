@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from '@/firebase';
 import { subscribeToPlanAction } from '@/app/subscribe/actions';
@@ -58,9 +58,7 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
         setIsLoading(planId);
 
         try {
-            // The Server Action `subscribeToPlanAction` will securely read the
-            // user's token from the headers on the server side.
-            const result = await subscribeToPlanAction({ planId });
+            const result = await subscribeToPlanAction({ planId, userId: user.uid });
 
             if (result.success) {
                 toast({
@@ -125,9 +123,9 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
                                     className="w-full" 
                                     variant={plan.highlight ? 'default' : 'outline'}
                                     onClick={() => getButtonAction(plan)}
-                                    disabled={isUserLoading || (isLoading !== '' && isLoading !== plan.planId)}
+                                    disabled={isUserLoading || isLoading !== ''}
                                 >
-                                    {isLoading === plan.planId ? 'Procesando...' : (isSubscribeFlow ? 'Seleccionar Plan' : 'Comenzar Ahora')}
+                                    {isLoading === plan.planId ? <Loader2 className="animate-spin" /> : (isSubscribeFlow ? 'Seleccionar Plan' : 'Comenzar Ahora')}
                                 </Button>
                             </CardFooter>
                         </Card>

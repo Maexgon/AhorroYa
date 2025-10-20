@@ -4,30 +4,28 @@
 import { initializeAdminApp } from '@/firebase/admin-config';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { headers } from 'next/headers';
 import { defaultCategories } from '@/lib/default-categories';
 
 interface SubscribeToPlanParams {
     planId: string;
+    userId: string; // User's UID is now passed directly
 }
 
 /**
  * A secure server action to handle a user's subscription to a plan.
  * It performs all necessary checks and database writes with admin privileges.
  * 
- * - Verifies the calling user's authentication token from the request headers.
+ * - Verifies the calling user's UID.
  * - Checks if a tenant already exists for the user.
  * - If not, it creates the User, Tenant, Membership, and default Categories.
  * - Creates a License document based on the selected plan.
  * - Activates the Tenant.
  */
 export async function subscribeToPlanAction(params: SubscribeToPlanParams): Promise<{ success: boolean; error?: string; }> {
-    const { planId } = params;
-    const headersList = headers();
-    const idToken = headersList.get('Authorization')?.split('Bearer ')[1];
+    const { planId, userId } = params;
 
-    if (!idToken) {
-        return { success: false, error: "Token de autenticación no proporcionado." };
+    if (!userId) {
+        return { success: false, error: "ID de usuario no proporcionado." };
     }
 
     try {
@@ -35,13 +33,13 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         const adminAuth = getAuth(adminApp);
         const adminFirestore = getFirestore(adminApp);
         
-        // 1. Verify user token
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        // 1. Get user data from Auth using the provided UID
+        const userRecord = await adminAuth.getUser(userId);
         const user = {
-            uid: decodedToken.uid,
-            displayName: decodedToken.name || 'Usuario',
-            email: decodedToken.email || '',
-            photoURL: decodedToken.picture || null,
+            uid: userRecord.uid,
+            displayName: userRecord.displayName || 'Usuario',
+            email: userRecord.email || '',
+            photoURL: userRecord.photoURL || null,
         };
 
         const batch = adminFirestore.batch();
@@ -58,7 +56,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             tenantRef = adminFirestore.collection("tenants").doc();
             tenantId = tenantRef.id;
 
-            // Create User
+            // Create User document in Firestore
             const userRef = adminFirestore.collection("users").doc(user.uid);
             batch.set(userRef, {
                 uid: user.uid, displayName: user.displayName, email: user.email, photoURL: user.photoURL,
@@ -69,7 +67,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             batch.set(tenantRef, {
                 id: tenantId, type: planId.toUpperCase(), name: `Espacio de ${user.displayName.split(' ')[0]}`,
                 baseCurrency: "ARS", createdAt: new Date().toISOString(), ownerUid: user.uid,
-                status: "pending", // Will be activated by license
+                status: "pending",
                 settings: JSON.stringify({ quietHours: true, rollover: false }),
             });
 
@@ -134,8 +132,8 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
     } catch (error: any) {
         console.error("Error in subscribeToPlanAction:", error);
-         if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
-            return { success: false, error: "Tu sesión ha expirado o es inválida. Por favor, inicia sesión de nuevo." };
+         if (error.code === 'auth/user-not-found') {
+            return { success: false, error: "El usuario no fue encontrado. Por favor, intenta iniciar sesión de nuevo." };
         }
         return { success: false, error: error.message || 'Ocurrió un error inesperado al suscribirse al plan.' };
     }
