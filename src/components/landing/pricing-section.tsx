@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -58,7 +57,12 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
         setIsLoading(planId);
 
         try {
-            const result = await subscribeToPlanAction({ planId, userId: user.uid });
+            const result = await subscribeToPlanAction({ 
+                planId, 
+                userId: user.uid,
+                userEmail: user.email || '',
+                userDisplayName: user.displayName || 'Usuario'
+            });
 
             if (result.success) {
                 toast({

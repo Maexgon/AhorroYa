@@ -1,4 +1,3 @@
-
 'use server';
 
 import { collection, doc, writeBatch, getDoc, updateDoc } from 'firebase/firestore';
@@ -8,31 +7,24 @@ import { initializeFirebaseServer } from '@/firebase/server-init';
 interface SubscribeToPlanParams {
     planId: string;
     userId: string;
+    userEmail: string;
+    userDisplayName: string;
 }
 
 export async function subscribeToPlanAction(params: SubscribeToPlanParams): Promise<{ success: boolean; error?: string; }> {
-    const { planId, userId } = params;
+    const { planId, userId, userEmail, userDisplayName } = params;
 
     if (!planId || !userId) {
         return { success: false, error: 'El ID del plan y del usuario son requeridos.' };
     }
 
     try {
-        const { firestore, auth } = initializeFirebaseServer();
-        const user = await auth.getUser(userId);
-
-        const userDocRef = doc(firestore, 'users', userId);
-        const userDoc = await getDoc(userDocRef);
-
-        if (userDoc.exists() && userDoc.data()?.tenantIds?.length > 0) {
-            return { success: false, error: 'El usuario ya está asociado a un tenant.' };
-        }
-
+        const { firestore } = initializeFirebaseServer();
         const batch = writeBatch(firestore);
+        
+        // 1. Create Tenant
         const tenantRef = doc(collection(firestore, 'tenants'));
         const tenantId = tenantRef.id;
-
-        // 1. Create Tenant
         batch.set(tenantRef, {
             id: tenantId,
             type: planId.toUpperCase(),
@@ -40,7 +32,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             baseCurrency: "ARS",
             createdAt: new Date().toISOString(),
             ownerUid: userId,
-            status: "pending",
+            status: "pending", // Will be activated at the end
             settings: JSON.stringify({ quietHours: true, rollover: false }),
         });
 
@@ -49,14 +41,15 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         batch.set(membershipRef, {
             tenantId: tenantId,
             uid: userId,
-            displayName: user.displayName || user.email,
-            email: user.email,
+            displayName: userDisplayName,
+            email: userEmail,
             role: 'owner',
             status: 'active',
             joinedAt: new Date().toISOString()
         });
 
         // 3. Update User with Tenant ID
+        const userDocRef = doc(firestore, 'users', userId);
         batch.update(userDocRef, { tenantIds: [tenantId] });
 
         // 4. Create Categories & Subcategories
@@ -84,17 +77,17 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
             maxUsers: maxUsersMapping[planId] ?? 1
         });
+        
+        // 6. Set Tenant to Active
+        batch.update(tenantRef, { status: "active" });
 
-        // 6. Commit the main batch
+        // Commit all changes at once
         await batch.commit();
-
-        // 7. Activate Tenant in a separate update
-        await updateDoc(tenantRef, { status: "active" });
 
         return { success: true };
 
     } catch (error: any) {
-        console.error("[subscribeToPlanAction] ERROR CATCH:", error);
-        return { success: false, error: `Error: ${error.message} (Code: ${error.code})` };
+        console.error("Error in subscribeToPlanAction: ", error);
+        return { success: false, error: `Error: ${error.message}` };
     }
 }
