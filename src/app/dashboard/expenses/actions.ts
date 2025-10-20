@@ -2,8 +2,8 @@
 'use server';
 
 import { processReceipt, type ProcessReceiptOutput, type ProcessReceiptInput } from '@/ai/flows/ocr-receipt-processing';
-import { initializeFirebase } from '@/firebase/config';
-import { getStorage, ref, uploadBytes } from 'firebase/storage';
+import { initializeAdminApp } from '@/firebase/admin-config';
+import { getStorage } from 'firebase-admin/storage';
 
 
 /**
@@ -41,7 +41,7 @@ export async function processReceiptAction(
 
 
 /**
- * Uploads a PDF to Firebase Storage and then processes it using an AI flow.
+ * Uploads a PDF to Firebase Storage using the Admin SDK and then processes it using an AI flow.
  *
  * @param {FormData} formData - The form data containing the PDF file and other details.
  * @returns {Promise<{success: boolean; data?: ProcessReceiptOutput; error?: string}>} - The result of the AI processing.
@@ -59,14 +59,23 @@ export async function uploadAndProcessPdfAction(
             return { success: false, error: 'Faltan datos para procesar el PDF.' };
         }
         
-        console.log('[PDF ACTION] Uploading PDF to Storage...');
-        const firebaseApp = initializeFirebase();
-        const storage = getStorage(firebaseApp);
-        const storageRef = ref(storage, `receipts/${tenantId}/${userId}/${Date.now()}-${pdfFile.name}`);
+        console.log('[PDF ACTION] Uploading PDF to Storage via Admin SDK...');
         
-        const fileBuffer = await pdfFile.arrayBuffer();
-        const snapshot = await uploadBytes(storageRef, fileBuffer);
-        const gsUrl = `gs://${snapshot.metadata.bucket}/${snapshot.metadata.fullPath}`;
+        // Initialize Admin App and get Storage bucket
+        await initializeAdminApp();
+        const bucket = getStorage().bucket();
+        const filePath = `receipts/${tenantId}/${userId}/${Date.now()}-${pdfFile.name}`;
+        const fileUpload = bucket.file(filePath);
+
+        const fileBuffer = Buffer.from(await pdfFile.arrayBuffer());
+
+        await fileUpload.save(fileBuffer, {
+            metadata: {
+                contentType: pdfFile.type,
+            },
+        });
+        
+        const gsUrl = `gs://${bucket.name}/${filePath}`;
         console.log(`[PDF ACTION] PDF uploaded. gsUrl: ${gsUrl}`);
 
         console.log('[PDF ACTION] Calling processReceipt flow...');
@@ -80,7 +89,13 @@ export async function uploadAndProcessPdfAction(
         });
         console.log('[PDF ACTION] Received result from processReceipt:', result);
         
+        if (!result || Object.keys(result).length === 0) {
+            console.warn('AI flow returned empty or null result for PDF.');
+            return { success: false, error: 'La IA no pudo extraer datos del PDF.' };
+        }
+        
         return { success: true, data: result };
+
     } catch (e: any) {
         console.error('Error in uploadAndProcessPdfAction:', e);
         return { success: false, error: e.message || 'Ocurrió un error desconocido al procesar el PDF.' };
