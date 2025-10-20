@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -100,7 +101,7 @@ export default function InsightsPage() {
     }, [allIncomes, fromDate, toDate]);
 
     const budgetsQuery = useMemoFirebase(() => {
-        if (!tenantId || !firestore) return null;
+        if (!tenantId || !firestore || !fromDate) return null;
         return query(collection(firestore, 'budgets'), 
             where('tenantId', '==', tenantId),
             where('month', '==', fromDate.getMonth() + 1),
@@ -117,7 +118,6 @@ export default function InsightsPage() {
     
     const isLoadingData = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
 
-    // --- AI Insights Generation ---
     React.useEffect(() => {
         const canGenerate = !isLoadingData && !!tenantId && allExpenses && budgets && categories && allIncomes && user;
         
@@ -162,7 +162,7 @@ export default function InsightsPage() {
             setIsGenerating(false);
         }
 
-    }, [isLoadingData, allExpenses, budgets, categories, allIncomes, fromDate, insightsData, error, tenantId, user, monthlyExpenses, monthlyIncomes, pendingInstallments]);
+    }, [isLoadingData, allExpenses, budgets, categories, allIncomes, fromDate, insightsData, error, tenantId, user, monthlyExpenses, monthlyIncomes, pendingInstallments, toast]);
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
 
@@ -203,6 +203,9 @@ export default function InsightsPage() {
             console.error("Error exporting to PDF:", err);
         });
     };
+    
+    const currentMonthName = fromDate ? formatDate(fromDate, 'LLLL', { locale: es }) : '';
+    const currentYear = fromDate ? fromDate.getFullYear().toString() : '';
 
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">
@@ -245,7 +248,14 @@ export default function InsightsPage() {
                                     <CardDescription>Tu situación financiera del mes actual.</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <p className="text-muted-foreground">{insightsData.generalSummary}</p>
+                                    <div className="prose prose-sm dark:prose-invert max-w-none bg-muted/50 p-4 rounded-lg">
+                                        <p className="font-mono text-xs">
+                                            Reporte Financiero al {formatDate(new Date(), 'yyyy-MM-dd')}<br/>
+                                            Generado por: {userData?.displayName || user?.displayName || 'Usuario'}<br/>
+                                            Período: {currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} de {currentYear}
+                                        </p>
+                                        <p className="mt-4 text-sm text-muted-foreground">{insightsData.generalSummary}</p>
+                                    </div>
                                 </CardContent>
                             </Card>
                             
@@ -327,5 +337,3 @@ export default function InsightsPage() {
         </div>
     );
 }
-
-    
