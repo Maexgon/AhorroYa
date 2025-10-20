@@ -8,7 +8,7 @@ export default function Footer() {
           <div className="flex items-center gap-2">
             <AhorroYaLogo className="h-5 w-5 text-foreground" />
             <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
-              Creado por Ahorro Ya. © {new Date().getFullYear()} Todos los derechos reservados.
+              Creado por ACIZER. © {new Date().getFullYear()} Todos los derechos reservados.
             </p>
           </div>
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
