@@ -4,6 +4,8 @@
 import { initializeAdminApp } from '@/firebase/admin-config';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+
 
 export async function uploadAvatarAction(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
     const file = formData.get('file') as File;
@@ -15,10 +17,9 @@ export async function uploadAvatarAction(formData: FormData): Promise<{ success:
 
     try {
         const adminApp = await initializeAdminApp();
-        const storage = adminApp.storage();
-        const bucket = storage.bucket();
+        const bucket = getStorage(adminApp).bucket();
 
-        const filePath = `avatars/${uid}/${file.name}`;
+        const filePath = `avatars/${uid}/${Date.now()}_${file.name}`;
         const fileBuffer = Buffer.from(await file.arrayBuffer());
 
         const bucketFile = bucket.file(filePath);
