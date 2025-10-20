@@ -59,22 +59,24 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             console.log('[subscribeToPlanAction] Añadiendo actualización de usuario al lote inicial...');
             initialBatch.update(userRef, { tenantIds: FieldValue.arrayUnion(tenantId) });
 
-            console.log('[subscribeToPlanAction] Añadiendo creación de tenant al lote inicial...');
-            initialBatch.set(tenantRef, {
+            const tenantData = {
                 id: tenantId, type: planId.toUpperCase(), name: `Espacio de ${user.displayName.split(' ')[0]}`,
                 baseCurrency: "ARS", createdAt: new Date().toISOString(), ownerUid: user.uid,
                 status: "pending",
                 settings: JSON.stringify({ quietHours: true, rollover: false }),
-            });
-
-            console.log('[subscribeToPlanAction] Añadiendo creación de membresía al lote inicial...');
-            const membershipRef = adminFirestore.collection("memberships").doc(`${tenantId}_${user.uid}`);
-            initialBatch.set(membershipRef, {
+            };
+            console.log('[subscribeToPlanAction] Añadiendo creación de tenant al lote inicial. Data:', tenantData);
+            initialBatch.set(tenantRef, tenantData);
+            
+            const membershipData = {
                 tenantId: tenantId, uid: user.uid, displayName: user.displayName, email: user.email,
                 role: 'owner', status: 'active', joinedAt: new Date().toISOString()
-            });
+            };
+            const membershipRef = adminFirestore.collection("memberships").doc(`${tenantId}_${user.uid}`);
+            console.log('[subscribeToPlanAction] Añadiendo creación de membresía al lote inicial. Data:', membershipData);
+            initialBatch.set(membershipRef, membershipData);
 
-            console.log('[subscribeToPlanAction] Ejecutando lote inicial...');
+            console.log('[subscribeToPlanAction] Ejecutando lote inicial (update user, create tenant, create membership)...');
             await initialBatch.commit();
             console.log('[subscribeToPlanAction] Lote inicial completado.');
             
@@ -117,17 +119,18 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         }
 
         const maxUsersMapping: { [key: string]: number } = { personal: 1, familiar: 4, empresa: 10, demo: 1 };
-
-        console.log('[subscribeToPlanAction] Añadiendo creación de licencia al lote final...');
-        finalBatch.set(licenseRef, {
+        
+        const licenseData = {
             id: licenseRef.id, tenantId: tenantId, plan: planId, status: 'active',
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
             maxUsers: maxUsersMapping[planId] ?? 1,
             paymentId: `sim_${adminFirestore.collection("anything").doc().id}`,
-        });
+        };
+        console.log('[subscribeToPlanAction] Añadiendo creación de licencia al lote final. Data:', licenseData);
+        finalBatch.set(licenseRef, licenseData);
 
-        console.log('[subscribeToPlanAction] Añadiendo actualización de tenant a "active" al lote final...');
         const tenantRefToUpdate = adminFirestore.collection("tenants").doc(tenantId);
+        console.log('[subscribeToPlanAction] Añadiendo actualización de tenant a "active" al lote final...');
         finalBatch.update(tenantRefToUpdate, { status: "active" });
         
         console.log('[subscribeToPlanAction] Ejecutando lote final (licencia y activación)...');
