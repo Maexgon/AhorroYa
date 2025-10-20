@@ -17,16 +17,20 @@ interface SubscribeToPlanParams {
  */
 export async function subscribeToPlanAction(params: SubscribeToPlanParams): Promise<{ success: boolean; error?: string; }> {
     const { planId, userId } = params;
+    console.log(`[subscribeToPlanAction] Iniciando para userId: ${userId} y planId: ${planId}`);
 
     if (!userId) {
+        console.error('[subscribeToPlanAction] Error: ID de usuario no proporcionado.');
         return { success: false, error: "ID de usuario no proporcionado." };
     }
 
     try {
+        console.log('[subscribeToPlanAction] Inicializando Firebase Admin...');
         const adminApp = await initializeAdminApp();
         const adminAuth = getAuth(adminApp);
         const adminFirestore = getFirestore(adminApp);
         
+        console.log(`[subscribeToPlanAction] Obteniendo registro de Auth para userId: ${userId}`);
         const userRecord = await adminAuth.getUser(userId);
         const user = {
             uid: userRecord.uid,
@@ -34,21 +38,28 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             email: userRecord.email || '',
             photoURL: userRecord.photoURL || null,
         };
+        console.log('[subscribeToPlanAction] Información de usuario obtenida:', user.displayName);
 
         const userRef = adminFirestore.collection("users").doc(user.uid);
+        console.log(`[subscribeToPlanAction] Obteniendo documento de Firestore para userId: ${user.uid}`);
         const userSnap = await userRef.get();
         const existingTenantIds = userSnap.data()?.tenantIds || [];
+        console.log('[subscribeToPlanAction] Tenant IDs existentes:', existingTenantIds);
 
         let tenantId: string;
         
         if (existingTenantIds.length === 0) {
+            console.log('[subscribeToPlanAction] No se encontraron tenants. Creando uno nuevo...');
             const tenantRef = adminFirestore.collection("tenants").doc();
             tenantId = tenantRef.id;
+            console.log(`[subscribeToPlanAction] Nuevo tenantId generado: ${tenantId}`);
 
             const initialBatch = adminFirestore.batch();
             
+            console.log('[subscribeToPlanAction] Añadiendo actualización de usuario al lote inicial...');
             initialBatch.update(userRef, { tenantIds: FieldValue.arrayUnion(tenantId) });
 
+            console.log('[subscribeToPlanAction] Añadiendo creación de tenant al lote inicial...');
             initialBatch.set(tenantRef, {
                 id: tenantId, type: planId.toUpperCase(), name: `Espacio de ${user.displayName.split(' ')[0]}`,
                 baseCurrency: "ARS", createdAt: new Date().toISOString(), ownerUid: user.uid,
@@ -56,18 +67,22 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
                 settings: JSON.stringify({ quietHours: true, rollover: false }),
             });
 
+            console.log('[subscribeToPlanAction] Añadiendo creación de membresía al lote inicial...');
             const membershipRef = adminFirestore.collection("memberships").doc(`${tenantId}_${user.uid}`);
             initialBatch.set(membershipRef, {
                 tenantId: tenantId, uid: user.uid, displayName: user.displayName, email: user.email,
                 role: 'owner', status: 'active', joinedAt: new Date().toISOString()
             });
 
+            console.log('[subscribeToPlanAction] Ejecutando lote inicial...');
             await initialBatch.commit();
+            console.log('[subscribeToPlanAction] Lote inicial completado.');
             
             const categoriesBatch = adminFirestore.batch();
             const categoriesCol = adminFirestore.collection("categories");
             const subcategoriesCol = adminFirestore.collection("subcategories");
 
+            console.log('[subscribeToPlanAction] Añadiendo categorías al lote de categorías...');
             defaultCategories.forEach((category, catIndex) => {
                 const categoryRef = categoriesCol.doc();
                 categoriesBatch.set(categoryRef, { id: categoryRef.id, tenantId: tenantId, name: category.name, color: category.color, order: catIndex });
@@ -77,11 +92,15 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
                     categoriesBatch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantId, categoryId: categoryRef.id, name: subcategoryName, order: subCatIndex });
                 });
             });
+            console.log('[subscribeToPlanAction] Ejecutando lote de categorías...');
             await categoriesBatch.commit();
+            console.log('[subscribeToPlanAction] Lote de categorías completado.');
         } else {
             tenantId = existingTenantIds[0];
+            console.log(`[subscribeToPlanAction] Usando tenant existente: ${tenantId}`);
             const tenantSnap = await adminFirestore.collection("tenants").doc(tenantId).get();
             if (tenantSnap.data()?.status === 'active') {
+                 console.warn(`[subscribeToPlanAction] El usuario ya tiene un plan activo para el tenant ${tenantId}.`);
                  return { success: false, error: 'Ya tienes un plan activo.' };
             }
         }
@@ -99,6 +118,7 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
         const maxUsersMapping: { [key: string]: number } = { personal: 1, familiar: 4, empresa: 10, demo: 1 };
 
+        console.log('[subscribeToPlanAction] Añadiendo creación de licencia al lote final...');
         finalBatch.set(licenseRef, {
             id: licenseRef.id, tenantId: tenantId, plan: planId, status: 'active',
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
@@ -106,15 +126,18 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             paymentId: `sim_${adminFirestore.collection("anything").doc().id}`,
         });
 
+        console.log('[subscribeToPlanAction] Añadiendo actualización de tenant a "active" al lote final...');
         const tenantRefToUpdate = adminFirestore.collection("tenants").doc(tenantId);
         finalBatch.update(tenantRefToUpdate, { status: "active" });
         
+        console.log('[subscribeToPlanAction] Ejecutando lote final (licencia y activación)...');
         await finalBatch.commit();
+        console.log('[subscribeToPlanAction] Lote final completado. ¡Proceso exitoso!');
 
         return { success: true };
 
     } catch (error: any) {
-        console.error("Error in subscribeToPlanAction:", error);
+        console.error("[subscribeToPlanAction] ERROR CATCH:", error);
         return { success: false, error: `Ocurrió un error al crear la licencia. (${error.code || 'INTERNAL'})` };
     }
 }
