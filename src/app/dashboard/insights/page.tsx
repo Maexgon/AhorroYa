@@ -57,7 +57,7 @@ export default function InsightsPage() {
             where('deleted', '==', false)
         );
     }, [tenantId, firestore]);
-    const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<Expense>(allExpenses);
+    const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
     
     const monthlyExpenses = React.useMemo(() => {
         if (!allExpenses) return [];

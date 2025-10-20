@@ -20,7 +20,7 @@ export async function generateInsightsAction(
     try {
         const result = await generateFinancialInsights(input);
         
-        if (!result || !result.insights || result.insights.length === 0) {
+        if (!result) {
             console.warn('AI flow returned empty or null result for insights.');
             return { success: false, error: 'La IA no pudo generar un análisis con los datos proporcionados.' };
         }
