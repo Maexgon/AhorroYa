@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -10,6 +9,7 @@ import { z } from 'zod';
 import { useUser, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { getAuth, updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -18,7 +18,6 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
-import { uploadAvatarAction } from './actions';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'El nombre es requerido.'),
@@ -39,7 +38,6 @@ export default function ProfilePage() {
   const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   
-  // State to force re-render of avatar image
   const [avatarKey, setAvatarKey] = React.useState(Date.now());
 
 
@@ -96,16 +94,14 @@ export default function ProfilePage() {
           phone: data.phone,
       };
 
-      // Update Firestore
       await updateDoc(userDocToUpdateRef, firestoreUpdateData);
 
-      // Update Auth profile
       if (currentUser.displayName !== data.displayName) {
           await updateProfile(currentUser, { displayName: data.displayName });
       }
       
       toast({ title: '¡Éxito!', description: 'Tu perfil ha sido actualizado.' });
-      setAvatarKey(Date.now()); // Force avatar refresh
+      setAvatarKey(Date.now());
 
     } catch (error) {
        errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -123,12 +119,15 @@ export default function ProfilePage() {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("[DEBUG] handleFileChange triggered");
     const file = event.target.files?.[0];
     const currentUser = user;
     
     if (!file || !currentUser) {
         return;
     }
+    
+    console.log("[DEBUG] File selected:", { name: file.name, size: file.size, type: file.type });
     
     if (file.size > 2 * 1024 * 1024) { // 2MB limit
         toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El tamaño máximo es 2MB.' });
@@ -137,21 +136,23 @@ export default function ProfilePage() {
 
     setIsUploading(true);
     toast({ title: 'Subiendo imagen...' });
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('uid', currentUser.uid);
     
-    try {
-      const result = await uploadAvatarAction(formData);
+    const storage = getStorage();
+    const storageRef = ref(storage, `avatars/${currentUser.uid}/${file.name}`);
+    console.log("[DEBUG] Uploading to storageRef path:", storageRef.fullPath);
 
-      if (result.success && result.url) {
-        toast({ title: '¡Foto actualizada!', description: 'Tu nueva foto de perfil está lista.' });
-        // Force re-fetch of user data to get the new URL
-        setAvatarKey(Date.now());
-      } else {
-        throw new Error(result.error || 'Error desconocido en la subida.');
-      }
+    try {
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      const auth = getAuth();
+      const userDocRef = doc(firestore, 'users', currentUser.uid);
+
+      await updateProfile(currentUser, { photoURL: downloadURL });
+      await updateDoc(userDocRef, { photoURL: downloadURL });
+
+      toast({ title: '¡Foto actualizada!', description: 'Tu nueva foto de perfil está lista.' });
+      setAvatarKey(Date.now());
     } catch (error: any) {
         console.error("[DEBUG] Full error object during upload:", error);
         toast({ variant: 'destructive', title: 'Error al subir', description: error.message || 'No se pudo subir la imagen. Revisa la consola para más detalles.' });
@@ -159,6 +160,7 @@ export default function ProfilePage() {
         setIsUploading(false);
     }
   };
+
 
   if (isUserLoading || isUserDocLoading) {
     return (
