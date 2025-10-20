@@ -1,3 +1,4 @@
+
 // This file is auto-generated from backend.json
 // It is not meant to be edited by hand, but rather regenerated using Genkit
 // whenever the backend.json file is updated.
@@ -37,6 +38,8 @@ export type User = {
   photoURL?: string; // URL of the user's profile photo.
   tenantIds?: string[]; // References to Tenants. (Relationship: User 1:N Tenant)
   isSuperadmin?: boolean; // Indicates if the user has superadmin privileges.
+  address?: string; // The user's physical address.
+  phone?: string; // The user's phone number.
 };
 export type Currency = {
   code: string; // Currency code (e.g., ARS, USD).

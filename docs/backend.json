@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Tenant": {
@@ -183,6 +184,14 @@
         "isSuperadmin": {
           "type": "boolean",
           "description": "Indicates if the user has superadmin privileges."
+        },
+        "address": {
+            "type": "string",
+            "description": "The user's physical address."
+        },
+        "phone": {
+            "type": "string",
+            "description": "The user's phone number."
         }
       },
       "required": [

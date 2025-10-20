@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View, Banknote, GripVertical } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View, Banknote, GripVertical, User as UserIcon, LogOut } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -44,6 +44,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 
 const SAFE_DEFAULTS = {
     barData: [],
@@ -1126,6 +1128,14 @@ export default function DashboardPageContainer() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'owner' | 'member' | null>(null);
   const [isLoadingRole, setIsLoadingRole] = useState(true);
+  
+  const getInitials = (name: string = "") => {
+    const names = name.split(' ');
+    if (names.length > 1) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }
 
   // 1. Get user's tenantId
   const userDocRef = useMemo(() => {
@@ -1202,7 +1212,33 @@ export default function DashboardPageContainer() {
             <span className="font-bold font-headline text-foreground">Ahorro Ya</span>
           </div>
           <div className="flex flex-1 items-center justify-end space-x-4">
-             <Button onClick={handleLogout} variant="ghost">Cerrar Sesión</Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                        <Avatar className="h-9 w-9">
+                            <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "Usuario"} />
+                            <AvatarFallback>{getInitials(user.displayName || "")}</AvatarFallback>
+                        </Avatar>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>
+                        <p className="font-medium">{user.displayName}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                        <Link href="/dashboard/profile">
+                            <UserIcon className="mr-2 h-4 w-4" />
+                            <span>Perfil</span>
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleLogout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Cerrar Sesión</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -1213,3 +1249,4 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
