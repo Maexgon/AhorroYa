@@ -36,6 +36,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 
 function ManageCategories({ tenantId }: { tenantId: string }) {
@@ -403,7 +404,7 @@ export default function SettingsPage() {
 
   const activeLicense = licenses?.[0];
 
-  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses || isLoadingMembers;
+  const isLoading = isUserLoading || isUserDocLoading || isTenantLoading || isLoadingLicenses;
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !tenantId || !activeLicense) {
@@ -495,7 +496,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
-  if (isUserLoading || isUserDocLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
