@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import DashboardPreview from '@/components/landing/dashboard-preview';
 import { ArrowRight } from 'lucide-react';
+import Footer from '@/components/shared/footer';
 
 export default function HeroSection() {
   return (
@@ -16,7 +17,7 @@ export default function HeroSection() {
         </p>
         <div className="flex w-full items-center justify-center space-x-4 py-4 md:pb-6">
           <Button asChild size="lg" className="text-primary-foreground">
-            <Link href="#">
+            <Link href="/register">
               Empezar Gratis <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
