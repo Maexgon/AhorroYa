@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ChevronsRight, Wallet, PiggyBank } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ChevronsRight, Wallet, PiggyBank, FileDown } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -13,6 +13,9 @@ import type { Budget, Category, Expense, User as UserType, Income } from '@/lib/
 import { generateInsightsAction } from './actions';
 import { type GenerateFinancialInsightsOutput } from '@/ai/flows/generate-financial-insights';
 import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import htmlToDocx from 'html-to-docx';
+import { saveAs } from 'file-saver';
 
 function InsightIcon({ emoji }: { emoji?: string }) {
     switch (emoji) {
@@ -28,6 +31,7 @@ function InsightIcon({ emoji }: { emoji?: string }) {
 export default function InsightsPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
+    const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
     const [insightsData, setInsightsData] = React.useState<GenerateFinancialInsightsOutput | null>(null);
     const [isGenerating, setIsGenerating] = React.useState(true);
@@ -58,6 +62,15 @@ export default function InsightsPage() {
         );
     }, [tenantId, firestore]);
     const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
+
+    const incomesQuery = useMemoFirebase(() => {
+        if (!tenantId || !firestore) return null;
+        return query(collection(firestore, 'incomes'),
+            where('tenantId', '==', tenantId),
+            where('deleted', '==', false)
+        );
+    }, [tenantId, firestore]);
+    const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<Income>(incomesQuery);
     
     const monthlyExpenses = React.useMemo(() => {
         if (!allExpenses) return [];
@@ -71,16 +84,6 @@ export default function InsightsPage() {
         if(!allExpenses) return [];
         return allExpenses.filter(e => e.paymentMethod === 'credit' && new Date(e.date) > toDate);
     }, [allExpenses, toDate]);
-
-
-    const incomesQuery = useMemoFirebase(() => {
-        if (!tenantId || !firestore) return null;
-        return query(collection(firestore, 'incomes'),
-            where('tenantId', '==', tenantId),
-            where('deleted', '==', false)
-        );
-    }, [tenantId, firestore]);
-    const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<Income>(incomesQuery);
 
     const monthlyIncomes = React.useMemo(() => {
         if (!allIncomes) return [];
@@ -106,46 +109,111 @@ export default function InsightsPage() {
     }, [tenantId, firestore]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
-    const isDataLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
+    const isLoadingData = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
 
     // --- AI Insights Generation ---
     React.useEffect(() => {
-        // Do not run if data is still loading or if we already have insights/error.
-        if (isDataLoading || insightsData || error) {
-            return;
-        }
+        const canGenerate = !isLoadingData && monthlyExpenses && budgets && categories && monthlyIncomes && pendingInstallments;
+        
+        if (canGenerate && !insightsData && !error) {
+            const generateInsights = async () => {
+                setIsGenerating(true);
+                setError(null);
+                
+                const result = await generateInsightsAction({
+                    monthlyExpenses: JSON.stringify(monthlyExpenses),
+                    monthlyIncomes: JSON.stringify(monthlyIncomes),
+                    pendingInstallments: JSON.stringify(pendingInstallments),
+                    budgets: JSON.stringify(budgets),
+                    categories: JSON.stringify(categories.map(c => ({id: c.id, name: c.name}))),
+                    baseCurrency: 'ARS',
+                });
 
-        // Ensure we have the minimum required data to proceed.
-        if (!monthlyExpenses || !budgets || !categories || !monthlyIncomes || !pendingInstallments) {
-            return;
-        }
+                if (result.success && result.data) {
+                    setInsightsData(result.data);
+                } else {
+                    setError(result.error || 'No se pudieron generar los insights.');
+                }
+                setIsGenerating(false);
+            };
 
-        const generateInsights = async () => {
-            setIsGenerating(true);
-            setError(null);
-            
-            const result = await generateInsightsAction({
-                monthlyExpenses: JSON.stringify(monthlyExpenses),
-                monthlyIncomes: JSON.stringify(monthlyIncomes),
-                pendingInstallments: JSON.stringify(pendingInstallments),
-                budgets: JSON.stringify(budgets),
-                categories: JSON.stringify(categories.map(c => ({id: c.id, name: c.name}))),
-                baseCurrency: 'ARS',
-            });
-
-            if (result.success && result.data) {
-                setInsightsData(result.data);
-            } else {
-                setError(result.error || 'No se pudieron generar los insights.');
-            }
+            generateInsights();
+        } else if (!isLoadingData && !insightsData && !error) {
+            // Data loaded but not enough to generate, stop loading state
             setIsGenerating(false);
-        };
+        }
 
-        generateInsights();
-
-    }, [isDataLoading, monthlyExpenses, budgets, categories, monthlyIncomes, pendingInstallments, insightsData, error]);
+    }, [isLoadingData, monthlyExpenses, budgets, categories, monthlyIncomes, pendingInstallments, insightsData, error]);
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
+
+    const handleExportToDocx = async () => {
+        if (!insightsData) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'No hay datos de análisis para exportar.',
+            });
+            return;
+        }
+
+        try {
+            let htmlString = `
+                <h1>Análisis Financiero - Ahorro Ya</h1>
+                <h2>Resumen General</h2>
+                <p>${insightsData.generalSummary}</p>
+                <br />
+                <h2>Recomendaciones Clave</h2>
+            `;
+
+            insightsData.keyRecommendations.forEach(rec => {
+                htmlString += `
+                    <h3>${rec.emoji || ''} ${rec.title}</h3>
+                    <p><strong>Descripción:</strong> ${rec.description}</p>
+                    <p><strong>Sugerencia:</strong> ${rec.suggestion}</p>
+                    <br />
+                `;
+            });
+
+            htmlString += '<h2>Ajustes de Presupuesto Sugeridos</h2>';
+            insightsData.budgetAdjustments.forEach(adj => {
+                htmlString += `
+                    <p><strong>Categoría:</strong> ${adj.categoryName}</p>
+                    <p>Monto Actual: ${formatCurrency(adj.currentAmount)}</p>
+                    <p>Monto Sugerido: ${formatCurrency(adj.suggestedAmount)}</p>
+                    <p><i>Razón: ${adj.reasoning}</i></p>
+                    <br />
+                `;
+            });
+
+            htmlString += '<h2>Consejos de Ahorro</h2><ul>';
+            insightsData.savingsTips.forEach(tip => {
+                htmlString += `<li>${tip}</li>`;
+            });
+            htmlString += '</ul>';
+
+            const fileBuffer = await htmlToDocx(htmlString, undefined, {
+                table: { row: { cantSplit: true } },
+                footer: true,
+                pageNumber: true,
+            });
+
+            saveAs(fileBuffer as Blob, 'analisis-financiero.docx');
+
+            toast({
+                title: '¡Éxito!',
+                description: 'El informe se ha exportado a Word.',
+            });
+
+        } catch (e) {
+            console.error('Error exporting to DOCX:', e);
+            toast({
+                variant: 'destructive',
+                title: 'Error de Exportación',
+                description: 'No se pudo generar el documento de Word.',
+            });
+        }
+    };
 
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">
@@ -157,6 +225,10 @@ export default function InsightsPage() {
                         </Link>
                     </Button>
                     <h1 className="ml-4 font-headline text-xl font-bold">Análisis Financiero con IA</h1>
+                     <Button variant="outline" size="sm" className="ml-auto" onClick={handleExportToDocx} disabled={!insightsData || isGenerating}>
+                        <FileDown className="mr-2 h-4 w-4" />
+                        Exportar a DOCX
+                    </Button>
                 </div>
             </header>
 
@@ -252,7 +324,15 @@ export default function InsightsPage() {
 
                         </div>
 
-                    ) : null}
+                    ) : (
+                        <Card className="flex flex-col items-center justify-center p-12">
+                             <h2 className="text-xl font-bold">No hay datos suficientes</h2>
+                            <p className="mt-2 text-muted-foreground">No pudimos generar un análisis porque no hay suficientes datos de gastos o presupuestos para el mes actual.</p>
+                            <Button variant="outline" asChild className="mt-6">
+                                <Link href="/dashboard">Volver al Dashboard</Link>
+                            </Button>
+                        </Card>
+                    )}
                 </div>
             </main>
         </div>
