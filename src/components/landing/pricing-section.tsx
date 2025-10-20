@@ -58,19 +58,8 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
         setIsLoading(planId);
 
         try {
-            const token = await user.getIdToken();
-            
-            // This is a temporary workaround to pass the token to the server action
-            // The ideal solution is to use a dedicated API route or a library that handles this
-            const tempFetch = fetch('/api/subscribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ planId })
-            });
-
+            // The Server Action `subscribeToPlanAction` will securely read the
+            // user's token from the headers on the server side.
             const result = await subscribeToPlanAction({ planId });
 
             if (result.success) {
@@ -87,6 +76,7 @@ export default function PricingSection({ isSubscribeFlow = false }: { isSubscrib
                 });
             }
         } catch (error: any) {
+            console.error("Error in handleSelectPlan:", error);
             toast({
                 variant: 'destructive',
                 title: 'Error inesperado',

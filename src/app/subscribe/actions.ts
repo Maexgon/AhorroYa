@@ -134,8 +134,8 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
 
     } catch (error: any) {
         console.error("Error in subscribeToPlanAction:", error);
-         if (error.code === 'auth/id-token-expired') {
-            return { success: false, error: "Tu sesión ha expirado. Por favor, recarga la página e intenta de nuevo." };
+         if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
+            return { success: false, error: "Tu sesión ha expirado o es inválida. Por favor, inicia sesión de nuevo." };
         }
         return { success: false, error: error.message || 'Ocurrió un error inesperado al suscribirse al plan.' };
     }
