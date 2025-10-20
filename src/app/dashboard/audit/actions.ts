@@ -1,8 +1,8 @@
 
 'use server';
 
-import { initializeAdminApp } from '@/firebase/admin-config';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeFirebase } from '@/firebase/config';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
 type AuditLogPayload = {
     tenantId: string;
@@ -22,10 +22,10 @@ type AuditLogPayload = {
  */
 export async function logAuditEvent(payload: AuditLogPayload): Promise<{ success: boolean; error?: string }> {
     try {
-        const adminApp = await initializeAdminApp();
-        const adminFirestore = getFirestore(adminApp);
+        const firebaseApp = initializeFirebase();
+        const firestore = getFirestore(firebaseApp);
         
-        const logRef = adminFirestore.collection('audit_logs').doc();
+        const logRef = doc(firestore, 'audit_logs', crypto.randomUUID());
 
         const logData = {
             id: logRef.id,
@@ -35,7 +35,7 @@ export async function logAuditEvent(payload: AuditLogPayload): Promise<{ success
             ts: new Date().toISOString(),
         };
 
-        await logRef.set(logData);
+        await setDoc(logRef, logData);
 
         return { success: true };
 
