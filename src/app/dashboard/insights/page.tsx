@@ -116,10 +116,10 @@ export default function InsightsPage() {
     }, [tenantId, firestore]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
-    const isLoadingData = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
+    const areDataQueriesLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
 
     React.useEffect(() => {
-        const canGenerate = !isLoadingData && !!tenantId && allExpenses && budgets && categories && allIncomes && user;
+        const canGenerate = !areDataQueriesLoading && !!tenantId && allExpenses && budgets && categories && allIncomes && user;
         
         if (canGenerate && !insightsData && !error) {
             const generateInsights = async () => {
@@ -157,12 +157,12 @@ export default function InsightsPage() {
             };
 
             generateInsights();
-        } else if (!isLoadingData && !insightsData && !error) {
+        } else if (!areDataQueriesLoading && !insightsData && !error) {
             // Data loaded but not enough to generate, stop loading state
             setIsGenerating(false);
         }
 
-    }, [isLoadingData, allExpenses, budgets, categories, allIncomes, fromDate, insightsData, error, tenantId, user, monthlyExpenses, monthlyIncomes, pendingInstallments, toast]);
+    }, [areDataQueriesLoading, allExpenses, budgets, categories, allIncomes, fromDate, insightsData, error, tenantId, user, monthlyExpenses, monthlyIncomes, pendingInstallments, toast]);
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
 
@@ -245,11 +245,13 @@ export default function InsightsPage() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Resumen General</CardTitle>
-                                    <CardDescription>Tu situación financiera del mes actual.</CardDescription>
+                                    <CardDescription>
+                                        Análisis de la situación financiera de {currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} de {currentYear}.
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="prose prose-sm dark:prose-invert max-w-none bg-muted/50 p-4 rounded-lg">
-                                        <p className="font-mono text-xs">
+                                         <p className="font-mono text-xs">
                                             Reporte Financiero al {formatDate(new Date(), 'yyyy-MM-dd')}<br/>
                                             Generado por: {userData?.displayName || user?.displayName || 'Usuario'}<br/>
                                             Período: {currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} de {currentYear}
