@@ -1,9 +1,9 @@
 
-'use server';
+'use client';
 
+import { initializeFirebase } from '@/firebase/config';
 import { defaultCategories } from '@/lib/default-categories';
 import { getFirestore, writeBatch, doc, collection } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase/config';
 
 interface SubscribeToPlanParams {
     planId: string;
@@ -48,9 +48,6 @@ export async function createInitialTenantAndMembershipAction(params: Omit<Subscr
             joinedAt: new Date().toISOString(),
         };
         batch.set(membershipRef, membershipData);
-
-        const userRef = doc(firestore, 'users', userId);
-        batch.update(userRef, { tenantIds: [tenantRef.id] });
         
         await batch.commit();
 
