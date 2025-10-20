@@ -48,7 +48,7 @@ export function Combobox({
   }, [value, options]);
 
   const handleSelect = (currentValue: string) => {
-    const selectedOption = options.find(opt => opt.label === currentValue);
+    const selectedOption = options.find(opt => opt.label.toLowerCase() === currentValue.toLowerCase());
     onSelect(selectedOption ? selectedOption.label : currentValue);
     setInputValue(selectedOption ? selectedOption.label : currentValue);
     setOpen(false);
@@ -57,11 +57,22 @@ export function Combobox({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
-    onSelect(newValue);
-    if (!open) {
-      setOpen(true);
+    onSelect(newValue); // Update the form state continuously
+    
+    // Open popover only if there are 2 or more characters
+    if (newValue.length >= 2) {
+      if (!open) setOpen(true);
+    } else {
+      if (open) setOpen(false);
     }
   }
+
+  const filteredOptions = React.useMemo(() => {
+    if (!inputValue) return options;
+    return options.filter(option =>
+      option.label.toLowerCase().includes(inputValue.toLowerCase())
+    );
+  }, [inputValue, options]);
   
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -71,23 +82,22 @@ export function Combobox({
                 placeholder={placeholder}
                 value={inputValue}
                 onChange={handleInputChange}
-                onFocus={() => {if (inputValue) setOpen(true)}}
-                className={cn("w-full justify-between", className)}
+                onFocus={() => {
+                  if (inputValue && inputValue.length >= 2) setOpen(true)
+                }}
+                className={cn("w-full justify-between pr-8", className)}
             />
             <ChevronsUpDown 
-                className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 shrink-0 opacity-50 cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 shrink-0 opacity-50 cursor-pointer"
                 onClick={() => setOpen(!open)}
             />
         </div>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-        <Command filter={(value, search) => {
-            if (value.toLowerCase().includes(search.toLowerCase())) return 1;
-            return 0;
-        }}>
+        <Command>
           <CommandList>
             <CommandGroup>
-              {options.map((option) => (
+              {filteredOptions.map((option) => (
                   <CommandItem
                     key={option.value}
                     value={option.label}
@@ -109,7 +119,7 @@ export function Combobox({
                      Crear "{inputValue}"
                 </CommandItem>
             )}
-             {options.length === 0 && !inputValue && (
+             {filteredOptions.length === 0 && !inputValue && (
                 <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
              )}
           </CommandList>
