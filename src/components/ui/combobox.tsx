@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, Plus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
@@ -40,30 +40,26 @@ export function Combobox({
     className,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
-  const [inputValue, setInputValue] = React.useState(value || "")
-  const [search, setSearch] = React.useState("")
+  const [inputValue, setInputValue] = React.useState("")
 
   React.useEffect(() => {
-      const selectedOption = options.find(opt => opt.value === value || opt.label === value);
-      setInputValue(selectedOption?.label || value);
+    const selectedOption = options.find(opt => opt.value === value || opt.label === value);
+    setInputValue(selectedOption?.label || value);
   }, [value, options]);
 
   const handleSelect = (currentValue: string) => {
-    onSelect(currentValue);
+    const selectedOption = options.find(opt => opt.label === currentValue);
+    onSelect(selectedOption ? selectedOption.label : currentValue);
+    setInputValue(selectedOption ? selectedOption.label : currentValue);
     setOpen(false);
-    setSearch("");
   }
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
-    setSearch(newValue);
     onSelect(newValue);
-
-    if (newValue.length > 0) {
-        setOpen(true);
-    } else {
-        setOpen(false);
+    if (!open) {
+      setOpen(true);
     }
   }
   
@@ -75,7 +71,7 @@ export function Combobox({
                 placeholder={placeholder}
                 value={inputValue}
                 onChange={handleInputChange}
-                onFocus={() => setOpen(true)}
+                onFocus={() => {if (inputValue) setOpen(true)}}
                 className={cn("w-full justify-between", className)}
             />
             <ChevronsUpDown 
@@ -85,36 +81,39 @@ export function Combobox({
         </div>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-        <Command>
-            <CommandList>
-                <CommandGroup>
-                  {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).map((option) => (
-                      <CommandItem
-                        key={option.value}
-                        value={option.label}
-                        onSelect={handleSelect}
-                      >
-                      <Check
-                          className={cn(
-                          "mr-2 h-4 w-4",
-                          value === option.value ? "opacity-100" : "opacity-0"
-                          )}
-                      />
-                      {option.label}
-                      </CommandItem>
-                  ))}
-                </CommandGroup>
-                {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).length === 0 && search.length > 0 && (
-                    <CommandItem onSelect={() => handleSelect(search)}>
-                         <Plus className="mr-2 h-4 w-4" />
-                         Crear "{search}"
-                    </CommandItem>
-                )}
-                 {options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase())).length === 0 && search.length === 0 && (
-                    <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
-                 )}
-            </CommandList>
-          </Command>
+        <Command filter={(value, search) => {
+            if (value.toLowerCase().includes(search.toLowerCase())) return 1;
+            return 0;
+        }}>
+          <CommandList>
+            <CommandGroup>
+              {options.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={option.label}
+                    onSelect={handleSelect}
+                  >
+                  <Check
+                      className={cn(
+                      "mr-2 h-4 w-4",
+                      value === option.label ? "opacity-100" : "opacity-0"
+                      )}
+                  />
+                  {option.label}
+                  </CommandItem>
+              ))}
+            </CommandGroup>
+            {inputValue && !options.some(opt => opt.label.toLowerCase() === inputValue.toLowerCase()) && (
+                <CommandItem onSelect={() => handleSelect(inputValue)}>
+                     <Plus className="mr-2 h-4 w-4" />
+                     Crear "{inputValue}"
+                </CommandItem>
+            )}
+             {options.length === 0 && !inputValue && (
+                <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
+             )}
+          </CommandList>
+        </Command>
       </PopoverContent>
     </Popover>
   )
