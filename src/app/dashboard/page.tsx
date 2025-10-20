@@ -527,48 +527,6 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
             </Button>
         </div>
 
-        <Card>
-            <CardHeader>
-                <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
-                <CardDescription>
-                    Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={processedData.installmentsChartData.monthlyTotals}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
-                        <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                        <Tooltip
-                            content={({ active, payload, label }) => {
-                                if (active && payload && payload.length) {
-                                    return (
-                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                            <p className="font-bold">{label}</p>
-                                            <p style={{ color: 'hsl(var(--chart-2))' }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            }}
-                        />
-                        <Bar dataKey="total" name="Total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]}>
-                            <LabelList
-                                dataKey="total"
-                                position="top"
-                                offset={8}
-                                className="fill-foreground"
-                                fontSize={12}
-                                formatter={(value: number) => processedData.formatCurrency(value)}
-                            />
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-            </CardContent>
-        </Card>
-
-
         <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -641,6 +599,47 @@ function OwnerDashboard({ tenantId }: { tenantId: string }) {
 
             </div>
         </div>
+        
+        <Card>
+            <CardHeader>
+                <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
+                <CardDescription>
+                    Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={processedData.installmentsChartData.monthlyTotals}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
+                        <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                        <Tooltip
+                            content={({ active, payload, label }) => {
+                                if (active && payload && payload.length) {
+                                    return (
+                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                            <p className="font-bold">{label}</p>
+                                            <p style={{ color: 'hsl(var(--chart-2))' }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            }}
+                        />
+                        <Bar dataKey="total" name="Total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]}>
+                            <LabelList
+                                dataKey="total"
+                                position="top"
+                                offset={8}
+                                className="fill-foreground"
+                                fontSize={12}
+                                formatter={(value: number) => processedData.formatCurrency(value)}
+                            />
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {chartVisibility.monthlyFlow && (
