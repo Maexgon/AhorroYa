@@ -77,11 +77,15 @@ export default function EditExpensePage() {
   React.useEffect(() => {
     if (expenseData) {
       reset({
-        ...expenseData,
-        date: new Date(expenseData.date),
-        notes: expenseData.notes || '',
+        entityName: expenseData.entityName || '',
         entityCuit: expenseData.entityCuit || '',
+        date: new Date(expenseData.date),
+        amount: expenseData.amount,
+        currency: expenseData.currency,
+        categoryId: expenseData.categoryId,
         subcategoryId: expenseData.subcategoryId || '',
+        paymentMethod: expenseData.paymentMethod,
+        notes: expenseData.notes || '',
         installments: expenseData.installments || 1,
         cardType: expenseData.cardType || '',
       });
@@ -380,7 +384,5 @@ export default function EditExpensePage() {
     </div>
   );
 }
-
-    
 
     
