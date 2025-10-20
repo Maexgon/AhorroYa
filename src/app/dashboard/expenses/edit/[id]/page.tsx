@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -40,56 +39,30 @@ const expenseFormSchema = z.object({
 
 type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
 
-export default function EditExpensePage() {
+
+function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
   const router = useRouter();
-  const params = useParams();
   const { toast } = useToast();
   const firestore = useFirestore();
-
-  const expenseId = params.id as string;
-
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const expenseId = expenseData.id;
 
-  const expenseRef = useMemoFirebase(() => {
-    if (!firestore || !expenseId) return null;
-    return doc(firestore, 'expenses', expenseId);
-  }, [firestore, expenseId]);
-  const { data: expenseData, isLoading: isLoadingExpense } = useDoc<Expense>(expenseRef);
-
-  const { control, handleSubmit, watch, formState: { errors }, reset, setValue } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
-        entityName: '',
-        entityCuit: '',
-        amount: 0,
-        currency: 'ARS',
-        categoryId: '',
-        subcategoryId: '',
-        paymentMethod: 'cash',
-        notes: '',
-        installments: 1,
-        cardType: '',
+      entityName: expenseData.entityName || '',
+      entityCuit: expenseData.entityCuit || '',
+      date: new Date(expenseData.date),
+      amount: expenseData.amount,
+      currency: expenseData.currency,
+      categoryId: expenseData.categoryId,
+      subcategoryId: expenseData.subcategoryId || '',
+      paymentMethod: expenseData.paymentMethod,
+      notes: expenseData.notes || '',
+      installments: expenseData.installments || 1,
+      cardType: expenseData.cardType || '',
     }
   });
-  
-  React.useEffect(() => {
-    if (expenseData) {
-      reset({
-        entityName: expenseData.entityName || '',
-        entityCuit: expenseData.entityCuit || '',
-        date: new Date(expenseData.date),
-        amount: expenseData.amount,
-        currency: expenseData.currency,
-        categoryId: expenseData.categoryId,
-        subcategoryId: expenseData.subcategoryId || '',
-        paymentMethod: expenseData.paymentMethod,
-        notes: expenseData.notes || '',
-        installments: expenseData.installments || 1,
-        cardType: expenseData.cardType || '',
-      });
-    }
-  }, [expenseData, reset]);
-
 
   const selectedCategoryId = watch('categoryId');
   const paymentMethod = watch('paymentMethod');
@@ -112,7 +85,6 @@ export default function EditExpensePage() {
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
-  
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
     if (!allSubcategories || !selectedCategoryId) return [];
@@ -160,6 +132,208 @@ export default function EditExpensePage() {
             setIsSubmitting(false);
         });
   };
+    
+    return (
+        <form onSubmit={handleSubmit(onSubmit)}>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Detalles del Gasto</CardTitle>
+                    <CardDescription>Ajusta la información del gasto.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="entityName">Nombre de la Entidad</Label>
+                        <Controller name="entityName" control={control} render={({ field }) => <Input id="entityName" {...field} />} />
+                        {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="entityCuit">CUIT de la Entidad (Opcional)</Label>
+                        <Controller name="entityCuit" control={control} render={({ field }) => <Input id="entityCuit" {...field} />} />
+                        {errors.entityCuit && <p className="text-sm text-destructive">{errors.entityCuit.message}</p>}
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="date">Fecha del Gasto</Label>
+                        <Controller
+                            name="date"
+                            control={control}
+                            render={({ field }) => (
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {field.value ? format(field.value, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+                        />
+                        {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+                    </div>
+                   
+                    <div className='grid grid-cols-3 gap-4'>
+                        <div className="space-y-2 col-span-2">
+                            <Label htmlFor="amount">Monto</Label>
+                            <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
+                            {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="currency">Moneda</Label>
+                            <Controller
+                                name="currency"
+                                control={control}
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="ARS">ARS</SelectItem>
+                                            <SelectItem value="USD">USD</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label htmlFor="paymentMethod">Método de Pago</Label>
+                        <Controller
+                            name="paymentMethod"
+                            control={control}
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger><SelectValue placeholder="Selecciona un método" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="cash">Efectivo</SelectItem>
+                                        <SelectItem value="debit">Tarjeta de Débito</SelectItem>
+                                        <SelectItem value="credit">Tarjeta de Crédito</SelectItem>
+                                        <SelectItem value="transfer">Transferencia</SelectItem>
+                                        <SelectItem value="other">Otro</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                        {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                    </div>
+                    
+                    {paymentMethod === 'credit' && (
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="installments">Cuotas</Label>
+                                <Controller
+                                    name="installments"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Select disabled onValueChange={(v) => field.onChange(Number(v))} value={String(field.value || 1)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {[1, 3, 6, 12, 24].map(i => <SelectItem key={i} value={String(i)}>{i}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                <p className="text-xs text-muted-foreground">No se pueden editar las cuotas de un gasto existente.</p>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="cardType">Tipo de Tarjeta</Label>
+                                <Controller
+                                    name="cardType"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue placeholder="Selecciona tipo" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="visa">Visa</SelectItem>
+                                                <SelectItem value="mastercard">Mastercard</SelectItem>
+                                                <SelectItem value="amex">American Express</SelectItem>
+                                                <SelectItem value="diners">Diners</SelectItem>
+                                                <SelectItem value="other">Otra</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        <Label htmlFor="categoryId">Categoría</Label>
+                         <Controller
+                            name="categoryId"
+                            control={control}
+                            render={({ field }) => (
+                                 <Select 
+                                    onValueChange={(value) => {
+                                        field.onChange(value);
+                                        setValue('subcategoryId', '');
+                                    }} 
+                                    value={field.value}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona una categoría" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {categories?.map((cat) => (
+                                            <SelectItem key={cat.id} value={cat.id}>
+                                                {cat.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                        {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
+                    </div>
+
+                     <div className="space-y-2">
+                        <Label htmlFor="subcategoryId">Subcategoría (Opcional)</Label>
+                        <Controller
+                            name="subcategoryId"
+                            control={control}
+                            render={({ field }) => (
+                                <Select 
+                                    onValueChange={field.onChange} 
+                                    value={field.value ?? ''} 
+                                    disabled={!selectedCategoryId || !subcategoriesForSelectedCategory || subcategoriesForSelectedCategory.length === 0}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Selecciona una subcategoría" /></SelectTrigger>
+                                    <SelectContent>
+                                        {subcategoriesForSelectedCategory?.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                    </div>
+
+                    <div className="md:col-span-2 space-y-2">
+                        <Label htmlFor="notes">Notas (Opcional)</Label>
+                        <Controller name="notes" control={control} render={({ field }) => <Input id="notes" {...field} />} />
+                    </div>
+
+                </CardContent>
+                <CardFooter>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
+                    </Button>
+                </CardFooter>
+            </Card>
+        </form>
+    )
+}
+
+export default function EditExpensePageContainer() {
+  const params = useParams();
+  const firestore = useFirestore();
+  const expenseId = params.id as string;
+
+  const expenseRef = useMemoFirebase(() => {
+    if (!firestore || !expenseId) return null;
+    return doc(firestore, 'expenses', expenseId);
+  }, [firestore, expenseId]);
+  const { data: expenseData, isLoading: isLoadingExpense } = useDoc<Expense>(expenseRef);
 
   if (isLoadingExpense) {
     return (
@@ -169,7 +343,8 @@ export default function EditExpensePage() {
         </div>
     )
   }
-   if (!expenseData) {
+
+  if (!expenseData) {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
             <p className="text-destructive">No se pudo encontrar el gasto.</p>
@@ -195,194 +370,7 @@ export default function EditExpensePage() {
 
       <main className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-2xl">
-            <form onSubmit={handleSubmit(onSubmit)}>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Detalles del Gasto</CardTitle>
-                        <CardDescription>Ajusta la información del gasto.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="entityName">Nombre de la Entidad</Label>
-                            <Controller name="entityName" control={control} render={({ field }) => <Input id="entityName" {...field} />} />
-                            {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="entityCuit">CUIT de la Entidad (Opcional)</Label>
-                            <Controller name="entityCuit" control={control} render={({ field }) => <Input id="entityCuit" {...field} />} />
-                            {errors.entityCuit && <p className="text-sm text-destructive">{errors.entityCuit.message}</p>}
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="date">Fecha del Gasto</Label>
-                            <Controller
-                                name="date"
-                                control={control}
-                                render={({ field }) => (
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button variant={"outline"} className="w-full justify-start text-left font-normal">
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {field.value ? format(field.value, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0">
-                                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                                        </PopoverContent>
-                                    </Popover>
-                                )}
-                            />
-                            {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
-                        </div>
-                       
-                        <div className='grid grid-cols-3 gap-4'>
-                            <div className="space-y-2 col-span-2">
-                                <Label htmlFor="amount">Monto</Label>
-                                <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
-                                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="currency">Moneda</Label>
-                                <Controller
-                                    name="currency"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="ARS">ARS</SelectItem>
-                                                <SelectItem value="USD">USD</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    )}
-                                />
-                                {errors.currency && <p className="text-sm text-destructive">{errors.currency.message}</p>}
-                            </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                            <Label htmlFor="paymentMethod">Método de Pago</Label>
-                            <Controller
-                                name="paymentMethod"
-                                control={control}
-                                render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <SelectTrigger><SelectValue placeholder="Selecciona un método" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="cash">Efectivo</SelectItem>
-                                            <SelectItem value="debit">Tarjeta de Débito</SelectItem>
-                                            <SelectItem value="credit">Tarjeta de Crédito</SelectItem>
-                                            <SelectItem value="transfer">Transferencia</SelectItem>
-                                            <SelectItem value="other">Otro</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                            {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
-                        </div>
-                        
-                        {paymentMethod === 'credit' && (
-                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="installments">Cuotas</Label>
-                                    <Controller
-                                        name="installments"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <Select disabled onValueChange={(v) => field.onChange(Number(v))} value={String(field.value || 1)}>
-                                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    {[1, 3, 6, 12, 24].map(i => <SelectItem key={i} value={String(i)}>{i}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
-                                    <p className="text-xs text-muted-foreground">No se pueden editar las cuotas de un gasto existente.</p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="cardType">Tipo de Tarjeta</Label>
-                                    <Controller
-                                        name="cardType"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <SelectTrigger><SelectValue placeholder="Selecciona tipo" /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="visa">Visa</SelectItem>
-                                                    <SelectItem value="mastercard">Mastercard</SelectItem>
-                                                    <SelectItem value="amex">American Express</SelectItem>
-                                                    <SelectItem value="diners">Diners</SelectItem>
-                                                    <SelectItem value="other">Otra</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                            <Label htmlFor="categoryId">Categoría</Label>
-                             <Controller
-                                name="categoryId"
-                                control={control}
-                                render={({ field }) => (
-                                     <Select 
-                                        onValueChange={(value) => {
-                                            field.onChange(value);
-                                            setValue('subcategoryId', '');
-                                        }} 
-                                        value={field.value}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecciona una categoría" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {categories?.map((cat) => (
-                                                <SelectItem key={cat.id} value={cat.id}>
-                                                    {cat.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                            {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
-                        </div>
-
-                         <div className="space-y-2">
-                            <Label htmlFor="subcategoryId">Subcategoría (Opcional)</Label>
-                            <Controller
-                                name="subcategoryId"
-                                control={control}
-                                render={({ field }) => (
-                                    <Select 
-                                        onValueChange={field.onChange} 
-                                        value={field.value ?? ''} 
-                                        disabled={!selectedCategoryId || !subcategoriesForSelectedCategory || subcategoriesForSelectedCategory.length === 0}
-                                    >
-                                        <SelectTrigger><SelectValue placeholder="Selecciona una subcategoría" /></SelectTrigger>
-                                        <SelectContent>
-                                            {subcategoriesForSelectedCategory?.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                        </div>
-
-                        <div className="md:col-span-2 space-y-2">
-                            <Label htmlFor="notes">Notas (Opcional)</Label>
-                            <Controller name="notes" control={control} render={({ field }) => <Input id="notes" {...field} />} />
-                        </div>
-
-                    </CardContent>
-                    <CardFooter>
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
-                        </Button>
-                    </CardFooter>
-                </Card>
-            </form>
+            <ExpenseEditForm expenseData={expenseData} />
         </div>
       </main>
     </div>
