@@ -15,16 +15,26 @@ const serviceAccount = {
  * This is safe to call multiple times.
  */
 export async function initializeAdminApp() {
-    if (getApps().length > 0 && getApps().find(app => app.name === '[DEFAULT]')) {
-        return; // Already initialized
+    // Using a named app to avoid conflicts if the default app is used elsewhere.
+    const appName = 'admin-sdk-app';
+    const existingApp = getApps().find(app => app.name === appName);
+    if (existingApp) {
+        return existingApp;
     }
     
     if (!process.env.FIREBASE_PRIVATE_KEY) {
         throw new Error("FIREBASE_PRIVATE_KEY environment variable is not set. Cannot initialize Admin SDK.");
     }
     
-    initializeApp({
-        credential: cert(serviceAccount),
+    // The private key needs to be parsed correctly.
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+
+    return initializeApp({
+        credential: cert({
+            projectId: serviceAccount.projectId,
+            clientEmail: serviceAccount.clientEmail,
+            privateKey: privateKey,
+        }),
         storageBucket: `${serviceAccount.projectId}.appspot.com`,
-    });
+    }, appName);
 }
