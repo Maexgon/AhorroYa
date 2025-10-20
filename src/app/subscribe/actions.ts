@@ -8,18 +8,12 @@ import { defaultCategories } from '@/lib/default-categories';
 
 interface SubscribeToPlanParams {
     planId: string;
-    userId: string; // User's UID is now passed directly
+    userId: string; 
 }
 
 /**
  * A secure server action to handle a user's subscription to a plan.
  * It performs all necessary checks and database writes with admin privileges.
- * 
- * - Verifies the calling user's UID.
- * - Checks if a tenant already exists for the user.
- * - If not, it creates the User, Tenant, Membership, and default Categories.
- * - Creates a License document based on the selected plan.
- * - Activates the Tenant.
  */
 export async function subscribeToPlanAction(params: SubscribeToPlanParams): Promise<{ success: boolean; error?: string; }> {
     const { planId, userId } = params;
@@ -33,7 +27,6 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
         const adminAuth = getAuth(adminApp);
         const adminFirestore = getFirestore(adminApp);
         
-        // 1. Get user data from Auth using the provided UID
         const userRecord = await adminAuth.getUser(userId);
         const user = {
             uid: userRecord.uid,
@@ -42,98 +35,101 @@ export async function subscribeToPlanAction(params: SubscribeToPlanParams): Prom
             photoURL: userRecord.photoURL || null,
         };
 
-        const batch = adminFirestore.batch();
-        let tenantId: string;
-        let tenantRef;
-        
-        // 2. Check if tenant exists
+        // --- Step 1: Find or Create the Tenant, User, and Membership ---
         const tenantsRef = adminFirestore.collection("tenants");
         const q = tenantsRef.where("ownerUid", "==", user.uid);
         const querySnapshot = await q.get();
 
+        let tenantId: string;
+        let isNewTenant = false;
+
         if (querySnapshot.empty) {
-            // 3a. If no tenant, create all initial documents
-            tenantRef = adminFirestore.collection("tenants").doc(); // Let Firestore generate the ID
+            isNewTenant = true;
+            const tenantRef = tenantsRef.doc();
             tenantId = tenantRef.id;
+
+            const initialBatch = adminFirestore.batch();
 
             // Create User document in Firestore
             const userRef = adminFirestore.collection("users").doc(user.uid);
-            batch.set(userRef, {
+            initialBatch.set(userRef, {
                 uid: user.uid, displayName: user.displayName, email: user.email, photoURL: user.photoURL,
                 tenantIds: [tenantId], isSuperadmin: false,
             });
 
             // Create Tenant
-            batch.set(tenantRef, {
+            initialBatch.set(tenantRef, {
                 id: tenantId, type: planId.toUpperCase(), name: `Espacio de ${user.displayName.split(' ')[0]}`,
                 baseCurrency: "ARS", createdAt: new Date().toISOString(), ownerUid: user.uid,
                 status: "pending",
                 settings: JSON.stringify({ quietHours: true, rollover: false }),
             });
 
-            // Create Membership
+            // Create Membership (using a predictable ID)
             const membershipRef = adminFirestore.collection("memberships").doc(`${tenantId}_${user.uid}`);
-            batch.set(membershipRef, {
+            initialBatch.set(membershipRef, {
                 tenantId: tenantId, uid: user.uid, displayName: user.displayName, email: user.email,
                 role: 'owner', status: 'active', joinedAt: new Date().toISOString()
             });
 
-            // Create default categories and subcategories
-            defaultCategories.forEach((category, catIndex) => {
-                const categoryRef = adminFirestore.collection("categories").doc(); // Let Firestore generate ID
-                const categoryId = categoryRef.id;
-                batch.set(categoryRef, { id: categoryId, tenantId: tenantId, name: category.name, color: category.color, order: catIndex });
-
-                category.subcategories.forEach((subcategoryName, subCatIndex) => {
-                    const subcategoryRef = adminFirestore.collection("subcategories").doc(); // Let Firestore generate ID
-                    batch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantId, categoryId: categoryId, name: subcategoryName, order: subCatIndex });
-                });
-            });
+            await initialBatch.commit();
 
         } else {
-            // 3b. If tenant exists, just get its ID
             const tenantDoc = querySnapshot.docs[0];
             tenantId = tenantDoc.id;
-            tenantRef = tenantDoc.ref;
             if (tenantDoc.data().status === 'active') {
                 return { success: false, error: 'Ya tienes un plan activo.' };
             }
         }
         
-        // 4. Create License and activate Tenant
-        const licenseRef = adminFirestore.collection("licenses").doc(); // Let Firestore generate ID
+        // --- Step 2: If it was a new tenant, create default categories ---
+        if (isNewTenant) {
+            const categoriesBatch = adminFirestore.batch();
+            const categoriesCol = adminFirestore.collection("categories");
+            const subcategoriesCol = adminFirestore.collection("subcategories");
+
+            defaultCategories.forEach((category, catIndex) => {
+                const categoryRef = categoriesCol.doc();
+                categoriesBatch.set(categoryRef, { id: categoryRef.id, tenantId: tenantId, name: category.name, color: category.color, order: catIndex });
+
+                category.subcategories.forEach((subcategoryName, subCatIndex) => {
+                    const subcategoryRef = subcategoriesCol.doc();
+                    categoriesBatch.set(subcategoryRef, { id: subcategoryRef.id, tenantId: tenantId, categoryId: categoryRef.id, name: subcategoryName, order: subCatIndex });
+                });
+            });
+            await categoriesBatch.commit();
+        }
+
+        // --- Step 3: Create License and activate Tenant ---
+        const finalBatch = adminFirestore.batch();
+        const licenseRef = adminFirestore.collection("licenses").doc();
         const startDate = new Date();
         const endDate = new Date();
+        
         if (planId === 'demo') {
             endDate.setDate(startDate.getDate() + 15);
         } else {
             endDate.setFullYear(startDate.getFullYear() + 1);
         }
 
-        const maxUsersMapping: { [key: string]: number } = {
-            personal: 1, familiar: 4, empresa: 10, demo: 1,
-        };
+        const maxUsersMapping: { [key: string]: number } = { personal: 1, familiar: 4, empresa: 10, demo: 1 };
 
-        batch.set(licenseRef, {
+        finalBatch.set(licenseRef, {
             id: licenseRef.id, tenantId: tenantId, plan: planId, status: 'active',
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
-            maxUsers: maxUsersMapping[planId as keyof typeof maxUsersMapping] ?? 1,
-            paymentId: `sim_${adminFirestore.collection("anything").doc().id}`, // Secure random ID generation
+            maxUsers: maxUsersMapping[planId] ?? 1,
+            paymentId: `sim_${adminFirestore.collection("anything").doc().id}`,
         });
 
-        // 5. Activate tenant
-        batch.update(tenantRef, { status: "active" });
-
-        // 6. Commit all changes
-        await batch.commit();
+        const tenantRefToUpdate = adminFirestore.collection("tenants").doc(tenantId);
+        finalBatch.update(tenantRefToUpdate, { status: "active" });
+        
+        await finalBatch.commit();
 
         return { success: true };
 
     } catch (error: any) {
         console.error("Error in subscribeToPlanAction:", error);
-         if (error.code === 'auth/user-not-found') {
-            return { success: false, error: "El usuario no fue encontrado. Por favor, intenta iniciar sesión de nuevo." };
-        }
         return { success: false, error: `Ocurrió un error al crear la licencia. (${error.code || 'INTERNAL'})` };
     }
 }
