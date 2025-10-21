@@ -130,6 +130,7 @@ export type Budget = {
   subcategoryId?: string; // Reference to Subcategory. (Relationship: Subcategory 1:N Budget)
   amountARS: number; // Budget amount in ARS.
   rolloverFromPrevARS: number; // Amount rolled over from the previous month.
+  description?: string; // Optional description for the budget.
 };
 export type Alert = {
   id: string; // Unique identifier for the alert.

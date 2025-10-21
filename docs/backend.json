@@ -622,6 +622,10 @@
         "rolloverFromPrevARS": {
           "type": "number",
           "description": "Amount rolled over from the previous month."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description for the budget."
         }
       },
       "required": [
