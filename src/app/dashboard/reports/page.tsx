@@ -15,7 +15,7 @@ import type { Category, Entity, User as UserType, Tenant } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MultiSelect, type MultiSelectOption } from '@/components/shared/multi-select';
 import { Separator } from '@/components/ui/separator';
@@ -129,6 +129,28 @@ export default function ReportsPage() {
             : [...prev, option]
         );
     }
+    
+    const setDateRange = (preset: string) => {
+        const now = new Date();
+        switch (preset) {
+            case 'currentMonth':
+                setDate({ from: startOfMonth(now), to: endOfMonth(now) });
+                break;
+            case 'currentQuarter':
+                setDate({ from: startOfMonth(subMonths(now, 3)), to: endOfMonth(now) });
+                break;
+            case 'currentSemester':
+                setDate({ from: startOfMonth(subMonths(now, 5)), to: endOfMonth(now) });
+                break;
+            case 'currentYear':
+                setDate({ from: startOfYear(now), to: endOfYear(now) });
+                break;
+            case 'ytd':
+                setDate({ from: startOfYear(now), to: now });
+                break;
+        }
+    };
+
 
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">
@@ -173,14 +195,21 @@ export default function ReportsPage() {
                                             ) : (<span>Selecciona un rango</span>)}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
+                                    <PopoverContent className="w-auto p-0 flex" align="start">
+                                        <div className="flex flex-col space-y-1 border-r p-2">
+                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentMonth')}>Mes Actual</Button>
+                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentQuarter')}>Cuatrimestre</Button>
+                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentSemester')}>Semestre</Button>
+                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentYear')}>Año Actual</Button>
+                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('ytd')}>Year-to-Date</Button>
+                                        </div>
                                         <Calendar
                                             initialFocus
                                             mode="range"
                                             defaultMonth={date?.from}
                                             selected={date}
                                             onSelect={setDate}
-                                            numberOfMonths={2}
+                                            numberOfMonths={1}
                                             locale={es}
                                         />
                                     </PopoverContent>
