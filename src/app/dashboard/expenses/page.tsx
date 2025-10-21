@@ -27,6 +27,7 @@ import { DataTable } from './data-table';
 import { columns } from './columns';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { logAuditEvent } from '../audit/actions';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function ExpensesPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
@@ -38,6 +39,10 @@ export default function ExpensesPage() {
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [expenseToDelete, setExpenseToDelete] = React.useState<Expense | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
+
+    const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth() + 1);
+    const [currentYear, setCurrentYear] = React.useState(new Date().getFullYear());
+
 
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
@@ -152,7 +157,6 @@ export default function ExpensesPage() {
             });
     };
 
-
     const tableData = React.useMemo(() => {
         if (!expenses || !categories || !subcategories) return [];
 
@@ -174,13 +178,25 @@ export default function ExpensesPage() {
             memberMap.set(user.uid, userData.displayName);
         }
 
-        return expenses.map(expense => ({
-            ...expense,
-            category: categoryMap.get(expense.categoryId),
-            subcategory: expense.subcategoryId ? subcategoryMap.get(expense.subcategoryId) : undefined,
-            userName: memberMap.get(expense.userId) || 'Usuario desconocido',
-        }));
-    }, [expenses, categories, subcategories, members, user, userData]);
+        return expenses
+            .filter(expense => {
+                const expenseDate = new Date(expense.date);
+                return expenseDate.getMonth() + 1 === currentMonth && expenseDate.getFullYear() === currentYear;
+            })
+            .map(expense => ({
+                ...expense,
+                category: categoryMap.get(expense.categoryId),
+                subcategory: expense.subcategoryId ? subcategoryMap.get(expense.subcategoryId) : undefined,
+                userName: memberMap.get(expense.userId) || 'Usuario desconocido',
+            }));
+    }, [expenses, categories, subcategories, members, user, userData, currentMonth, currentYear]);
+
+    const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
+    const uniqueYears = React.useMemo(() => {
+        if (!expenses) return [new Date().getFullYear()];
+        const yearsSet = new Set(expenses.map(e => new Date(e.date).getFullYear()));
+        return Array.from(yearsSet).sort((a,b) => b - a);
+    }, [expenses]);
 
     const isLoading = isAuthLoading || isUserDocLoading || isLoadingMembership || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
 
@@ -220,12 +236,36 @@ export default function ExpensesPage() {
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
                         ) : (
-                            <DataTable 
+                            <>
+                                <div className="flex items-center py-4 gap-4">
+                                    <Select value={String(currentMonth)} onValueChange={(val) => setCurrentMonth(Number(val))}>
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {months.map(m => (
+                                                <SelectItem key={m.value} value={String(m.value)}>{m.name.charAt(0).toUpperCase() + m.name.slice(1)}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                     <Select value={String(currentYear)} onValueChange={(val) => setCurrentYear(Number(val))}>
+                                        <SelectTrigger className="w-[120px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {uniqueYears.map(y => (
+                                                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <DataTable 
                                     columns={columns(isOwner)} 
                                     data={tableData}
                                     categories={categories || []}
                                     onDelete={handleOpenDeleteDialog}
                                 />
+                            </>
                         )}
                         </CardContent>
                     </Card>

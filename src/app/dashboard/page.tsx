@@ -7,10 +7,10 @@ import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { collection, query, where, writeBatch, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, writeBatch, getDocs, doc, deleteDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
-import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
+import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income, Subcategory } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert, View, FileBarChart } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -236,22 +236,25 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
   const tenantRef = useMemoFirebase(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
-  const categoriesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const categoriesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
+
+  const subcategoriesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'subcategories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const { data: allSubcategories, isLoading: isLoadingSubcategories } = useCollection<WithId<Subcategory>>(subcategoriesQuery);
   
-  const expensesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+  const expensesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
 
-  const incomesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+  const incomesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
   const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<WithId<Income>>(incomesQuery);
 
-  const budgetsQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const budgetsQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const isLoading = isLoadingTenant || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes;
+  const isLoading = isLoadingTenant || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes || isLoadingSubcategories;
   
  const processedData = useMemo(() => {
-    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user) {
+    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user || !allSubcategories) {
       return SAFE_DEFAULTS;
     }
 
@@ -399,7 +402,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         isOwner,
         installmentsChartData
     };
-  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user]);
+  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -816,7 +819,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/expenses/new">
+                <Link href="/dashboard/expenses">
                     <Plus className="mr-2 h-4 w-4" /> Crear Gasto
                 </Link>
             </Button>
