@@ -165,28 +165,28 @@ export function DataTable<TData extends { details: any[], amountARS: number }, T
                   {row.getIsExpanded() && (
                     <TableRow>
                       <TableCell colSpan={columns.length} className="p-0">
-                          <div className="p-4 bg-muted/50">
+                          <div className="p-2 bg-muted/50">
                             <Table>
                                 <TableHeader>
                                   <TableRow>
-                                    <TableHead className="w-[70%]">Descripción</TableHead>
-                                    <TableHead className="text-right">Monto Presupuestado</TableHead>
-                                    <TableHead className="text-right">Acciones</TableHead>
+                                    <TableHead className="w-[70%] text-xs py-2">Descripción</TableHead>
+                                    <TableHead className="text-right text-xs py-2">Monto</TableHead>
+                                    <TableHead className="text-right text-xs py-2">Acciones</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {row.original.details.map((detail: any) => (
                                       <TableRow key={detail.id} className="hover:bg-muted">
-                                          <TableCell className="text-sm text-muted-foreground">{detail.description || 'Sin descripción'}</TableCell>
-                                          <TableCell className="text-right font-mono text-sm">{formatCurrency(detail.amountARS)}</TableCell>
-                                          <TableCell className="text-right">
-                                              <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+                                          <TableCell className="text-xs text-muted-foreground py-2">{detail.description || 'Sin descripción'}</TableCell>
+                                          <TableCell className="text-right font-mono text-xs py-2">{formatCurrency(detail.amountARS)}</TableCell>
+                                          <TableCell className="text-right py-2">
+                                              <Button variant="ghost" size="icon" asChild className="h-7 w-7">
                                                   <Link href={`/dashboard/budget/edit/${detail.id}`}>
-                                                      <Pencil className="h-4 w-4"/>
+                                                      <Pencil className="h-3 w-3"/>
                                                   </Link>
                                               </Button>
-                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => onDelete(detail.id)}>
-                                                  <Trash2 className="h-4 w-4"/>
+                                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(detail.id)}>
+                                                  <Trash2 className="h-3 w-3"/>
                                               </Button>
                                           </TableCell>
                                       </TableRow>
