@@ -20,13 +20,15 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useToast } from '@/hooks/use-toast';
-import { getColumns } from './columns';
+import { getColumns, type BudgetRow } from './columns';
 import { DataTable } from './data-table';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { addMonths } from 'date-fns';
+import { Input } from '@/components/ui/input';
+
 
 export default function BudgetPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
@@ -36,12 +38,19 @@ export default function BudgetPage() {
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [budgetToDelete, setBudgetToDelete] = React.useState<string | null>(null);
+    
+    // State for duplication dialog
     const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = React.useState(false);
     const [isDuplicating, setIsDuplicating] = React.useState(false);
     const [targetMonth, setTargetMonth] = React.useState(new Date().getMonth() + 1);
     const [targetYear, setTargetYear] = React.useState(new Date().getFullYear());
-    const [rowSelection, setRowSelection] = React.useState({});
+    const [repeatCount, setRepeatCount] = React.useState(0);
+
+    // State for table selections
+    const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
+    const [detailRowSelection, setDetailRowSelection] = React.useState<Record<string, boolean>>({});
     
+    // State for filters
     const [filterMonth, setFilterMonth] = React.useState<string>(String(new Date().getMonth() + 1));
     const [filterYear, setFilterYear] = React.useState<string>(String(new Date().getFullYear()));
 
@@ -88,49 +97,43 @@ export default function BudgetPage() {
     
         const categoryMap = new Map(categories.map(c => [c.id, c]));
     
-        // First, group all individual budgets by their category-month-year key
-        const groupedBudgets: { [key: string]: { summary: any, items: Budget[] } } = {};
+        const groupedBudgets: { [key: string]: BudgetRow } = {};
     
         budgets.forEach(budget => {
             const key = `${budget.year}-${budget.month}-${budget.categoryId}`;
             if (!groupedBudgets[key]) {
                  const category = categoryMap.get(budget.categoryId);
                 groupedBudgets[key] = {
-                    summary: {
-                        id: key, // Composite key for the group
-                        categoryId: budget.categoryId,
-                        categoryName: category?.name || 'N/A',
-                        categoryColor: category?.color || '#888888',
-                        year: budget.year,
-                        month: budget.month,
-                        amountARS: 0,
-                        spent: 0,
-                    },
-                    items: []
+                    id: key, // Composite key for the group
+                    categoryId: budget.categoryId,
+                    categoryName: category?.name || 'N/A',
+                    categoryColor: category?.color || '#888888',
+                    year: budget.year,
+                    month: budget.month,
+                    amountARS: 0,
+                    spent: 0,
+                    remaining: 0,
+                    percentage: 0,
+                    details: []
                 };
             }
-            groupedBudgets[key].summary.amountARS += budget.amountARS;
-            groupedBudgets[key].items.push(budget);
+            groupedBudgets[key].amountARS += budget.amountARS;
+            groupedBudgets[key].details.push(budget);
         });
     
-        // Now, calculate expenses for each group
         Object.values(groupedBudgets).forEach(group => {
             const spent = expenses
-                .filter(e => e.categoryId === group.summary.categoryId && new Date(e.date).getMonth() + 1 === group.summary.month && new Date(e.date).getFullYear() === group.summary.year)
+                .filter(e => e.categoryId === group.categoryId && new Date(e.date).getMonth() + 1 === group.month && new Date(e.date).getFullYear() === group.year)
                 .reduce((acc, e) => acc + e.amountARS, 0);
             
-            group.summary.spent = spent;
-            group.summary.remaining = group.summary.amountARS - spent;
-            group.summary.percentage = group.summary.amountARS > 0 ? (spent / group.summary.amountARS) * 100 : 0;
+            group.spent = spent;
+            group.remaining = group.amountARS - spent;
+            group.percentage = group.amountARS > 0 ? (spent / group.amountARS) * 100 : 0;
         });
     
-        // Finally, return an array of the combined structure
-        return Object.values(groupedBudgets).map(g => ({
-            ...g.summary,
-            details: g.items
-        }));
+        return Object.values(groupedBudgets);
     }, [budgets, categories, expenses]);
-
+    
     const filteredBudgetData = React.useMemo(() => {
         return budgetData.filter(b => {
             const monthMatch = filterMonth === 'all' || b.month === parseInt(filterMonth);
@@ -157,7 +160,6 @@ export default function BudgetPage() {
         deleteDoc(budgetRef)
             .then(() => {
                 toast({ title: 'Presupuesto eliminado', description: 'El presupuesto ha sido eliminado correctamente.' });
-                // Optimistic update
                 if(budgets && setBudgets) {
                     setBudgets(budgets.filter(b => b.id !== budgetToDelete));
                 }
@@ -175,14 +177,37 @@ export default function BudgetPage() {
             });
     };
     
+    const selectedItemsForDuplication = React.useMemo(() => {
+        const selectedGroupKeys = Object.keys(rowSelection).filter(key => rowSelection[key]);
+        const selectedDetailIds = Object.keys(detailRowSelection).filter(key => detailRowSelection[key]);
+
+        let items: Budget[] = [];
+
+        // Add items from fully selected categories
+        const selectedGroups = filteredBudgetData.filter(group => selectedGroupKeys.includes(group.id));
+        selectedGroups.forEach(group => {
+            items.push(...group.details);
+        });
+
+        // Add individually selected items, avoiding duplicates
+        const selectedGroupCategoryIds = new Set(selectedGroups.map(g => g.categoryId));
+        if (budgets) {
+            budgets.forEach(budget => {
+                if (selectedDetailIds.includes(budget.id) && !selectedGroupCategoryIds.has(budget.categoryId)) {
+                    if (!items.find(i => i.id === budget.id)) {
+                        items.push(budget);
+                    }
+                }
+            });
+        }
+        
+        return items;
+    }, [rowSelection, detailRowSelection, filteredBudgetData, budgets]);
+
+
     const handleDuplicateBudgets = async () => {
-        if (!firestore || !user || !tenantId) return;
-
-        const selectedRowIndices = Object.keys(rowSelection).map(Number);
-        const budgetsToDuplicate = budgetData.filter((_, index) => selectedRowIndices.includes(index));
-
-        if (budgetsToDuplicate.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No hay presupuestos seleccionados para duplicar.' });
+        if (!firestore || !user || !tenantId || selectedItemsForDuplication.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No hay items de presupuesto seleccionados para duplicar.' });
             return;
         }
 
@@ -190,54 +215,61 @@ export default function BudgetPage() {
         toast({ title: "Procesando...", description: "Duplicando presupuestos." });
 
         try {
-            const budgetsRef = collection(firestore, 'budgets');
-            const q = query(budgetsRef, 
-                where('tenantId', '==', tenantId),
-                where('year', '==', targetYear),
-                where('month', '==', targetMonth)
-            );
-            const existingDocsSnap = await getDocs(q);
-            const existingCategoryIds = new Set(existingDocsSnap.docs.map(d => d.data().categoryId));
-
             const batch = writeBatch(firestore);
-            let duplicatedCount = 0;
-            let skippedCount = 0;
-            
-            const originalBudgetsToDuplicate = budgets?.filter(b => 
-                budgetsToDuplicate.some(bd => bd.categoryId === b.categoryId && bd.month === b.month && bd.year === b.year)
-            ) || [];
+            let totalDuplicatedCount = 0;
 
-            originalBudgetsToDuplicate.forEach(budget => {
-                if (!existingCategoryIds.has(budget.categoryId)) {
-                     const newBudgetRef = doc(collection(firestore, 'budgets'));
-                    const newBudgetData = {
-                        tenantId: budget.tenantId,
-                        year: targetYear,
-                        month: targetMonth,
-                        categoryId: budget.categoryId,
-                        subcategoryId: budget.subcategoryId || null,
-                        amountARS: budget.amountARS,
-                        description: budget.description || "",
-                        rolloverFromPrevARS: 0, 
-                    };
-                    batch.set(newBudgetRef, newBudgetData);
-                    duplicatedCount++;
-                    existingCategoryIds.add(budget.categoryId);
-                } else {
-                    skippedCount++;
-                }
-            });
+            for (let i = 0; i <= repeatCount; i++) {
+                const currentDate = addMonths(new Date(targetYear, targetMonth - 1), i);
+                const currentTargetYear = currentDate.getFullYear();
+                const currentTargetMonth = currentDate.getMonth() + 1;
 
-            if (duplicatedCount > 0) {
+                const budgetsRef = collection(firestore, 'budgets');
+                const q = query(budgetsRef,
+                    where('tenantId', '==', tenantId),
+                    where('year', '==', currentTargetYear),
+                    where('month', '==', currentTargetMonth)
+                );
+                const existingDocsSnap = await getDocs(q);
+                
+                // Create a unique key for existing budgets: `categoryId_description`
+                const existingBudgets = new Set(existingDocsSnap.docs.map(d => `${d.data().categoryId}_${d.data().description || ''}`));
+
+                let duplicatedInThisMonth = 0;
+                
+                selectedItemsForDuplication.forEach(budget => {
+                    const budgetKey = `${budget.categoryId}_${budget.description || ''}`;
+                    if (!existingBudgets.has(budgetKey)) {
+                        const newBudgetRef = doc(collection(firestore, 'budgets'));
+                        const newBudgetData = {
+                            tenantId: budget.tenantId,
+                            year: currentTargetYear,
+                            month: currentTargetMonth,
+                            categoryId: budget.categoryId,
+                            subcategoryId: budget.subcategoryId || null,
+                            amountARS: budget.amountARS,
+                            description: budget.description || "",
+                            rolloverFromPrevARS: 0,
+                        };
+                        batch.set(newBudgetRef, newBudgetData);
+                        duplicatedInThisMonth++;
+                        existingBudgets.add(budgetKey); // Prevent duplicating the same item twice in the same run
+                    }
+                });
+                totalDuplicatedCount += duplicatedInThisMonth;
+            }
+
+
+            if (totalDuplicatedCount > 0) {
                 await batch.commit();
             }
 
             toast({
                 title: "Proceso completado",
-                description: `${duplicatedCount} presupuestos únicos duplicados. ${skippedCount} entradas omitidas por ya existir en el mes de destino.`
+                description: `${totalDuplicatedCount} items de presupuesto duplicados en ${repeatCount + 1} mes(es).`
             });
 
         } catch (error) {
+            console.error("Error duplicating budgets:", error);
              errorEmitter.emit('permission-error', new FirestorePermissionError({
                 path: 'batch-write',
                 operation: 'write',
@@ -247,6 +279,7 @@ export default function BudgetPage() {
             setIsDuplicating(false);
             setIsDuplicateDialogOpen(false);
             setRowSelection({});
+            setDetailRowSelection({});
         }
     };
     
@@ -256,8 +289,10 @@ export default function BudgetPage() {
 
     const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
     const uniqueYearsInBudgets = React.useMemo(() => {
-        if (!budgetData) return [];
+        if (!budgetData) return [new Date().getFullYear()];
         const yearsSet = new Set(budgetData.map(b => b.year));
+        const currentYear = new Date().getFullYear();
+        if(!yearsSet.has(currentYear)) yearsSet.add(currentYear);
         return Array.from(yearsSet).sort((a,b) => b - a);
     }, [budgetData]);
     
@@ -313,22 +348,23 @@ export default function BudgetPage() {
                             <div className="flex gap-2">
                                 <AlertDialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
                                     <AlertDialogTrigger asChild>
-                                        <Button variant="outline" disabled={Object.keys(rowSelection).length === 0}>
+                                        <Button variant="outline" disabled={selectedItemsForDuplication.length === 0}>
                                             <Repeat className="mr-2 h-4 w-4" />
-                                            Duplicar ({Object.keys(rowSelection).length})
+                                            Duplicar ({selectedItemsForDuplication.length})
                                         </Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
                                         <AlertDialogHeader>
                                             <AlertDialogTitle>Duplicar Presupuestos</AlertDialogTitle>
                                             <AlertDialogDescription>
-                                                Selecciona el mes y año de destino para los
-                                                <span className="font-bold"> {Object.keys(rowSelection).length}</span> presupuestos seleccionados. Los presupuestos para categorías que ya existan en el mes de destino no serán duplicados.
+                                                Selecciona el mes y año de inicio, y cuántas veces repetir la operación para los
+                                                <span className="font-bold"> {selectedItemsForDuplication.length}</span> items seleccionados.
+                                                Los items que ya existan en un mes de destino no se duplicarán.
                                             </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <div className="grid grid-cols-2 gap-4 py-4">
                                             <div className="space-y-2">
-                                                <Label htmlFor="target-month">Mes</Label>
+                                                <Label htmlFor="target-month">Mes de Inicio</Label>
                                                 <Select value={String(targetMonth)} onValueChange={(val) => setTargetMonth(Number(val))}>
                                                     <SelectTrigger id="target-month"><SelectValue/></SelectTrigger>
                                                     <SelectContent>
@@ -337,13 +373,25 @@ export default function BudgetPage() {
                                                 </Select>
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor="target-year">Año</Label>
+                                                <Label htmlFor="target-year">Año de Inicio</Label>
                                                 <Select value={String(targetYear)} onValueChange={(val) => setTargetYear(Number(val))}>
                                                     <SelectTrigger id="target-year"><SelectValue/></SelectTrigger>
                                                     <SelectContent>
                                                         {uniqueYearsInBudgets.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
+                                            </div>
+                                            <div className="space-y-2 col-span-2">
+                                                <Label htmlFor="repeat-count">Repetir (veces)</Label>
+                                                <Input 
+                                                    id="repeat-count" 
+                                                    type="number" 
+                                                    min="0"
+                                                    value={repeatCount}
+                                                    onChange={(e) => setRepeatCount(Number(e.target.value))}
+                                                    placeholder="0"
+                                                />
+                                                <p className="text-xs text-muted-foreground">0 = solo el mes de inicio, 1 = mes de inicio + 1 mes extra.</p>
                                             </div>
                                         </div>
                                         <AlertDialogFooter>
@@ -366,10 +414,12 @@ export default function BudgetPage() {
                     <CardContent>
                        <DataTable
                             columns={columns}
-                            data={budgetData}
+                            data={filteredBudgetData}
                             onDelete={handleOpenDeleteDialog}
                             rowSelection={rowSelection}
                             setRowSelection={setRowSelection}
+                            detailRowSelection={detailRowSelection}
+                            setDetailRowSelection={setDetailRowSelection}
                             months={months}
                             years={uniqueYearsInBudgets.map(y => ({ value: y, label: String(y)}))}
                             filterMonth={filterMonth}

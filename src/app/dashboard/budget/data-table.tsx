@@ -26,17 +26,20 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Badge } from "@/components/ui/badge"
 import Link from 'next/link';
 import { Pencil, Trash2 } from "lucide-react"
+import type { BudgetRow } from './columns';
+import { Checkbox } from "@/components/ui/checkbox"
 
-interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData extends BudgetRow, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   onDelete: (id: string) => void
-  rowSelection: object
-  setRowSelection: React.Dispatch<React.SetStateAction<object>>
+  rowSelection: Record<string, boolean>
+  setRowSelection: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  detailRowSelection: Record<string, boolean>
+  setDetailRowSelection: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
   months: { value: number; name: string }[]
   years: { value: number; label: string }[]
   filterMonth: string;
@@ -45,12 +48,14 @@ interface DataTableProps<TData, TValue> {
   setFilterYear: (value: string) => void;
 }
 
-export function DataTable<TData extends { details: any[], amountARS: number }, TValue>({
+export function DataTable<TData extends BudgetRow, TValue>({
   columns,
   data,
   onDelete,
   rowSelection,
   setRowSelection,
+  detailRowSelection,
+  setDetailRowSelection,
   months,
   years,
   filterMonth,
@@ -88,6 +93,7 @@ export function DataTable<TData extends { details: any[], amountARS: number }, T
     onRowSelectionChange: setRowSelection,
     onExpandedChange: setExpanded,
     getExpandedRowModel: getExpandedRowModel(),
+    getRowId: (row) => row.id,
     getRowCanExpand: (row) => row.original.details && row.original.details.length > 0,
     initialState: {
         pagination: {
@@ -176,17 +182,30 @@ export function DataTable<TData extends { details: any[], amountARS: number }, T
                             <Table>
                                 <TableHeader>
                                   <TableRow>
-                                    <TableHead className="w-[70%] text-xs py-2">Descripción</TableHead>
+                                    <TableHead className="w-10 py-2"></TableHead>
+                                    <TableHead className="w-[60%] text-xs py-2">Descripción</TableHead>
                                     <TableHead className="text-right text-xs py-2">Monto</TableHead>
-                                    <TableHead className="text-right text-xs py-2">Acciones</TableHead>
+                                    <TableHead className="text-right text-xs py-2 w-24">Acciones</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {row.original.details.map((detail: any) => (
-                                      <TableRow key={detail.id} className="hover:bg-muted">
-                                          <TableCell className="text-xs text-muted-foreground py-2">{detail.description || 'Sin descripción'}</TableCell>
-                                          <TableCell className="text-right font-mono text-xs py-2">{formatCurrency(detail.amountARS)}</TableCell>
-                                          <TableCell className="text-right py-2">
+                                      <TableRow key={detail.id} className="hover:bg-muted/60">
+                                          <TableCell className="py-1">
+                                            <Checkbox
+                                                checked={detailRowSelection[detail.id]}
+                                                onCheckedChange={(value) => {
+                                                  setDetailRowSelection(prev => ({
+                                                      ...prev,
+                                                      [detail.id]: !!value,
+                                                  }));
+                                                }}
+                                                aria-label={`Select detail ${detail.id}`}
+                                            />
+                                          </TableCell>
+                                          <TableCell className="text-xs text-muted-foreground py-1">{detail.description || 'Sin descripción'}</TableCell>
+                                          <TableCell className="text-right font-mono text-xs py-1">{formatCurrency(detail.amountARS)}</TableCell>
+                                          <TableCell className="text-right py-1">
                                               <Button variant="ghost" size="icon" asChild className="h-7 w-7">
                                                   <Link href={`/dashboard/budget/edit/${detail.id}`}>
                                                       <Pencil className="h-3 w-3"/>
