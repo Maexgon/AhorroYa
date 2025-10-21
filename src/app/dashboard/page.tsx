@@ -270,28 +270,37 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         }).format(amount);
     };
 
+    const fromDateFilter = date?.from ? new Date(date.from.setHours(0, 0, 0, 0)) : null;
+    const toDateFilter = date?.to ? new Date(date.to.setHours(23, 59, 59, 999)) : (fromDateFilter ? new Date(fromDateFilter.setHours(23, 59, 59, 999)) : null);
+
+    // Filter all data based on selected category first
+    const categoryFilteredExpenses = selectedCategoryId === 'all'
+      ? allExpenses
+      : allExpenses.filter(e => e.categoryId === selectedCategoryId);
+
+    const categoryFilteredBudgets = selectedCategoryId === 'all'
+      ? allBudgets
+      : allBudgets.filter(b => b.categoryId === selectedCategoryId);
+
+
+    const periodFilteredExpenses = categoryFilteredExpenses.filter(expense => {
+        if (!fromDateFilter) return false;
+        const expenseDate = new Date(expense.date);
+        return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
+    });
+
+    const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
+
     const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
     const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
 
-    const filteredExpenses = allExpenses.filter(expense => {
-        if (!date?.from) return false;
-        const expenseDate = new Date(expense.date);
-        const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
-        const toDate = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : new Date(date.from.setHours(23, 59, 59, 999));
-        if (expenseDate < fromDate || expenseDate > toDate) return false;
-        if (selectedCategoryId !== 'all' && expense.categoryId !== selectedCategoryId) return false;
-        return true;
-    });
-
-    const totalExpenses = filteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
-
-    const totalBudgetForPeriod = allBudgets
+    const totalBudgetForPeriod = categoryFilteredBudgets
       .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
       .reduce((acc, budget) => acc + budget.amountARS, 0);
 
     const budgetBalance = totalBudgetForPeriod - totalExpenses;
 
-    const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
+    const barData = Object.entries(periodFilteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         if (!acc[categoryName]) acc[categoryName] = 0;
         acc[categoryName] += expense.amountARS;
@@ -305,7 +314,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         default: Sparkles, 'Comestibles': Utensils, 'Ropa y Accesorios': ShoppingCart, 'Mobilidad': Bus, 'Vida y Entretenimiento': Film, 'Vivienda': Home,
     };
 
-    const recentExpenses = filteredExpenses
+    const recentExpenses = periodFilteredExpenses
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
@@ -316,11 +325,11 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         });
 
     const budgetChartData = (() => {
-        return allBudgets
+        return categoryFilteredBudgets
             .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
             .map(budget => {
-                const spentInARS = allExpenses
-                    .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
+                const spentInARS = periodFilteredExpenses
+                    .filter(e => e.categoryId === budget.categoryId)
                     .reduce((acc, e) => acc + e.amountARS, 0);
 
                 const percentage = budget.amountARS > 0 ? Math.round((spentInARS / budget.amountARS) * 100) : 0;
@@ -342,11 +351,11 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         const month = monthDate.getMonth();
         const year = monthDate.getFullYear();
         
-        const monthlyExpenses = allExpenses
+        const monthlyExpenses = categoryFilteredExpenses
           .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
           .reduce((sum, e) => sum + e.amountARS, 0);
           
-        const monthlyIncomes = allIncomes
+        const monthlyIncomes = allIncomes // Incomes are not filtered by category
           .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
           .reduce((sum, inc) => sum + inc.amountARS, 0);
 
@@ -363,7 +372,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     });
 
     const installmentsChartData = (() => {
-      const pendingInstallments = allExpenses.filter(e => 
+      const pendingInstallments = categoryFilteredExpenses.filter(e => 
         e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday())
       );
     
@@ -1047,17 +1056,18 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
 
     const finalFormatCurrency = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
     
-    const filteredExpenses = allExpenses.filter(expense => {
-        if (!date?.from) return false;
+    const fromDateFilter = date?.from ? new Date(date.from.setHours(0, 0, 0, 0)) : null;
+    const toDateFilter = date?.to ? new Date(date.to.setHours(23, 59, 59, 999)) : (fromDateFilter ? new Date(fromDateFilter.setHours(23, 59, 59, 999)) : null);
+
+    const periodFilteredExpenses = allExpenses.filter(expense => {
+        if (!fromDateFilter) return false;
         const expenseDate = new Date(expense.date);
-        const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
-        const toDate = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : new Date(date.from.setHours(23, 59, 59, 999));
-        return expenseDate >= fromDate && expenseDate <= toDate;
+        return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
     });
 
-    const totalExpenses = filteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
+    const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
 
-    const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
+    const barData = Object.entries(periodFilteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
         if (!acc[categoryName]) acc[categoryName] = 0;
         acc[categoryName] += expense.amountARS;
