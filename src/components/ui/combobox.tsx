@@ -5,6 +5,7 @@ import * as React from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import {
   Command,
   CommandEmpty,
@@ -41,6 +42,7 @@ export function Combobox({
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [inputValue, setInputValue] = React.useState("")
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     // Sync external value with internal input value
@@ -53,29 +55,30 @@ export function Combobox({
     onSelect(selectedOption ? selectedOption.label : currentValue);
     setInputValue(selectedOption ? selectedOption.label : currentValue);
     setOpen(false);
+    setSearchTerm(""); // Reset search term
   }
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
+    setSearchTerm(newValue); // Update search term
     onSelect(newValue); // Update the form state continuously
   }
 
   const filteredOptions = React.useMemo(() => {
-    if (!inputValue) return [];
+    if (searchTerm.length < 5) return [];
     return options.filter(option =>
-      option.label.toLowerCase().includes(inputValue.toLowerCase())
+      option.label.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [inputValue, options]);
+  }, [searchTerm, options]);
 
-  // Logic to control popover visibility based on user requirements
   React.useEffect(() => {
-    if (inputValue.length >= 5 && filteredOptions.length > 0) {
+    if (searchTerm.length >= 5 && filteredOptions.length > 0) {
       if (!open) setOpen(true);
     } else {
       if (open) setOpen(false);
     }
-  }, [inputValue, filteredOptions, open]);
+  }, [searchTerm, filteredOptions, open]);
   
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -87,28 +90,33 @@ export function Combobox({
                 onChange={handleInputChange}
                 className={cn("w-full justify-between", className)}
             />
+            <ChevronsUpDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 shrink-0 opacity-50" />
         </div>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
           <CommandList>
-            <CommandGroup>
-              {filteredOptions.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.label}
-                    onSelect={handleSelect}
-                  >
-                  <Check
-                      className={cn(
-                      "mr-2 h-4 w-4",
-                      value === option.label ? "opacity-100" : "opacity-0"
-                      )}
-                  />
-                  {option.label}
-                  </CommandItem>
-              ))}
-            </CommandGroup>
+            {filteredOptions.length > 0 ? (
+                <CommandGroup>
+                {filteredOptions.map((option) => (
+                    <CommandItem
+                        key={option.value}
+                        value={option.label}
+                        onSelect={() => handleSelect(option.label)}
+                    >
+                    <Check
+                        className={cn(
+                        "mr-2 h-4 w-4",
+                        value === option.label ? "opacity-100" : "opacity-0"
+                        )}
+                    />
+                    {option.label}
+                    </CommandItem>
+                ))}
+                </CommandGroup>
+            ) : (
+                searchTerm.length >= 5 && <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
