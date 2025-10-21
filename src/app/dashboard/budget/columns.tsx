@@ -2,12 +2,19 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { Pencil, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
+import type { Budget } from "@/lib/types"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export type BudgetRow = {
   id: string;
@@ -20,12 +27,29 @@ export type BudgetRow = {
   remaining: number;
   percentage: number;
   categoryId: string;
+  details: Budget[];
 }
 
 export const getColumns = (
   onDelete: (id: string) => void,
   formatCurrency: (amount: number) => string
 ): ColumnDef<BudgetRow>[] => [
+  {
+    id: "expander",
+    header: () => null,
+    cell: ({ row }) => {
+      return row.getCanExpand() ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={row.getToggleExpandedHandler()}
+          className="h-8 w-8"
+        >
+          {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </Button>
+      ) : null
+    },
+  },
   {
     id: "select",
     header: ({ table }) => (

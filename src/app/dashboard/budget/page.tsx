@@ -83,39 +83,48 @@ export default function BudgetPage() {
         if (!budgets || !categories || !expenses) return [];
     
         const categoryMap = new Map(categories.map(c => [c.id, c]));
-        const groupedBudgets: { [key: string]: any } = {};
     
-        // Group and sum budgets
+        // First, group all individual budgets by their category-month-year key
+        const groupedBudgets: { [key: string]: { summary: any, items: Budget[] } } = {};
+    
         budgets.forEach(budget => {
             const key = `${budget.year}-${budget.month}-${budget.categoryId}`;
             if (!groupedBudgets[key]) {
-                const category = categoryMap.get(budget.categoryId);
+                 const category = categoryMap.get(budget.categoryId);
                 groupedBudgets[key] = {
-                    id: key, // Composite key for the group
-                    categoryId: budget.categoryId,
-                    categoryName: category?.name || 'N/A',
-                    categoryColor: category?.color || '#888888',
-                    year: budget.year,
-                    month: budget.month,
-                    amountARS: 0,
-                    spent: 0,
+                    summary: {
+                        id: key, // Composite key for the group
+                        categoryId: budget.categoryId,
+                        categoryName: category?.name || 'N/A',
+                        categoryColor: category?.color || '#888888',
+                        year: budget.year,
+                        month: budget.month,
+                        amountARS: 0,
+                        spent: 0,
+                    },
+                    items: []
                 };
             }
-            groupedBudgets[key].amountARS += budget.amountARS;
+            groupedBudgets[key].summary.amountARS += budget.amountARS;
+            groupedBudgets[key].items.push(budget);
         });
     
-        // Calculate expenses for each group
+        // Now, calculate expenses for each group
         Object.values(groupedBudgets).forEach(group => {
             const spent = expenses
-                .filter(e => e.categoryId === group.categoryId && new Date(e.date).getMonth() + 1 === group.month && new Date(e.date).getFullYear() === group.year)
+                .filter(e => e.categoryId === group.summary.categoryId && new Date(e.date).getMonth() + 1 === group.summary.month && new Date(e.date).getFullYear() === group.summary.year)
                 .reduce((acc, e) => acc + e.amountARS, 0);
             
-            group.spent = spent;
-            group.remaining = group.amountARS - spent;
-            group.percentage = group.amountARS > 0 ? (spent / group.amountARS) * 100 : 0;
+            group.summary.spent = spent;
+            group.summary.remaining = group.summary.amountARS - spent;
+            group.summary.percentage = group.summary.amountARS > 0 ? (spent / group.summary.amountARS) * 100 : 0;
         });
     
-        return Object.values(groupedBudgets);
+        // Finally, return an array of the combined structure
+        return Object.values(groupedBudgets).map(g => ({
+            ...g.summary,
+            details: g.items
+        }));
     }, [budgets, categories, expenses]);
 
     const handleOpenDeleteDialog = (id: string) => {

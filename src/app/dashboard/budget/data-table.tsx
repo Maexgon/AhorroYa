@@ -13,6 +13,8 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  getExpandedRowModel,
+  ExpandedState,
 } from "@tanstack/react-table"
 import {
   Table,
@@ -24,6 +26,10 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Badge } from "@/components/ui/badge"
+import Link from 'next/link';
+import { Pencil, Trash2 } from "lucide-react"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -35,7 +41,7 @@ interface DataTableProps<TData, TValue> {
   years: { value: number; label: string }[]
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends { details: any[], amountARS: number }, TValue>({
   columns,
   data,
   onDelete,
@@ -46,6 +52,7 @@ export function DataTable<TData, TValue>({
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
+  const [expanded, setExpanded] = React.useState<ExpandedState>({})
 
   const table = useReactTable({
     data,
@@ -60,6 +67,9 @@ export function DataTable<TData, TValue>({
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
+    onExpandedChange: setExpanded,
+    getExpandedRowModel: getExpandedRowModel(),
+    getRowCanExpand: (row) => row.original.details && row.original.details.length > 0,
     initialState: {
         pagination: {
             pageSize: 10,
@@ -69,8 +79,11 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
       rowSelection,
+      expanded,
     },
   })
+
+  const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(amount);
 
   return (
     <div>
@@ -139,16 +152,52 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
+                <React.Fragment key={row.id}>
+                  <TableRow
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                  {row.getIsExpanded() && (
+                    <TableRow>
+                      <TableCell colSpan={columns.length} className="p-0">
+                          <div className="p-4 bg-muted/50">
+                            <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="w-[70%]">Descripción</TableHead>
+                                    <TableHead className="text-right">Monto Presupuestado</TableHead>
+                                    <TableHead className="text-right">Acciones</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {row.original.details.map((detail: any) => (
+                                      <TableRow key={detail.id} className="hover:bg-muted">
+                                          <TableCell className="text-sm text-muted-foreground">{detail.description || 'Sin descripción'}</TableCell>
+                                          <TableCell className="text-right font-mono text-sm">{formatCurrency(detail.amountARS)}</TableCell>
+                                          <TableCell className="text-right">
+                                              <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+                                                  <Link href={`/dashboard/budget/edit/${detail.id}`}>
+                                                      <Pencil className="h-4 w-4"/>
+                                                  </Link>
+                                              </Button>
+                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => onDelete(detail.id)}>
+                                                  <Trash2 className="h-4 w-4"/>
+                                              </Button>
+                                          </TableCell>
+                                      </TableRow>
+                                  ))}
+                                </TableBody>
+                            </Table>
+                          </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
               ))
             ) : (
               <TableRow>
