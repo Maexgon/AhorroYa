@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, View, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, Settings, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -867,8 +867,8 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
 
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="outline" className="w-full md:w-auto">
-                            <View className="mr-2 h-4 w-4" />
+                        <Button variant="ghost" className="w-full md:w-auto">
+                            <Settings className="mr-2 h-4 w-4" />
                             Diseño Dashboard
                         </Button>
                     </DialogTrigger>
