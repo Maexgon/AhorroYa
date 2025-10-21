@@ -273,15 +273,16 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     const fromDateFilter = date.from ? startOfMonth(date.from) : startOfYear(new Date());
     const toDateFilter = date.to ? endOfMonth(date.to) : endOfYear(new Date());
 
-    const getPeriodExpenses = (source: Expense[]) => {
-      return source.filter(expense => {
+    const periodFilteredExpenses = allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
         const categoryMatch = selectedCategoryId === 'all' || expense.categoryId === selectedCategoryId;
         return expenseDate >= fromDateFilter && expenseDate <= toDateFilter && categoryMatch;
-      });
-    };
+    });
 
-    const periodFilteredExpenses = getPeriodExpenses(allExpenses);
+    const periodFilteredIncomes = allIncomes.filter(income => {
+        const incomeDate = new Date(income.date);
+        return incomeDate >= fromDateFilter && incomeDate <= toDateFilter;
+    });
     
     const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
 
@@ -346,8 +347,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             .map(group => ({
                 ...group,
                 percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
-            }))
-            .slice(0, 5);
+            }));
     })();
     
     const intervalMonths = eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
@@ -356,11 +356,11 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         const month = monthDate.getMonth();
         const year = monthDate.getFullYear();
 
-        const monthExpenses = (selectedCategoryId === 'all' ? allExpenses : allExpenses.filter(e => e.categoryId === selectedCategoryId))
+        const monthExpenses = periodFilteredExpenses
           .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
           .reduce((sum, e) => sum + e.amountARS, 0);
           
-        const monthIncomes = allIncomes
+        const monthIncomes = periodFilteredIncomes
           .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
           .reduce((sum, inc) => sum + inc.amountARS, 0);
 
@@ -383,9 +383,9 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         };
     });
     
-
+    const installmentsFilteredExpenses = (selectedCategoryId === 'all' ? allExpenses : allExpenses.filter(e => e.categoryId === selectedCategoryId));
     const installmentsChartData = (() => {
-      const allPendingInstallments = (selectedCategoryId === 'all' ? allExpenses : allExpenses.filter(e => e.categoryId === selectedCategoryId))
+      const allPendingInstallments = installmentsFilteredExpenses
         .filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
 
       const monthlyTotals = allPendingInstallments.reduce((acc, expense) => {
@@ -722,26 +722,31 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <BarChart data={processedData.budgetChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barCategoryGap="20%">
-                            <XAxis type="number" hide />
-                            <YAxis 
-                                type="category" 
+                   <ResponsiveContainer width="100%" height={300}>
+                        <ComposedChart data={processedData.budgetChartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis 
                                 dataKey="name" 
-                                tickLine={false} 
-                                axisLine={false} 
-                                width={100}
-                                tick={<CustomizedYAxisTick />}
+                                stroke="hsl(var(--foreground))" 
+                                fontSize={10}
+                                interval={0}
+                                angle={-45}
+                                textAnchor="end"
+                                height={60}
+                            />
+                            <YAxis 
+                                stroke="hsl(var(--foreground))" 
+                                fontSize={12} 
+                                tickFormatter={(value) => `$${Number(value) / 1000}k`}
                             />
                             <Tooltip
-                                cursor={{ fill: 'hsl(var(--secondary))' }}
-                                content={({ active, payload }) => {
+                                content={({ active, payload, label }) => {
                                     if (active && payload && payload.length) {
                                     const data = payload[0].payload;
                                     return (
                                         <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                            <p className="font-bold">{data.name}</p>
-                                            <p>Gastado: {processedData.formatCurrency(data.Gastado)}</p>
+                                            <p className="font-bold">{label}</p>
+                                            <p>Gastado: {processedData.formatCurrency(data.Gastado)} ({data.percentage}%)</p>
                                             <p>Presupuestado: {processedData.formatCurrency(data.Presupuestado)}</p>
                                         </div>
                                     );
@@ -749,28 +754,10 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                     return null;
                                 }}
                             />
-                            <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3) / 0.2)" radius={[0, 8, 8, 0]} barSize={40}>
-                                <LabelList 
-                                    dataKey="Presupuestado" 
-                                    position="insideLeft" 
-                                    offset={15}
-                                    style={{ fill: 'hsl(var(--foreground))' }}
-                                    fontSize={13}
-                                    fontWeight="600"
-                                    formatter={(value: number) => processedData.formatCurrency(value)}
-                                />
-                            </Bar>
-                            <Bar dataKey="Gastado" fill="hsl(var(--chart-3))" radius={[0, 8, 8, 0]} barSize={40}>
-                                <LabelList
-                                    dataKey="percentage"
-                                    position="center"
-                                    style={{ fill: 'white' }}
-                                    fontSize={13}
-                                    fontWeight="700"
-                                    formatter={(value: number) => `${value}%`}
-                                />
-                            </Bar>
-                        </BarChart>
+                            <Legend />
+                            <Bar dataKey="Presupuestado" name="Presupuesto" fill="hsl(var(--chart-3) / 0.4)" radius={[4, 4, 0, 0]} />
+                            <Line type="monotone" dataKey="Gastado" name="Gastado" stroke="hsl(var(--destructive))" strokeWidth={2} />
+                        </ComposedChart>
                     </ResponsiveContainer>
                 </CardContent>
                 </Card>
@@ -844,7 +831,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/expenses">
+                <Link href="/dashboard/expenses/new">
                     <Plus className="mr-2 h-4 w-4" /> Crear Gasto
                 </Link>
             </Button>
@@ -855,8 +842,8 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             </Button>
              {processedData.isOwner && (
                 <Button asChild>
-                    <Link href="/dashboard/reports">
-                        <FileBarChart className="mr-2 h-4 w-4" /> Crear Reporte
+                    <Link href="/dashboard/insights">
+                        <FileBarChart className="mr-2 h-4 w-4" /> Crear Reporte con IA
                     </Link>
                 </Button>
             )}
