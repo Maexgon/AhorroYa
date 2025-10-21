@@ -18,7 +18,7 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Plus } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Plus, Camera } from 'lucide-react';
 import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -483,14 +483,22 @@ export default function NewExpensePage() {
                                 )}
                             </div>
                         ) : (
-                            <div className="flex items-center justify-center w-full">
+                            <div className="flex items-center justify-center w-full gap-4">
                                 <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
-                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Haz clic para subir</span> o arrastra y suelta</p>
-                                        <p className="text-xs text-muted-foreground">Imágenes o un PDF (MAX 5MB)</p>
+                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Subir archivo</span></p>
+                                        <p className="text-xs text-muted-foreground">Imágenes o PDF (MAX 5MB)</p>
                                     </div>
                                     <input id="dropzone-file" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" />
+                                </label>
+                                <label htmlFor="camera-file" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                        <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
+                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Tomar Foto</span></p>
+                                        <p className="text-xs text-muted-foreground">Usa la cámara de tu dispositivo</p>
+                                    </div>
+                                    <input id="camera-file" type="file" capture="environment" className="hidden" onChange={(e) => handleReceiptChange(e.target.files)} accept="image/jpeg, image/png"/>
                                 </label>
                             </div>
                         )}
@@ -700,4 +708,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
