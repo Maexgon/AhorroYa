@@ -811,18 +811,18 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
 
         <div className="flex flex-wrap gap-2">
             <Button asChild>
-                <Link href="/dashboard/budget">
-                    <Settings className="mr-2 h-4 w-4" /> Ver Presupuesto
+                <Link href="/dashboard/budget/new">
+                    <Plus className="mr-2 h-4 w-4" /> Crear Presupuesto
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/expenses">
-                    <Settings className="mr-2 h-4 w-4" /> Ver Gastos
+                <Link href="/dashboard/expenses/new">
+                    <Plus className="mr-2 h-4 w-4" /> Crear Gasto
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/income">
-                    <Settings className="mr-2 h-4 w-4" /> Ver Ingresos
+                <Link href="/dashboard/income/new">
+                    <Plus className="mr-2 h-4 w-4" /> Crear Ingreso
                 </Link>
             </Button>
         </div>
