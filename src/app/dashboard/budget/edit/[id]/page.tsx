@@ -12,13 +12,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import type { Category, Budget } from '@/lib/types';
+import type { Category, Budget, User as UserType } from '@/lib/types';
 import { DropdownCat } from '@/components/ui/dropdowncat';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -27,7 +27,7 @@ const budgetFormSchema = z.object({
   year: z.coerce.number().min(new Date().getFullYear(), "El año no puede ser anterior al actual."),
   month: z.coerce.number().min(1).max(12),
   categoryId: z.string().min(1, "La categoría es requerida."),
-  amountARS: z.coerce.number().min(0.01, "El monto debe ser mayor a 0."),
+  amount: z.coerce.number().min(0.01, "El monto debe ser mayor a 0."),
   currency: z.string(),
   description: z.string().optional(),
 });
@@ -40,8 +40,10 @@ export default function EditBudgetPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const budgetId = params.id as string;
+  const { user, isUserLoading } = useUser();
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [tenantId, setTenantId] = React.useState<string | null>(null);
 
 
   const budgetRef = useMemoFirebase(() => {
@@ -50,7 +52,7 @@ export default function EditBudgetPage() {
   }, [firestore, budgetId]);
   const { data: budgetData, isLoading: isLoadingBudget } = useDoc<Budget>(budgetRef);
 
-  const { control, handleSubmit, formState: { errors }, reset, setValue } = useForm<BudgetFormValues>({
+  const { control, handleSubmit, formState: { errors }, reset } = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
   });
 
@@ -58,17 +60,32 @@ export default function EditBudgetPage() {
     if (budgetData) {
       reset({
         ...budgetData,
+        amount: budgetData.amountARS,
         currency: 'ARS',
       });
     }
   }, [budgetData, reset]);
 
-  const tenantId = budgetData?.tenantId;
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+
+  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+
+  React.useEffect(() => {
+    if (userData?.tenantIds && userData.tenantIds.length > 0) {
+      setTenantId(userData.tenantIds[0]);
+    }
+  }, [userData]);
+  
+  const ready = !!firestore && !!user && !isUserLoading && !isUserDocLoading && !!tenantId;
 
   const categoriesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
+    if (!ready) return null;
+    return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
+  }, [firestore, ready, tenantId]);
+
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
   const onSubmit = async (data: BudgetFormValues) => {
@@ -77,11 +94,28 @@ export default function EditBudgetPage() {
     setIsSubmitting(true);
     toast({ title: "Procesando...", description: "Actualizando el presupuesto." });
     
+    let amountARS = data.amount;
+    if (data.currency === 'USD') {
+        try {
+            const response = await fetch('https://dolarapi.com/v1/dolares/oficial');
+            if (!response.ok) throw new Error('No se pudo obtener el tipo de cambio.');
+            const rates = await response.json();
+            amountARS = data.amount * rates.venta;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error de Red', description: 'No se pudo obtener el tipo de cambio del dólar. El presupuesto no fue actualizado.' });
+            setIsSubmitting(false);
+            return;
+        }
+    }
+
     const budgetToUpdateRef = doc(firestore, 'budgets', budgetId);
     
     const updatedData = {
-      ...data,
-      // Ensure we don't accidentally overwrite tenantId or other crucial fields
+      year: data.year,
+      month: data.month,
+      categoryId: data.categoryId,
+      description: data.description || '',
+      amountARS,
       tenantId: budgetData?.tenantId,
     };
 
@@ -111,7 +145,7 @@ export default function EditBudgetPage() {
     return categories.map(c => ({ label: c.name, value: c.id }));
   }, [categories]);
 
-  if (isLoadingBudget || isLoadingCategories) {
+  if (isLoadingBudget || isLoadingCategories || isUserDocLoading) {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -219,9 +253,9 @@ export default function EditBudgetPage() {
                        
                         <div className='grid grid-cols-3 gap-4'>
                             <div className="space-y-2 col-span-2">
-                                <Label htmlFor="amountARS">Monto</Label>
-                                <Controller name="amountARS" control={control} render={({ field }) => <Input id="amountARS" type="number" step="0.01" {...field} />} />
-                                {errors.amountARS && <p className="text-sm text-destructive">{errors.amountARS.message}</p>}
+                                <Label htmlFor="amount">Monto</Label>
+                                <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
+                                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                             </div>
                              <div className="space-y-2">
                                 <Label htmlFor="currency">Moneda</Label>
@@ -229,10 +263,11 @@ export default function EditBudgetPage() {
                                     name="currency"
                                     control={control}
                                     render={({ field }) => (
-                                        <Select onValueChange={field.onChange} value={field.value} disabled>
+                                        <Select onValueChange={field.onChange} value={field.value}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="ARS">ARS</SelectItem>
+                                                <SelectItem value="USD">USD</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     )}

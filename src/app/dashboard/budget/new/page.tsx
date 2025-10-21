@@ -26,7 +26,7 @@ const budgetFormSchema = z.object({
   year: z.coerce.number().min(new Date().getFullYear(), "El año no puede ser anterior al actual."),
   month: z.coerce.number().min(1).max(12),
   categoryId: z.string().min(1, "La categoría es requerida."),
-  amountARS: z.coerce.number().min(0.01, "El monto debe ser mayor a 0."),
+  amount: z.coerce.number().min(0.01, "El monto debe ser mayor a 0."),
   currency: z.string(),
   description: z.string().optional(),
 });
@@ -48,7 +48,7 @@ export default function NewBudgetPage() {
       year: new Date().getFullYear(),
       month: new Date().getMonth() + 1,
       categoryId: '',
-      amountARS: 0,
+      amount: 0,
       currency: 'ARS',
       description: '',
     }
@@ -85,9 +85,28 @@ export default function NewBudgetPage() {
     setIsSubmitting(true);
     toast({ title: "Procesando...", description: "Guardando el presupuesto." });
 
+    let amountARS = data.amount;
+    if (data.currency === 'USD') {
+        try {
+            const response = await fetch('https://dolarapi.com/v1/dolares/oficial');
+            if (!response.ok) throw new Error('No se pudo obtener el tipo de cambio.');
+            const rates = await response.json();
+            amountARS = data.amount * rates.venta;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error de Red', description: 'No se pudo obtener el tipo de cambio del dólar. El presupuesto no fue guardado.' });
+            setIsSubmitting(false);
+            return;
+        }
+    }
+
+
     const budgetsRef = collection(firestore, 'budgets');
     const newBudgetData = {
-        ...data,
+        year: data.year,
+        month: data.month,
+        categoryId: data.categoryId,
+        description: data.description || '',
+        amountARS,
         tenantId: tenantId,
         rolloverFromPrevARS: 0, // Default value for now
     };
@@ -124,7 +143,8 @@ export default function NewBudgetPage() {
         console.error("Unexpected error checking for existing budget:", error);
         toast({ variant: 'destructive', title: 'Error Inesperado', description: 'No se pudo verificar el presupuesto existente.' });
     } finally {
-        setIsSubmitting(false);
+        // This is handled by the navigation, but as a fallback:
+        // setIsSubmitting(false);
     }
   };
   
@@ -234,9 +254,9 @@ export default function NewBudgetPage() {
                        
                         <div className='grid grid-cols-3 gap-4'>
                             <div className="space-y-2 col-span-2">
-                                <Label htmlFor="amountARS">Monto</Label>
-                                <Controller name="amountARS" control={control} render={({ field }) => <Input id="amountARS" type="number" step="0.01" {...field} />} />
-                                {errors.amountARS && <p className="text-sm text-destructive">{errors.amountARS.message}</p>}
+                                <Label htmlFor="amount">Monto</Label>
+                                <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
+                                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                             </div>
                              <div className="space-y-2">
                                 <Label htmlFor="currency">Moneda</Label>
@@ -244,10 +264,11 @@ export default function NewBudgetPage() {
                                     name="currency"
                                     control={control}
                                     render={({ field }) => (
-                                        <Select onValueChange={field.onChange} value={field.value} disabled>
+                                        <Select onValueChange={field.onChange} value={field.value}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="ARS">ARS</SelectItem>
+                                                <SelectItem value="USD">USD</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     )}
