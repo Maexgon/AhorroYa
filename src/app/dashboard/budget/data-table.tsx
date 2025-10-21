@@ -39,6 +39,10 @@ interface DataTableProps<TData, TValue> {
   setRowSelection: React.Dispatch<React.SetStateAction<object>>
   months: { value: number; name: string }[]
   years: { value: number; label: string }[]
+  filterMonth: string;
+  setFilterMonth: (value: string) => void;
+  filterYear: string;
+  setFilterYear: (value: string) => void;
 }
 
 export function DataTable<TData extends { details: any[], amountARS: number }, TValue>({
@@ -49,10 +53,25 @@ export function DataTable<TData extends { details: any[], amountARS: number }, T
   setRowSelection,
   months,
   years,
+  filterMonth,
+  setFilterMonth,
+  filterYear,
+  setFilterYear,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [expanded, setExpanded] = React.useState<ExpandedState>({})
+
+  React.useEffect(() => {
+    const filters: ColumnFiltersState = [];
+    if(filterMonth !== 'all') {
+      filters.push({ id: 'month', value: [parseInt(filterMonth)] });
+    }
+    if(filterYear !== 'all') {
+      filters.push({ id: 'year', value: [parseInt(filterYear)] });
+    }
+    setColumnFilters(filters);
+  }, [filterMonth, filterYear]);
 
   const table = useReactTable({
     data,
@@ -89,14 +108,8 @@ export function DataTable<TData extends { details: any[], amountARS: number }, T
     <div>
       <div className="flex items-center py-4 gap-4">
         <Select
-          value={String(table.getColumn("month")?.getFilterValue() ?? "all")}
-          onValueChange={(value) => {
-            if (value === 'all') {
-              table.getColumn("month")?.setFilterValue(undefined)
-            } else {
-              table.getColumn("month")?.setFilterValue([Number(value)])
-            }
-          }}
+          value={filterMonth}
+          onValueChange={setFilterMonth}
         >
             <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filtrar por mes..." />
@@ -109,14 +122,8 @@ export function DataTable<TData extends { details: any[], amountARS: number }, T
             </SelectContent>
         </Select>
         <Select
-          value={String(table.getColumn("year")?.getFilterValue() ?? "all")}
-          onValueChange={(value) => {
-            if (value === 'all') {
-              table.getColumn("year")?.setFilterValue(undefined)
-            } else {
-              table.getColumn("year")?.setFilterValue([Number(value)])
-            }
-          }}
+          value={filterYear}
+          onValueChange={setFilterYear}
         >
             <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="Filtrar por año..." />

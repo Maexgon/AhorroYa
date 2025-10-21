@@ -5,7 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft, Loader2, Repeat, Settings } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, Repeat, Settings, Banknote } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, deleteDoc, writeBatch, getDocs, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -41,6 +41,10 @@ export default function BudgetPage() {
     const [targetMonth, setTargetMonth] = React.useState(new Date().getMonth() + 1);
     const [targetYear, setTargetYear] = React.useState(new Date().getFullYear());
     const [rowSelection, setRowSelection] = React.useState({});
+    
+    const [filterMonth, setFilterMonth] = React.useState<string>(String(new Date().getMonth() + 1));
+    const [filterYear, setFilterYear] = React.useState<string>(String(new Date().getFullYear()));
+
 
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
@@ -126,6 +130,18 @@ export default function BudgetPage() {
             details: g.items
         }));
     }, [budgets, categories, expenses]);
+
+    const filteredBudgetData = React.useMemo(() => {
+        return budgetData.filter(b => {
+            const monthMatch = filterMonth === 'all' || b.month === parseInt(filterMonth);
+            const yearMatch = filterYear === 'all' || b.year === parseInt(filterYear);
+            return monthMatch && yearMatch;
+        });
+    }, [budgetData, filterMonth, filterYear]);
+    
+    const totalFilteredBudget = React.useMemo(() => {
+        return filteredBudgetData.reduce((acc, b) => acc + b.amountARS, 0);
+    }, [filteredBudgetData]);
 
     const handleOpenDeleteDialog = (id: string) => {
         setBudgetToDelete(id);
@@ -234,13 +250,16 @@ export default function BudgetPage() {
         }
     };
     
-    const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR").format(amount);
+    const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(amount);
     
     const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), []);
 
     const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({length: 5}, (_, i) => currentYear + i);
+    const uniqueYearsInBudgets = React.useMemo(() => {
+        if (!budgetData) return [];
+        const yearsSet = new Set(budgetData.map(b => b.year));
+        return Array.from(yearsSet).sort((a,b) => b - a);
+    }, [budgetData]);
     
     const isLoading = isAuthLoading || isUserDocLoading || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
 
@@ -267,7 +286,23 @@ export default function BudgetPage() {
                 </div>
             </header>
 
-            <main className="flex-1 p-4 md:p-8">
+            <main className="flex-1 p-4 md:p-8 space-y-6">
+                 <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-4">
+                             <div className="bg-primary/10 p-3 rounded-lg">
+                                <Banknote className="h-8 w-8 text-primary" />
+                            </div>
+                            <div>
+                                <CardTitle>Total Presupuestado</CardTitle>
+                                <CardDescription>Suma total para el período seleccionado.</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-3xl font-bold font-headline text-primary">{formatCurrency(totalFilteredBudget)}</p>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
@@ -306,7 +341,7 @@ export default function BudgetPage() {
                                                 <Select value={String(targetYear)} onValueChange={(val) => setTargetYear(Number(val))}>
                                                     <SelectTrigger id="target-year"><SelectValue/></SelectTrigger>
                                                     <SelectContent>
-                                                        {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                                                        {uniqueYearsInBudgets.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -336,7 +371,11 @@ export default function BudgetPage() {
                             rowSelection={rowSelection}
                             setRowSelection={setRowSelection}
                             months={months}
-                            years={years.map(y => ({ value: y, label: String(y)}))}
+                            years={uniqueYearsInBudgets.map(y => ({ value: y, label: String(y)}))}
+                            filterMonth={filterMonth}
+                            setFilterMonth={setFilterMonth}
+                            filterYear={filterYear}
+                            setFilterYear={setFilterYear}
                        />
                     </CardContent>
                 </Card>
