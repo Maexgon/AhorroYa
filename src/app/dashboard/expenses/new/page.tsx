@@ -27,7 +27,6 @@ import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, Currency, Entity } from '@/lib/types';
 import { logAuditEvent } from '../../audit/actions';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 
 const expenseFormSchema = z.object({
@@ -136,6 +135,8 @@ export default function NewExpensePage() {
       if (matches.length > 0) {
         setFoundEntities(matches);
         setIsEntityPopupOpen(true);
+      } else {
+        setIsEntityPopupOpen(false);
       }
     } else {
         setIsEntityPopupOpen(false);
@@ -504,11 +505,27 @@ export default function NewExpensePage() {
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                            <Label htmlFor="entityName">Nombre de la Entidad</Label>
-                            <Controller
-                                name="entityName"
-                                control={control}
-                                render={({ field }) => <Input id="entityName" {...field} />}
-                            />
+                           <Popover open={isEntityPopupOpen} onOpenChange={setIsEntityPopupOpen}>
+                                <PopoverTrigger asChild>
+                                    <div className="relative">
+                                         <Controller
+                                            name="entityName"
+                                            control={control}
+                                            render={({ field }) => <Input id="entityName" {...field} autoComplete="off" />}
+                                        />
+                                    </div>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                                    <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
+                                        {foundEntities.map(entity => (
+                                            <div key={entity.id} className="p-3 border-b last:border-b-0 rounded-md hover:bg-accent cursor-pointer" onClick={() => handleEntitySelect(entity)}>
+                                                <p className="font-semibold">{entity.razonSocial}</p>
+                                                {entity.cuit && <p className="text-sm text-muted-foreground">CUIT: {entity.cuit}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                             {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
                         </div>
                         <div className="space-y-2">
@@ -678,26 +695,9 @@ export default function NewExpensePage() {
                     </CardFooter>
                 </Card>
             </form>
-            <Dialog open={isEntityPopupOpen} onOpenChange={setIsEntityPopupOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Entidades Encontradas</DialogTitle>
-                        <DialogDescription>
-                            Hemos encontrado estas entidades que coinciden con tu búsqueda. Selecciona una para autocompletar los datos o cierra esta ventana para crear una nueva.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
-                        {foundEntities.map(entity => (
-                            <div key={entity.id} className="p-3 border rounded-md hover:bg-accent cursor-pointer" onClick={() => handleEntitySelect(entity)}>
-                                <p className="font-semibold">{entity.razonSocial}</p>
-                                {entity.cuit && <p className="text-sm text-muted-foreground">CUIT: {entity.cuit}</p>}
-                            </div>
-                        ))}
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
       </main>
     </div>
   );
 }
+
