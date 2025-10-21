@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, ArrowLeft, Loader2, Repeat, Settings } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, doc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, where, doc, deleteDoc, writeBatch, getDocs, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Budget, Category, Expense, User as UserType } from '@/lib/types';
 import { useDoc } from '@/firebase/firestore/use-doc';
