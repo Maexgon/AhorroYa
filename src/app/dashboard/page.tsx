@@ -523,10 +523,10 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                             <PieChart>
                                 <Pie
                                     data={processedData.budgetChartData}
-                                    cx="50%"
+                                    cx="35%"
                                     cy="50%"
                                     labelLine={false}
-                                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                                    label={false}
                                     outerRadius={80}
                                     innerRadius={40}
                                     paddingAngle={2}
@@ -551,6 +551,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                         return null;
                                     }}
                                 />
+                                <Legend layout="vertical" verticalAlign="middle" align="right" />
                             </PieChart>
                         </ResponsiveContainer>
                     </CardContent>
