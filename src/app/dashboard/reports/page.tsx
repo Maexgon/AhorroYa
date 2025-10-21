@@ -5,7 +5,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical, MoreVertical } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
@@ -246,25 +246,21 @@ export default function ReportsPage() {
         
         const finalChartData = Array.from(dataMap.values());
         
-        const incomeKeys = dynamicKeys.filter(k => k.type === 'income').map(k => k.key);
-        const expenseKeys = dynamicKeys.filter(k => k.type === 'expense').map(k => k.key);
-        const budgetKeys = dynamicKeys.filter(k => k.type === 'budget').map(k => k.key);
-
         const totalIncome = finalChartData.reduce((acc, data) => {
             let monthTotal = 0;
-            incomeKeys.forEach(key => monthTotal += (data[key] || 0));
+            dynamicKeys.filter(k => k.type === 'income').forEach(k => monthTotal += (data[k.key] || 0));
             return acc + monthTotal;
         }, 0);
         
         const totalExpense = finalChartData.reduce((acc, data) => {
             let monthTotal = 0;
-            expenseKeys.forEach(key => monthTotal += (data[key] || 0));
+            dynamicKeys.filter(k => k.type === 'expense').forEach(k => monthTotal += (data[k.key] || 0));
             return acc + monthTotal;
         }, 0);
 
         const totalBudget = finalChartData.reduce((acc, data) => {
             let monthTotal = 0;
-            budgetKeys.forEach(key => monthTotal += (data[key] || 0));
+            dynamicKeys.filter(k => k.type === 'budget').forEach(k => monthTotal += (data[k.key] || 0));
             return acc + monthTotal;
         }, 0);
 
@@ -322,9 +318,9 @@ export default function ReportsPage() {
         XLSX.writeFile(wb, "reporte_flujo_caja.xlsx");
     };
     
-    const showIncomeTotal = selectedColumns.some(c => staticIncomeCategories.some(sc => sc.value === c.value) || c.value === 'all-incomes');
-    const showExpenseTotal = selectedColumns.some(c => expenseCategories?.some(ec => ec.id === c.value) || c.value === 'all-expenses');
-    const showBudgetTotal = selectedColumns.some(c => c.value.startsWith('budget-'));
+    const showIncomeTotal = lineKeys.some(k => k.type === 'income');
+    const showExpenseTotal = lineKeys.some(k => k.type === 'expense');
+    const showBudgetTotal = lineKeys.some(k => k.type === 'budget');
 
 
     return (
