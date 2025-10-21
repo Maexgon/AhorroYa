@@ -5,7 +5,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
@@ -19,7 +19,7 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, ad
 import { es } from 'date-fns/locale';
 import { MultiSelect, type MultiSelectOption } from '@/components/shared/multi-select';
 import { Separator } from '@/components/ui/separator';
-import { ResponsiveContainer, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line, Brush, Area } from 'recharts';
+import { ResponsiveContainer, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line, Brush } from 'recharts';
 
 
 const paymentMethodOptions: MultiSelectOption[] = [
@@ -132,12 +132,16 @@ export default function ReportsPage() {
         ];
     },[expenseCategories]);
     
-    const budgetColumnOptions = React.useMemo<MultiSelectOption[]>(() => [
-        { value: 'all-budgets', label: 'Todos los Presupuestos' },
-    ], []);
+    const budgetColumnOptions = React.useMemo<MultiSelectOption[]>(() => {
+        const budgetCols = expenseCategories?.map(c => ({ value: `budget-${c.id}`, label: c.name })) || [];
+        return [
+            { value: 'all-budgets', label: 'Todos los Presupuestos' },
+            ...budgetCols
+        ];
+    }, [expenseCategories]);
 
-     const { chartData, totalIncome, totalExpense, lineKeys } = React.useMemo(() => {
-        if (!allIncomes || !allExpenses || !allBudgets || !date?.from) return { chartData: [], totalIncome: 0, totalExpense: 0, lineKeys: [] };
+     const { chartData, totalIncome, totalExpense, totalBudget, lineKeys } = React.useMemo(() => {
+        if (!allIncomes || !allExpenses || !allBudgets || !date?.from) return { chartData: [], totalIncome: 0, totalExpense: 0, totalBudget: 0, lineKeys: [] };
 
         const dataMap = new Map<string, any>();
         const from = startOfMonth(date.from);
@@ -154,12 +158,15 @@ export default function ReportsPage() {
 
         selectedColumns.forEach(col => {
             let key: string, label: string, color: string, type: 'income' | 'expense' | 'budget';
-            if (col.value === 'all-incomes') {
-                key = 'ingresos'; label = 'Ingresos Totales'; color = '#22c55e'; type = 'income';
-            } else if (col.value === 'all-expenses') {
-                key = 'egresos'; label = 'Egresos Totales'; color = '#ea580c'; type = 'expense';
-            } else if (col.value === 'all-budgets') {
-                key = 'presupuesto'; label = 'Presupuesto Total'; color = '#3b82f6'; type = 'budget';
+            
+            if (col.value === 'all-incomes') { key = 'ingresos'; label = 'Ingresos Totales'; color = '#22c55e'; type = 'income'; } 
+            else if (col.value === 'all-expenses') { key = 'egresos'; label = 'Egresos Totales'; color = '#ea580c'; type = 'expense'; } 
+            else if (col.value === 'all-budgets') { key = 'presupuesto'; label = 'Presupuesto Total'; color = '#3b82f6'; type = 'budget'; } 
+            else if (col.value.startsWith('budget-')) {
+                 const cat = expenseCategories?.find(c => `budget-${c.id}` === col.value);
+                 if (cat) {
+                    key = col.value; label = `Ppto: ${col.label}`; color = '#60a5fa'; type = 'budget';
+                 } else return;
             } else {
                 const incomeCat = staticIncomeCategories.find(c => c.value === col.value);
                 const expenseCat = expenseCategories?.find(c => c.id === col.value);
@@ -174,7 +181,6 @@ export default function ReportsPage() {
             dynamicKeys.push({ key, label, color, type });
         });
 
-        // Initialize all keys to 0 for all months
         for (const monthData of dataMap.values()) {
             dynamicKeys.forEach(k => monthData[k.key] = 0);
         }
@@ -182,7 +188,7 @@ export default function ReportsPage() {
         const filteredIncomes = allIncomes.filter(inc => new Date(inc.date) >= from && new Date(inc.date) <= to);
         const filteredExpenses = allExpenses.filter(exp => new Date(exp.date) >= from && new Date(exp.date) <= to);
         const filteredBudgets = allBudgets.filter(b => {
-             const budgetDate = new Date(b.year, b.month - 1);
+             const budgetDate = startOfMonth(new Date(b.year, b.month - 1));
              return budgetDate >= from && budgetDate <= to;
         });
 
@@ -190,7 +196,7 @@ export default function ReportsPage() {
              for (const monthData of dataMap.values()) {
                 const currentMonth = monthData.date.getMonth();
                 const currentYear = monthData.date.getFullYear();
-
+                
                 if (type === 'income') {
                     const relevantIncomes = key === 'ingresos' ? filteredIncomes : filteredIncomes.filter(i => i.category === key);
                     monthData[key] = relevantIncomes
@@ -202,7 +208,10 @@ export default function ReportsPage() {
                         .filter(e => new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
                         .reduce((sum, e) => sum + e.amountARS, 0);
                 } else if (type === 'budget') {
-                     monthData[key] = filteredBudgets
+                    const categoryId = key.startsWith('budget-') ? key.replace('budget-', '') : null;
+                    const relevantBudgets = categoryId ? filteredBudgets.filter(b => b.categoryId === categoryId) : filteredBudgets;
+
+                    monthData[key] = relevantBudgets
                         .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
                         .reduce((sum, b) => sum + b.amountARS, 0);
                 }
@@ -212,8 +221,9 @@ export default function ReportsPage() {
         const finalChartData = Array.from(dataMap.values());
         const totalIncome = finalChartData.reduce((acc, data) => acc + (data['ingresos'] || 0), 0);
         const totalExpense = finalChartData.reduce((acc, data) => acc + (data['egresos'] || 0), 0);
+        const totalBudget = finalChartData.reduce((acc, data) => acc + (data['presupuesto'] || 0), 0);
 
-        return { chartData: finalChartData, totalIncome, totalExpense, lineKeys: dynamicKeys };
+        return { chartData: finalChartData, totalIncome, totalExpense, totalBudget, lineKeys: dynamicKeys };
 
     }, [allIncomes, allExpenses, allBudgets, date, selectedColumns, expenseCategories]);
 
@@ -251,6 +261,10 @@ export default function ReportsPage() {
                 break;
         }
     };
+    
+    const showIncomeTotal = selectedColumns.some(c => c.value.includes('income'));
+    const showExpenseTotal = selectedColumns.some(c => c.value.includes('expense'));
+    const showBudgetTotal = selectedColumns.some(c => c.value.includes('budget'));
 
 
     return (
@@ -339,14 +353,24 @@ export default function ReportsPage() {
                         <div className="flex justify-between items-center">
                             <CardDescription>Ingresos vs. Egresos en el período seleccionado.</CardDescription>
                              <div className="flex gap-6 text-right">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Ingresos Totales</p>
-                                    <p className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Egresos Totales</p>
-                                    <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalExpense)}</p>
-                                </div>
+                                {showIncomeTotal && (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">Ingresos Totales</p>
+                                        <p className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</p>
+                                    </div>
+                                )}
+                                {showExpenseTotal && (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">Egresos Totales</p>
+                                        <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalExpense)}</p>
+                                    </div>
+                                )}
+                                {showBudgetTotal && (
+                                     <div>
+                                        <p className="text-sm text-muted-foreground">Presupuesto Total</p>
+                                        <p className="text-2xl font-bold text-sky-600">{formatCurrency(totalBudget)}</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </CardHeader>
@@ -454,7 +478,7 @@ export default function ReportsPage() {
                                             </div>
                                        ) : (
                                             <div className="text-center text-muted-foreground">
-                                                <p>Arrastra o haz clic en las columnas aquí</p>
+                                                <p>Haz clic en las columnas de la derecha para agregarlas aquí</p>
                                             </div>
                                        )}
                                     </CardContent>
