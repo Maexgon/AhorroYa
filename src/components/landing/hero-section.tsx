@@ -14,18 +14,18 @@ export default function HeroSection() {
           Ahorro Ya te ayuda a gestionar tus gastos, crear presupuestos y
           alcanzar tus metas financieras con inteligencia.
         </p>
-        <div className="flex w-full items-center justify-center space-x-4 py-4 md:pb-6">
-          <Button asChild size="lg" className="text-primary-foreground">
+        <div className="flex w-full flex-col items-center justify-center space-y-4 py-4 md:flex-row md:space-y-0 md:space-x-4 md:pb-6">
+          <Button asChild size="lg" className="w-full text-primary-foreground md:w-auto">
             <Link href="/register">
               Empezar Gratis <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
-          <Button asChild variant="outline" size="lg">
+          <Button asChild variant="outline" size="lg" className="w-full md:w-auto">
             <Link href="#features">
               Conocer más
             </Link>
           </Button>
-           <Button asChild variant="outline" size="lg">
+           <Button asChild variant="outline" size="lg" className="w-full md:w-auto">
             <Link href="#pricing">
               Precios
             </Link>
