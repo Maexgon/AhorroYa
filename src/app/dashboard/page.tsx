@@ -2,7 +2,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { AhorroYaLogo } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import { getAuth, signOut } from 'firebase/auth';
@@ -45,6 +45,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 
 
 const SAFE_DEFAULTS = {
@@ -199,6 +200,19 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     { id: 'expenseAnalysis', name: 'Análisis de Gastos', visible: true },
     { id: 'budgets', name: 'Presupuestos', visible: true },
   ]);
+
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+
+  const handleDragSort = () => {
+    if (dragItem.current === null || dragOverItem.current === null) return;
+    const newLayout = [...dashboardLayout];
+    const draggedItemContent = newLayout.splice(dragItem.current, 1)[0];
+    newLayout.splice(dragOverItem.current, 0, draggedItemContent);
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDashboardLayout(newLayout);
+  };
 
   useEffect(() => {
     // Set initial date range on client side to avoid hydration error
@@ -876,15 +890,25 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                         <DialogHeader>
                             <DialogTitle>Diseño del Dashboard</DialogTitle>
                             <DialogDescription>
-                                Selecciona los gráficos que quieres ver y cambia su orden.
+                                Selecciona los gráficos que quieres ver y cambia su orden arrastrando y soltando.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="py-4 space-y-4">
-                            {dashboardLayout.map((chart) => (
-                                <div key={chart.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted">
+                        <div className="py-4 space-y-2">
+                            {dashboardLayout.map((chart, index) => (
+                                <div 
+                                    key={chart.id} 
+                                    className={cn("flex items-center justify-between p-2 rounded-lg hover:bg-muted transition-colors",
+                                        dragOverItem.current === index && "bg-accent"
+                                    )}
+                                    draggable
+                                    onDragStart={() => dragItem.current = index}
+                                    onDragEnter={() => dragOverItem.current = index}
+                                    onDragEnd={handleDragSort}
+                                    onDragOver={(e) => e.preventDefault()}
+                                >
                                     <div className="flex items-center gap-3">
                                         <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-                                        <Label htmlFor={chart.id} className="font-medium">{chart.name}</Label>
+                                        <Label htmlFor={chart.id} className="font-medium cursor-grab">{chart.name}</Label>
                                     </div>
                                     <Checkbox
                                         id={chart.id}
@@ -900,17 +924,12 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             </div>
         </div>
         
-        {dashboardLayout.find(c => c.id === 'pendingInstallments' && c.visible) && renderChart('pendingInstallments')}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {dashboardLayout.find(c => c.id === 'monthlyFlow' && c.visible) && renderChart('monthlyFlow')}
-            {dashboardLayout.find(c => c.id === 'cumulativeBalance' && c.visible) && renderChart('cumulativeBalance')}
-        </div>
+        {dashboardLayout.map(chart => chart.visible && (
+            <div key={chart.id}>
+                {renderChart(chart.id)}
+            </div>
+        ))}
         
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-            {dashboardLayout.find(c => c.id === 'expenseAnalysis' && c.visible) && renderChart('expenseAnalysis')}
-            {dashboardLayout.find(c => c.id === 'budgets' && c.visible) && renderChart('budgets')}
-        </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-4">
             <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -1315,4 +1334,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
