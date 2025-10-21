@@ -27,8 +27,6 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { DropdownCat } from '@/components/ui/dropdowncat';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
-import { columns as expenseColumns } from './expenses/columns';
-import { DataTable as ExpensesDataTable } from './expenses/data-table';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -233,6 +231,11 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
   };
   
   // --- Data Fetching ---
+  const userDocRef = useMemoFirebase(() => (user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
+  const { data: userData } = useDoc<UserType>(userDocRef);
+  const isOwner = userData?.tenantIds?.includes(tenantId);
+
+
   const tenantRef = useMemoFirebase(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
@@ -386,9 +389,6 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
 
-    const isOwner = activeTenant?.ownerUid === user.uid;
-
-
     return { 
         barData, 
         recentExpenses, 
@@ -397,12 +397,12 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         budgetBalance, 
         formatCurrency: finalFormatCurrency, 
         toCurrencyCode: 'ARS', 
-        monthlyOverviewData: monthlyData, // Use the enriched monthly data
-        cumulativeChartData: monthlyData, // Use the same data for the new chart
-        isOwner,
+        monthlyOverviewData: monthlyData,
+        cumulativeChartData: monthlyData,
+        isOwner: !!isOwner,
         installmentsChartData
     };
-  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories]);
+  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories, isOwner]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -814,7 +814,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
 
         <div className="flex flex-wrap gap-2">
             <Button asChild>
-                <Link href="/dashboard/budget/new">
+                <Link href="/dashboard/budget">
                     <Plus className="mr-2 h-4 w-4" /> Crear Presupuesto
                 </Link>
             </Button>
@@ -824,7 +824,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/income/new">
+                <Link href="/dashboard/income">
                     <Plus className="mr-2 h-4 w-4" /> Crear Ingreso
                 </Link>
             </Button>
@@ -1015,66 +1015,86 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const [expenseToDelete, setExpenseToDelete] = React.useState<string | null>(null);
-  const [deleteConfirmationText, setDeleteConfirmationText] = React.useState('');
-  
-  // --- Data Fetching ---
-  const expensesQuery = useMemoFirebase(() => {
-      if (!firestore || !tenantId || !user) return null;
-      return query(
-          collection(firestore, 'expenses'), 
-          where('tenantId', '==', tenantId), 
-          where('deleted', '==', false),
-          where('userId', '==', user.uid)
-      );
-  }, [firestore, tenantId, user]);
-  const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
+  const [date, setDate] = React.useState<DateRange | undefined>(undefined);
 
-  const categoriesQuery = useMemoFirebase(() => {
-      if (!firestore || !tenantId) return null;
-      return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
-  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
-
-  const tableData = React.useMemo(() => {
-      if (!expenses || !categories) return [];
-      const categoryMap = new Map(categories.map(c => [c.id, c]));
-      return expenses.map(expense => ({
-          ...expense,
-          category: categoryMap.get(expense.categoryId),
-      }));
-  }, [expenses, categories]);
-
-  const handleOpenDeleteDialog = (expenseId: string) => {
-    setExpenseToDelete(expenseId);
-  };
-  
-  const resetDeleteDialog = () => {
-    setExpenseToDelete(null);
-    setDeleteConfirmationText('');
-  }
-
-  const handleDeleteExpense = async () => {
-    if (!expenseToDelete || !firestore) return;
-
-    const expenseRef = doc(firestore, 'expenses', expenseToDelete);
-    const updatedData = { deleted: true, updatedAt: new Date().toISOString() };
-    
-    updateDoc(expenseRef, updatedData).then(() => {
-        toast({ title: 'Gasto eliminado', description: 'El gasto ha sido marcado como eliminado.' });
-        if (expenses && setExpenses) {
-            setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
-        }
-        resetDeleteDialog();
-    }).catch(error => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: expenseRef.path, operation: 'update', requestResourceData: updatedData }));
-        resetDeleteDialog();
+  useEffect(() => {
+    // Set initial date range on client side to avoid hydration error
+    setDate({
+      from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
     });
-  };
+  }, []);
+  
+  // --- Data Fetching for Member ---
+  const expensesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+  const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
+  
+  const incomesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+  const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<WithId<Income>>(incomesQuery);
+  
+  const budgetsQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
 
-  const columns = useMemo(() => expenseColumns(false).filter(c => c.id !== 'select' && c.id !== 'actions'), []);
+  const categoriesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
 
-  const isLoading = isLoadingExpenses || isLoadingCategories;
+  const isLoading = isLoadingExpenses || isLoadingIncomes || isLoadingBudgets || isLoadingCategories;
+
+  const processedData = useMemo(() => {
+    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !user) {
+      return SAFE_DEFAULTS;
+    }
+
+    const finalFormatCurrency = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+    
+    const filteredExpenses = allExpenses.filter(expense => {
+        if (!date?.from) return false;
+        const expenseDate = new Date(expense.date);
+        const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
+        const toDate = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : new Date(date.from.setHours(23, 59, 59, 999));
+        return expenseDate >= fromDate && expenseDate <= toDate;
+    });
+
+    const totalExpenses = filteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
+
+    const barData = Object.entries(filteredExpenses.reduce((acc, expense) => {
+        const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
+        if (!acc[categoryName]) acc[categoryName] = 0;
+        acc[categoryName] += expense.amountARS;
+        return acc;
+    }, {} as Record<string, number>))
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+    let cumulativeExpenses = 0;
+    let cumulativeIncomes = 0;
+    const monthlyData = Array.from({ length: 12 }).map((_, i) => {
+        const monthDate = subMonths(new Date(), 11 - i);
+        const month = monthDate.getMonth();
+        const year = monthDate.getFullYear();
+        const monthlyExpenses = allExpenses.filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year).reduce((sum, e) => sum + e.amountARS, 0);
+        const monthlyIncomes = allIncomes.filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year).reduce((sum, inc) => sum + inc.amountARS, 0);
+        cumulativeExpenses += monthlyExpenses;
+        cumulativeIncomes += monthlyIncomes;
+        return { month: format(monthDate, 'MMM', { locale: es }), ingresos: monthlyIncomes, gastos: monthlyExpenses, ingresosAcumulados: cumulativeIncomes, gastosAcumulados: cumulativeExpenses };
+    });
+
+    const installmentsChartData = (() => {
+      const pendingInstallments = allExpenses.filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
+      const monthlyTotals = pendingInstallments.reduce((acc, expense) => {
+        const monthKey = format(new Date(expense.date), 'yyyy-MM');
+        if (!acc[monthKey]) { acc[monthKey] = 0; }
+        acc[monthKey] += expense.amountARS;
+        return acc;
+      }, {} as Record<string, number>);
+      const sortedMonthlyTotals = Object.entries(monthlyTotals).map(([key, total]) => ({ name: format(new Date(key), 'MMM yy', { locale: es }), total })).sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime()).slice(0, 6);
+      const totalPending = pendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
+      return { totalPending, monthlyTotals: sortedMonthlyTotals };
+    })();
+    
+    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, monthlyOverviewData: monthlyData, cumulativeChartData: monthlyData, installmentsChartData };
+  }, [isLoading, allExpenses, allIncomes, allBudgets, categories, date, user]);
 
   if (licenseStatus !== 'active') {
     return (
@@ -1094,68 +1114,124 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     )
   }
 
+  if (isLoading) {
+    return (
+        <div className="flex h-screen items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-              <div>
-                  <CardTitle>Mis Gastos</CardTitle>
-                  <CardDescription>Aquí puedes ver y administrar todos tus gastos registrados.</CardDescription>
-              </div>
-              <Button asChild>
-                  <Link href="/dashboard/expenses/new">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Crear Nuevo Gasto
-                  </Link>
-              </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-              <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>
-          ) : (
-              <ExpensesDataTable 
-                columns={columns} 
-                data={tableData}
-                categories={categories || []}
-                onDelete={handleOpenDeleteDialog}
-              />
-          )}
-        </CardContent>
-      </Card>
-      <AlertDialog open={!!expenseToDelete} onOpenChange={(open) => !open && resetDeleteDialog()}>
-          <AlertDialogContent>
-              <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                      Esta acción marcará el gasto como eliminado de forma permanente. Para confirmar, escribe <strong className="text-foreground">BORRAR</strong> en el campo de abajo.
-                  </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="py-2">
-                  <Label htmlFor="delete-confirm" className="sr-only">Confirmación</Label>
-                  <Input 
-                      id="delete-confirm"
-                      value={deleteConfirmationText}
-                      onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                      placeholder='Escribe "BORRAR"'
-                  />
-              </div>
-              <AlertDialogFooter>
-                  <AlertDialogCancel onClick={resetDeleteDialog}>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction 
-                      onClick={handleDeleteExpense}
-                      disabled={deleteConfirmationText !== 'BORRAR'}
-                      className="bg-destructive hover:bg-destructive/90"
-                  >
-                      Continuar
-                  </AlertDialogAction>
-              </AlertDialogFooter>
-          </AlertDialogContent>
-      </AlertDialog>
+      <CurrencyRates />
+      <div className="flex flex-wrap gap-2">
+          <Button asChild>
+              <Link href="/dashboard/expenses">
+                  <Plus className="mr-2 h-4 w-4" /> Crear Gasto
+              </Link>
+          </Button>
+      </div>
+
+       <div className="bg-card shadow rounded-lg p-4">
+            <h3 className="text-lg font-semibold mb-4">Filtros</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {date?.from ? (date.to ? (<> {format(date.from, "LLL dd, y", { locale: es })} - {format(date.to, "LLL dd, y", { locale: es })} </>) : (format(date.from, "LLL dd, y", { locale: es }))) : (<span>Selecciona un rango</span>)}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={2} locale={es} />
+                    </PopoverContent>
+                </Popover>
+            </div>
+        </div>
+        
+        <div className="grid gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
+                    <CardDescription>Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span></CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={processedData.installmentsChartData.monthlyTotals}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <Tooltip content={({ active, payload, label }) => active && payload && payload.length ? <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p style={{ color: 'hsl(var(--chart-2))' }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p></div> : null} />
+                            <Bar dataKey="total" name="Total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
+                    <CardDescription>Ingresos vs. Gastos de los últimos 12 meses.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                        <BarChart data={processedData.monthlyOverviewData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <Tooltip content={({ active, payload, label }) => active && payload?.length ? <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p><p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p></div> : null} />
+                            <Legend />
+                            <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Balance Acumulado Anual</CardTitle>
+                    <CardDescription>Evolución de ingresos y gastos acumulados.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                        <ComposedChart data={processedData.cumulativeChartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <Tooltip content={({ active, payload, label }) => { if (active && payload?.length) { const income = payload.find(p => p.dataKey === 'ingresosAcumulados')?.value || 0; const expense = payload.find(p => p.dataKey === 'gastosAcumulados')?.value || 0; return <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p style={{ color: 'hsl(var(--chart-3))' }}>Ing. Acum: {processedData.formatCurrency(income as number)}</p><p style={{ color: 'hsl(var(--destructive))' }}>Gas. Acum: {processedData.formatCurrency(expense as number)}</p><p className="font-semibold mt-1">Balance: {processedData.formatCurrency(income as number - (expense as number))}</p></div>; } return null; }} />
+                            <Legend />
+                            <Area type="monotone" dataKey="gastosAcumulados" fill="hsl(var(--destructive) / 0.1)" stroke="transparent" name="Gastos Acumulados" />
+                            <Area type="monotone" dataKey="ingresosAcumulados" fill="hsl(var(--chart-3) / 0.1)" stroke="transparent" name="Ingresos Acumulados" />
+                            <Line type="monotone" dataKey="ingresosAcumulados" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} name="Ingresos Acum." />
+                            <Line type="monotone" dataKey="gastosAcumulados" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} name="Gastos Acum." />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Análisis de Gastos</CardTitle>
+                    <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
+                            <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                            <YAxis hide={true} />
+                            <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                                <LabelList dataKey="total" position="top" offset={8} className="fill-foreground" fontSize={12} formatter={(value: number) => processedData.formatCurrency(value)} />
+                                {processedData.barData.map((entry, index) => <Cell key={`cell-${index}`} fill={["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"][index % 5]} />)}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+        </div>
     </div>
-  )
+  );
 }
 
 type LicenseStatus = 'active' | 'grace_period' | 'expired' | 'loading';
@@ -1348,3 +1424,5 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
+    
