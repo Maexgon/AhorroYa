@@ -11,7 +11,7 @@ import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import type { Category, Entity, User as UserType, Tenant, Expense, Income } from '@/lib/types';
+import type { Category, Entity, User as UserType, Tenant, Expense, Income, Budget } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
@@ -57,6 +57,11 @@ export default function ReportsPage() {
           from: startOfYear(new Date()),
           to: endOfYear(new Date()),
         });
+        setSelectedColumns([
+            { value: 'all-incomes', label: 'Todos los Ingresos' },
+            { value: 'all-expenses', label: 'Todos los Gastos' },
+            { value: 'all-budgets', label: 'Todos los Presupuestos' },
+        ]);
     }, []);
 
     // --- Data Fetching ---
@@ -83,6 +88,9 @@ export default function ReportsPage() {
 
     const incomesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
     const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<Income>(incomesQuery);
+    
+    const budgetsQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
+    const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
 
 
     const categoriesQuery = useMemoFirebase(() => {
@@ -128,43 +136,88 @@ export default function ReportsPage() {
         { value: 'all-budgets', label: 'Todos los Presupuestos' },
     ], []);
 
-    const { chartData, totalIncome, totalExpense } = React.useMemo(() => {
-        if (!allIncomes || !allExpenses) return { chartData: [], totalIncome: 0, totalExpense: 0 };
-        
-        const dataMap = new Map<string, { month: string; ingresos: number; egresos: number }>();
-        const from = date?.from ? startOfMonth(date.from) : startOfYear(new Date());
-        const to = date?.to ? endOfMonth(date.to) : endOfYear(new Date());
+     const { chartData, totalIncome, totalExpense, lineKeys } = React.useMemo(() => {
+        if (!allIncomes || !allExpenses || !allBudgets || !date?.from) return { chartData: [], totalIncome: 0, totalExpense: 0, lineKeys: [] };
+
+        const dataMap = new Map<string, any>();
+        const from = startOfMonth(date.from);
+        const to = endOfMonth(date.to || date.from);
 
         let current = from;
         while (current <= to) {
             const monthKey = format(current, 'yyyy-MM');
-            dataMap.set(monthKey, { month: format(current, 'MMM yy', { locale: es }), ingresos: 0, egresos: 0 });
+            dataMap.set(monthKey, { month: format(current, 'MMM yy', { locale: es }) });
             current = addMonths(current, 1);
         }
+        
+        const dynamicKeys: {key: string, label: string, color: string, type: 'income' | 'expense' | 'budget'}[] = [];
 
-        let runningTotalIncome = 0;
-        let runningTotalExpense = 0;
-
-        allIncomes.forEach(income => {
-            const incomeDate = new Date(income.date);
-            const monthKey = format(incomeDate, 'yyyy-MM');
-            if (dataMap.has(monthKey)) {
-                dataMap.get(monthKey)!.ingresos += income.amountARS;
-                runningTotalIncome += income.amountARS;
+        selectedColumns.forEach(col => {
+            let key: string, label: string, color: string, type: 'income' | 'expense' | 'budget';
+            if (col.value === 'all-incomes') {
+                key = 'ingresos'; label = 'Ingresos Totales'; color = '#22c55e'; type = 'income';
+            } else if (col.value === 'all-expenses') {
+                key = 'egresos'; label = 'Egresos Totales'; color = '#ea580c'; type = 'expense';
+            } else if (col.value === 'all-budgets') {
+                key = 'presupuesto'; label = 'Presupuesto Total'; color = '#3b82f6'; type = 'budget';
+            } else {
+                const incomeCat = staticIncomeCategories.find(c => c.value === col.value);
+                const expenseCat = expenseCategories?.find(c => c.id === col.value);
+                if (incomeCat) {
+                    key = col.value; label = col.label; color = '#6ee7b7'; type = 'income';
+                } else if (expenseCat) {
+                    key = col.value; label = col.label; color = '#f97316'; type = 'expense';
+                } else {
+                    return;
+                }
             }
+            dynamicKeys.push({ key, label, color, type });
         });
 
-        allExpenses.forEach(expense => {
-            const expenseDate = new Date(expense.date);
-            const monthKey = format(expenseDate, 'yyyy-MM');
-            if (dataMap.has(monthKey)) {
-                dataMap.get(monthKey)!.egresos += expense.amountARS;
-                runningTotalExpense += expense.amountARS;
-            }
+        // Initialize all keys to 0 for all months
+        for (const monthData of dataMap.values()) {
+            dynamicKeys.forEach(k => monthData[k.key] = 0);
+        }
+
+        const filteredIncomes = allIncomes.filter(inc => new Date(inc.date) >= from && new Date(inc.date) <= to);
+        const filteredExpenses = allExpenses.filter(exp => new Date(exp.date) >= from && new Date(exp.date) <= to);
+        const filteredBudgets = allBudgets.filter(b => {
+             const budgetDate = new Date(b.year, b.month - 1);
+             return budgetDate >= from && budgetDate <= to;
         });
 
-        return { chartData: Array.from(dataMap.values()), totalIncome: runningTotalIncome, totalExpense: runningTotalExpense };
-    }, [allIncomes, allExpenses, date]);
+        dynamicKeys.forEach(({ key, type }) => {
+             for (const monthData of dataMap.values()) {
+                const [monthStr, yearStr] = format(new Date(monthData.month), 'MMM-yyyy', { locale: es }).split('-');
+                const currentMonth = new Date(monthData.month).getMonth();
+                const currentYear = new Date(monthData.month).getFullYear();
+
+                if (type === 'income') {
+                    const relevantIncomes = key === 'ingresos' ? filteredIncomes : filteredIncomes.filter(i => i.category === key);
+                    monthData[key] = relevantIncomes
+                        .filter(i => new Date(i.date).getMonth() === currentMonth && new Date(i.date).getFullYear() === currentYear)
+                        .reduce((sum, i) => sum + i.amountARS, 0);
+                } else if (type === 'expense') {
+                    const relevantExpenses = key === 'egresos' ? filteredExpenses : filteredExpenses.filter(e => e.categoryId === key);
+                     monthData[key] = relevantExpenses
+                        .filter(e => new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
+                        .reduce((sum, e) => sum + e.amountARS, 0);
+                } else if (type === 'budget') {
+                     monthData[key] = filteredBudgets
+                        .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
+                        .reduce((sum, b) => sum + b.amountARS, 0);
+                }
+            }
+        });
+        
+        const finalChartData = Array.from(dataMap.values());
+        const totalIncome = finalChartData.reduce((acc, data) => acc + (data['ingresos'] || 0), 0);
+        const totalExpense = finalChartData.reduce((acc, data) => acc + (data['egresos'] || 0), 0);
+
+        return { chartData: finalChartData, totalIncome, totalExpense, lineKeys: dynamicKeys };
+
+    }, [allIncomes, allExpenses, allBudgets, date, selectedColumns, expenseCategories]);
+
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
@@ -310,8 +363,9 @@ export default function ReportsPage() {
                                             return (
                                                 <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
                                                     <p className="font-bold">{label}</p>
-                                                    <p style={{ color: '#22c55e' }}>Ingresos: {formatCurrency(payload[0].value as number)}</p>
-                                                    <p style={{ color: '#ea580c' }}>Egresos: {formatCurrency(payload[1].value as number)}</p>
+                                                    {payload.map(p => (
+                                                        <p key={p.dataKey} style={{ color: p.stroke }}>{p.name}: {formatCurrency(p.value as number)}</p>
+                                                    ))}
                                                 </div>
                                             );
                                         }
@@ -319,8 +373,9 @@ export default function ReportsPage() {
                                     }}
                                 />
                                 <Legend />
-                                <Line type="monotone" dataKey="ingresos" stroke="#22c55e" strokeWidth={2} name="Ingresos" dot={false} />
-                                <Line type="monotone" dataKey="egresos" stroke="#ea580c" strokeWidth={2} name="Egresos" dot={false} />
+                                {lineKeys.map(line => (
+                                    <Line key={line.key} type="monotone" dataKey={line.key} name={line.label} stroke={line.color} strokeWidth={2} dot={false} />
+                                ))}
                                 <Brush dataKey="month" height={30} stroke="hsl(var(--primary))" />
                             </LineChart>
                         </ResponsiveContainer>
@@ -334,7 +389,6 @@ export default function ReportsPage() {
                         <CardDescription>Crea y personaliza tus propios reportes financieros.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                        {/* --- COLUMNS --- */}
                         <div className="space-y-4">
                              <div className="flex items-center gap-2">
                                 <Columns className="h-5 w-5 text-primary" />
