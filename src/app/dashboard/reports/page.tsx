@@ -6,7 +6,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -18,39 +18,21 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MultiSelect, type MultiSelectOption } from '@/components/shared/multi-select';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
-const expenseColumns = [
-    { id: 'date', label: 'Fecha' },
-    { id: 'amount', label: 'Monto' },
-    { id: 'currency', label: 'Moneda' },
-    { id: 'amountARS', label: 'Monto (ARS)' },
-    { id: 'categoryId', label: 'Categoría' },
-    { id: 'subcategoryId', label: 'Subcategoría' },
-    { id: 'entityName', label: 'Entidad' },
-    { id: 'paymentMethod', label: 'Método de Pago' },
-    { id: 'notes', label: 'Notas' },
-    { id: 'userId', label: 'Usuario' },
+const paymentMethodOptions: MultiSelectOption[] = [
+    { value: 'cash', label: 'Efectivo' },
+    { value: 'debit', label: 'Tarjeta de Débito' },
+    { value: 'credit', label: 'Tarjeta de Crédito' },
+    { value: 'transfer', label: 'Transferencia' },
+    { value: 'other', label: 'Otro' },
 ];
 
-const incomeColumns = [
-    { id: 'date', label: 'Fecha' },
-    { id: 'amount', label: 'Monto' },
-    { id: 'currency', label: 'Moneda' },
-    { id: 'amountARS', label: 'Monto (ARS)' },
-    { id: 'category', label: 'Categoría' },
-    { id: 'description', label: 'Descripción' },
-    { id: 'userId', label: 'Usuario' },
-];
-
-const budgetColumns = [
-    { id: 'year', label: 'Año' },
-    { id: 'month', label: 'Mes' },
-    { id: 'categoryId', label: 'Categoría' },
-    { id: 'amountARS', label: 'Monto Presupuestado (ARS)' },
+const incomeCategories = [
+  { value: "salarios", label: "Salarios" },
+  { value: "inversiones", label: "Inversiones" },
+  { value: "premios o comisiones", label: "Premios o Comisiones" },
+  { value: "otros", label: "Otros" },
 ];
 
 
@@ -60,9 +42,13 @@ export default function ReportsPage() {
 
     const [tenantId, setTenantId] = React.useState<string | null>(null);
     const [date, setDate] = React.useState<DateRange | undefined>(undefined);
-    const [selectedCategories, setSelectedCategories] = React.useState<string[]>([]);
+    
+    const [selectedPaymentMethods, setSelectedPaymentMethods] = React.useState<string[]>([]);
     const [selectedEntities, setSelectedEntities] = React.useState<string[]>([]);
     const [selectedUsers, setSelectedUsers] = React.useState<string[]>([]);
+
+    const [selectedColumns, setSelectedColumns] = React.useState<MultiSelectOption[]>([]);
+
 
     React.useEffect(() => {
         setDate({
@@ -94,7 +80,7 @@ export default function ReportsPage() {
         if (!tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
     }, [tenantId]);
-    const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+    const { data: expenseCategories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
     const entitiesQuery = useMemoFirebase(() => {
         if (!tenantId) return null;
@@ -108,10 +94,6 @@ export default function ReportsPage() {
     }, [tenantId]);
     const { data: members, isLoading: isLoadingMembers } = useCollection<UserType>(membersQuery);
     
-    const categoryOptions = React.useMemo<MultiSelectOption[]>(() => 
-        categories?.map(c => ({ value: c.id, label: c.name })) || [], 
-    [categories]);
-
     const entityOptions = React.useMemo<MultiSelectOption[]>(() => 
         entities?.map(e => ({ value: e.id, label: e.razonSocial })) || [], 
     [entities]);
@@ -119,8 +101,20 @@ export default function ReportsPage() {
     const userOptions = React.useMemo<MultiSelectOption[]>(() => 
         members?.map(m => ({ value: m.uid, label: m.displayName })) || [], 
     [members]);
+    
+    const availableExpenseCategories = React.useMemo<MultiSelectOption[]>(() => 
+        expenseCategories?.map(c => ({ value: c.id, label: c.name })) || [],
+    [expenseCategories]);
 
     const isLoading = isUserLoading || isUserDocLoading || isLoadingCategories || isLoadingEntities || (tenantData?.type !== 'PERSONAL' && isLoadingMembers);
+
+    const handleToggleColumn = (option: MultiSelectOption) => {
+        setSelectedColumns(prev => 
+            prev.find(c => c.value === option.value) 
+            ? prev.filter(c => c.value !== option.value) 
+            : [...prev, option]
+        );
+    }
 
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">
@@ -177,24 +171,24 @@ export default function ReportsPage() {
                                         />
                                     </PopoverContent>
                                 </Popover>
-                                <MultiSelect
-                                    options={categoryOptions}
-                                    selected={selectedCategories}
-                                    onChange={setSelectedCategories}
-                                    placeholder="Filtrar por categorías..."
+                                 <MultiSelect
+                                    options={paymentMethodOptions}
+                                    selected={selectedPaymentMethods}
+                                    onChange={setSelectedPaymentMethods}
+                                    placeholder="Filtrar por método de pago..."
                                 />
                                 <MultiSelect
                                     options={entityOptions}
                                     selected={selectedEntities}
                                     onChange={setSelectedEntities}
-                                    placeholder="Filtrar por entidades..."
+                                    placeholder="Todas las entidades"
                                 />
                                 {tenantData?.type !== 'PERSONAL' && (
                                     <MultiSelect
                                         options={userOptions}
                                         selected={selectedUsers}
                                         onChange={setSelectedUsers}
-                                        placeholder="Filtrar por usuarios..."
+                                        placeholder="Todos los usuarios"
                                     />
                                 )}
                             </div>
@@ -209,50 +203,56 @@ export default function ReportsPage() {
                                 <h3 className="text-lg font-semibold">Columnas del Reporte</h3>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div>
-                                    <h4 className="font-medium mb-3">Columnas Disponibles</h4>
-                                    <Accordion type="multiple" className="w-full" defaultValue={['gastos']}>
-                                        <AccordionItem value="gastos">
-                                            <AccordionTrigger>Gastos</AccordionTrigger>
-                                            <AccordionContent className="p-2 space-y-2">
-                                               {expenseColumns.map(col => (
-                                                    <div key={`exp-${col.id}`} className="flex items-center space-x-2">
-                                                        <Checkbox id={`exp-${col.id}`} />
-                                                        <Label htmlFor={`exp-${col.id}`}>{col.label}</Label>
-                                                    </div>
-                                               ))}
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                        <AccordionItem value="ingresos">
-                                            <AccordionTrigger>Ingresos</AccordionTrigger>
-                                            <AccordionContent className="p-2 space-y-2">
-                                                {incomeColumns.map(col => (
-                                                    <div key={`inc-${col.id}`} className="flex items-center space-x-2">
-                                                        <Checkbox id={`inc-${col.id}`} />
-                                                        <Label htmlFor={`inc-${col.id}`}>{col.label}</Label>
-                                                    </div>
+                                <Card className="p-4">
+                                    <CardHeader className="p-2">
+                                        <CardTitle className="text-base">Columnas Disponibles</CardTitle>
+                                        <CardDescription className="text-sm">Haz clic en una categoría para agregarla a tu reporte.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-2 space-y-4">
+                                        <div>
+                                            <h4 className="font-semibold text-primary text-sm mb-2">Ingresos</h4>
+                                            <div className="space-y-2">
+                                                {incomeCategories.map(col => (
+                                                    <Button key={`inc-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
+                                                        {col.label}
+                                                    </Button>
                                                 ))}
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                        <AccordionItem value="presupuestos">
-                                            <AccordionTrigger>Presupuestos</AccordionTrigger>
-                                            <AccordionContent className="p-2 space-y-2">
-                                               {budgetColumns.map(col => (
-                                                    <div key={`bud-${col.id}`} className="flex items-center space-x-2">
-                                                        <Checkbox id={`bud-${col.id}`} />
-                                                        <Label htmlFor={`bud-${col.id}`}>{col.label}</Label>
-                                                    </div>
+                                            </div>
+                                        </div>
+                                         <div>
+                                            <h4 className="font-semibold text-destructive text-sm mb-2">Gastos</h4>
+                                            <div className="space-y-2">
+                                               {availableExpenseCategories.map(col => (
+                                                    <Button key={`exp-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
+                                                        {col.label}
+                                                    </Button>
                                                ))}
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                    </Accordion>
-                                </div>
-                                <div className="border border-dashed rounded-lg p-4 bg-muted/30">
-                                    <h4 className="font-medium mb-3">Columnas Seleccionadas</h4>
-                                    <div className="h-64 flex items-center justify-center">
-                                        <p className="text-sm text-muted-foreground">Arrastra y suelta columnas aquí</p>
-                                    </div>
-                                </div>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card className="p-4 bg-muted/30">
+                                    <CardHeader className="p-2">
+                                        <CardTitle className="text-base">Columnas Seleccionadas</CardTitle>
+                                        <CardDescription className="text-sm">Las columnas aparecerán en el reporte en este orden.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-2 min-h-[200px] border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col justify-center items-center">
+                                       {selectedColumns.length > 0 ? (
+                                            <div className="w-full space-y-2">
+                                                {selectedColumns.map(col => (
+                                                    <Button key={`sel-${col.value}`} variant="secondary" className="w-full justify-start font-semibold cursor-grab" onClick={() => handleToggleColumn(col)}>
+                                                        <GripVertical className="h-4 w-4 mr-2 text-muted-foreground" />
+                                                        {col.label}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                       ) : (
+                                            <div className="text-center text-muted-foreground">
+                                                <p>Arrastra o haz clic en las columnas aquí</p>
+                                            </div>
+                                       )}
+                                    </CardContent>
+                                </Card>
                             </div>
                         </div>
                     </CardContent>
