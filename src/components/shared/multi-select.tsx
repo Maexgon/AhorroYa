@@ -66,7 +66,7 @@ function MultiSelect({
                     className="mr-1 mb-1"
                   >
                     {option.label}
-                    <button
+                    <div
                       className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       onMouseDown={(e) => {
                         e.preventDefault()
@@ -75,7 +75,7 @@ function MultiSelect({
                       }}
                     >
                       <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                    </button>
+                    </div>
                   </Badge>
                 ))
             ) : (
