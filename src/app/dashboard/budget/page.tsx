@@ -100,6 +100,7 @@ export default function BudgetPage() {
                 spent,
                 remaining,
                 percentage,
+                description: budget.description,
             };
         });
     }, [budgets, categories, expenses]);

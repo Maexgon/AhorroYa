@@ -19,6 +19,7 @@ export type BudgetRow = {
   remaining: number;
   percentage: number;
   categoryId: string;
+  description?: string;
 }
 
 export const getColumns = (
@@ -52,9 +53,14 @@ export const getColumns = (
     header: "Categoría",
     cell: ({ row }) => {
       return (
-        <Badge style={{ backgroundColor: row.original.categoryColor, color: '#fff' }}>
-            {row.original.categoryName}
-        </Badge>
+        <div className="flex flex-col">
+            <Badge style={{ backgroundColor: row.original.categoryColor, color: '#fff' }} className="w-fit">
+                {row.original.categoryName}
+            </Badge>
+            {row.original.description && (
+                <p className="text-xs text-muted-foreground mt-1">{row.original.description}</p>
+            )}
+        </div>
       )
     },
   },

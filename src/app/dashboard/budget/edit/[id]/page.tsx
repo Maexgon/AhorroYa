@@ -20,6 +20,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Category, Budget } from '@/lib/types';
 import { DropdownCat } from '@/components/ui/dropdowncat';
+import { Textarea } from '@/components/ui/textarea';
 
 
 const budgetFormSchema = z.object({
@@ -28,6 +29,7 @@ const budgetFormSchema = z.object({
   categoryId: z.string().min(1, "La categoría es requerida."),
   amountARS: z.coerce.number().min(0.01, "El monto debe ser mayor a 0."),
   currency: z.string(),
+  description: z.string().optional(),
 });
 
 type BudgetFormValues = z.infer<typeof budgetFormSchema>;
@@ -204,6 +206,15 @@ export default function EditBudgetPage() {
                                 )}
                             />
                             {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Descripción (Opcional)</Label>
+                            <Controller
+                                name="description"
+                                control={control}
+                                render={({ field }) => <Textarea id="description" {...field} />}
+                            />
                         </div>
                        
                         <div className='grid grid-cols-3 gap-4'>
