@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, writeBatch, doc, getDocs, Firestore } from 'firebase/firestore';
+import { collection, query, where, writeBatch, doc, getDocs, Firestore, setDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -364,7 +364,7 @@ export default function NewExpensePage() {
                 paymentMethod: data.paymentMethod,
                 isRecurring: false,
                 notes: notesWithInstallment,
-                source: receiptFiles.length > 0 ? 'ocr' : 'manual',
+                source: 'manual', // Overwritten from 'ocr' to 'manual'
                 status: 'posted',
                 deleted: false,
                 createdAt: new Date().toISOString(),
