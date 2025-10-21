@@ -112,20 +112,6 @@ export default function NewBudgetPage() {
     };
 
     try {
-        const q = query(budgetsRef, 
-            where('tenantId', '==', tenantId),
-            where('year', '==', data.year),
-            where('month', '==', data.month),
-            where('categoryId', '==', data.categoryId)
-        );
-
-        const existingBudget = await getDocs(q);
-        if (!existingBudget.empty) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Ya existe un presupuesto para esta categoría en el mes y año seleccionados.' });
-            setIsSubmitting(false);
-            return;
-        }
-        
         addDoc(budgetsRef, newBudgetData)
             .then(() => {
                 toast({ title: "¡Éxito!", description: "El presupuesto ha sido guardado correctamente." });
@@ -140,8 +126,8 @@ export default function NewBudgetPage() {
             });
 
     } catch (error) {
-        console.error("Unexpected error checking for existing budget:", error);
-        toast({ variant: 'destructive', title: 'Error Inesperado', description: 'No se pudo verificar el presupuesto existente.' });
+        console.error("Unexpected error creating budget:", error);
+        toast({ variant: 'destructive', title: 'Error Inesperado', description: 'Ocurrió un error al guardar el presupuesto.' });
     } finally {
         // This is handled by the navigation, but as a fallback:
         // setIsSubmitting(false);
@@ -289,3 +275,5 @@ export default function NewBudgetPage() {
     </div>
   );
 }
+
+    
