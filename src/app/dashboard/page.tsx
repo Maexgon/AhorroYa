@@ -523,12 +523,11 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                            <PieChart>
                                 <Pie
                                     data={processedData.budgetChartData}
-                                    cx="40%" // Center the pie a bit more to the left to make space for legend
+                                    cx="40%"
                                     cy="50%"
                                     labelLine={false}
-                                    label={(props) => {
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
                                         const RADIAN = Math.PI / 180;
-                                        const { cx, cy, midAngle, innerRadius = 0, outerRadius = 0, percent } = props;
                                         if (typeof innerRadius !== 'number' || typeof outerRadius !== 'number' || typeof cx !== 'number' || typeof cy !== 'number' || typeof midAngle !== 'number' || typeof percent !== 'number') {
                                             return null;
                                         }
@@ -537,13 +536,13 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                         const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
                                         return (
-                                        <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">
-                                            {`${(percent * 100).toFixed(0)}%`}
-                                        </text>
+                                            <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">
+                                                {`${(percent * 100).toFixed(0)}%`}
+                                            </text>
                                         );
                                     }}
                                     outerRadius={80}
-                                    innerRadius={40} // Makes it a donut chart
+                                    innerRadius={40}
                                     paddingAngle={2}
                                     fill="#8884d8"
                                     dataKey="Presupuestado"
@@ -1111,6 +1110,8 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
   const { toast } = useToast();
 
   const [date, setDate] = React.useState<DateRange | undefined>(undefined);
+  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
 
   useEffect(() => {
     // Set initial date range on client side to avoid hydration error
@@ -1121,10 +1122,10 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
   }, []);
   
   // --- Data Fetching for Member ---
-  const expensesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+  const expensesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false), where('userId', '==', user?.uid)) : null), [firestore, tenantId, user]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
   
-  const incomesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+  const incomesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false), where('userId', '==', user?.uid)) : null), [firestore, tenantId, user]);
   const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<WithId<Income>>(incomesQuery);
   
   const budgetsQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
@@ -1148,6 +1149,11 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     const periodFilteredExpenses = allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
         return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
+    });
+    
+    const periodFilteredBudgets = allBudgets.filter(b => {
+        const budgetDate = new Date(b.year, b.month - 1);
+        return budgetDate >= startOfMonth(fromDateFilter) && budgetDate <= endOfMonth(toDateFilter);
     });
 
     const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
@@ -1182,6 +1188,32 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
           gastos: monthlyExpenses,
         };
     });
+    
+    const budgetChartData = (() => {
+        const groupedData = periodFilteredBudgets.reduce((acc, budget) => {
+            const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
+            if (!acc[categoryName]) {
+                acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
+            }
+            acc[categoryName].Presupuestado += budget.amountARS;
+            return acc;
+        }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>);
+        
+        return Object.values(groupedData)
+            .map(group => {
+                const categoryId = categories.find(c => c.name === group.name)?.id;
+                const spentInARS = periodFilteredExpenses
+                    .filter(e => e.categoryId === categoryId)
+                    .reduce((acc, e) => acc + e.amountARS, 0);
+                group.Gastado = spentInARS;
+                return group;
+            })
+            .map(group => ({
+                ...group,
+                percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
+            }));
+    })();
+
 
     let cumulativeIncomes = 0;
     let cumulativeExpenses = 0;
@@ -1208,7 +1240,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
     
-    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, monthlyOverviewData: monthlyData, cumulativeChartData: cumulativeChartData, installmentsChartData };
+    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, monthlyOverviewData: monthlyData, cumulativeChartData: cumulativeChartData, installmentsChartData, budgetChartData };
   }, [isLoading, allExpenses, allIncomes, allBudgets, categories, date, user]);
 
   if (licenseStatus !== 'active') {
@@ -1265,7 +1297,65 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
             </div>
         </div>
         
-        <div className="grid gap-6">
+        <div className="grid gap-6 md:grid-cols-2">
+             <Card>
+                <CardHeader>
+                    <CardTitle>Distribución de Presupuestos</CardTitle>
+                    <CardDescription>
+                        Cómo se divide tu presupuesto total.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                            <Pie
+                                data={processedData.budgetChartData}
+                                cx="40%"
+                                cy="50%"
+                                labelLine={false}
+                                label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                    const RADIAN = Math.PI / 180;
+                                    if (typeof innerRadius !== 'number' || typeof outerRadius !== 'number' || typeof cx !== 'number' || typeof cy !== 'number' || typeof midAngle !== 'number' || typeof percent !== 'number') return null;
+                                    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                    return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">{`${(percent * 100).toFixed(0)}%`}</text>;
+                                }}
+                                outerRadius={80}
+                                innerRadius={40}
+                                paddingAngle={2}
+                                fill="#8884d8"
+                                dataKey="Presupuestado"
+                                nameKey="name"
+                            >
+                                {processedData.budgetChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip content={({ active, payload }) => active && payload && payload.length ? <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{payload[0].name}</p><p>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p></div> : null} />
+                            <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px', lineHeight: '20px' }}/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+             <Card>
+                <CardHeader>
+                    <CardTitle>Presupuestos</CardTitle>
+                    <CardDescription>Tu progreso de gastos del mes.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <ComposedChart data={processedData.budgetChartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={10} interval={0} angle={-45} textAnchor="end" height={60} />
+                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <Tooltip content={({ active, payload, label }) => { if (active && payload && payload.length) { const data = payload[0].payload; return <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p>Gastado: {processedData.formatCurrency(data.Gastado)} ({data.percentage}%)</p><p>Presupuestado: {processedData.formatCurrency(data.Presupuestado)}</p></div>; } return null; }} />
+                            <Legend />
+                            <Bar dataKey="Presupuestado" name="Presupuesto" fill="hsl(var(--chart-3) / 0.4)" radius={[4, 4, 0, 0]} />
+                            <Line type="monotone" dataKey="Gastado" name="Gastado" stroke="hsl(var(--destructive))" strokeWidth={2} />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
