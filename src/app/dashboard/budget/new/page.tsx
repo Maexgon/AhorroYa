@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -12,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, addDoc, getDocs, orderBy, doc } from 'firebase/firestore';
+import { collection, query, where, addDoc, getDocs, orderBy, doc, writeBatch } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,6 +20,8 @@ import Link from 'next/link';
 import type { Category, User as UserType } from '@/lib/types';
 import { DropdownCat } from '@/components/ui/dropdowncat';
 import { Textarea } from '@/components/ui/textarea';
+import { addMonths } from 'date-fns';
+
 
 const budgetFormSchema = z.object({
   year: z.coerce.number().min(new Date().getFullYear(), "El año no puede ser anterior al actual."),
@@ -29,6 +30,7 @@ const budgetFormSchema = z.object({
   amount: z.coerce.number().min(0.01, "El monto debe ser mayor a 0."),
   currency: z.string(),
   description: z.string().optional(),
+  repeatCount: z.coerce.number().min(0).optional(),
 });
 
 type BudgetFormValues = z.infer<typeof budgetFormSchema>;
@@ -51,6 +53,7 @@ export default function NewBudgetPage() {
       amount: 0,
       currency: 'ARS',
       description: '',
+      repeatCount: 0,
     }
   });
 
@@ -83,7 +86,7 @@ export default function NewBudgetPage() {
         return;
     }
     setIsSubmitting(true);
-    toast({ title: "Procesando...", description: "Guardando el presupuesto." });
+    toast({ title: "Procesando...", description: "Guardando el presupuesto y sus repeticiones." });
 
     let amountARS = data.amount;
     if (data.currency === 'USD') {
@@ -98,39 +101,44 @@ export default function NewBudgetPage() {
             return;
         }
     }
-
-
-    const budgetsRef = collection(firestore, 'budgets');
-    const newBudgetData = {
-        year: data.year,
-        month: data.month,
-        categoryId: data.categoryId,
-        description: data.description || '',
-        amountARS,
-        tenantId: tenantId,
-        rolloverFromPrevARS: 0, // Default value for now
-    };
-
+    
     try {
-        addDoc(budgetsRef, newBudgetData)
-            .then(() => {
-                toast({ title: "¡Éxito!", description: "El presupuesto ha sido guardado correctamente." });
-                router.push('/dashboard/budget');
-            })
-            .catch((error) => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({
-                    path: budgetsRef.path,
-                    operation: 'create',
-                    requestResourceData: newBudgetData,
-                }));
-            });
+        const batch = writeBatch(firestore);
+        const repeatCount = data.repeatCount || 0;
+
+        for (let i = 0; i <= repeatCount; i++) {
+            const budgetDate = addMonths(new Date(data.year, data.month - 1), i);
+            const targetYear = budgetDate.getFullYear();
+            const targetMonth = budgetDate.getMonth() + 1;
+
+            const budgetsRef = doc(collection(firestore, 'budgets'));
+            const newBudgetData = {
+                id: budgetsRef.id,
+                year: targetYear,
+                month: targetMonth,
+                categoryId: data.categoryId,
+                description: data.description || '',
+                amountARS,
+                tenantId: tenantId,
+                rolloverFromPrevARS: 0, 
+            };
+            
+             batch.set(budgetsRef, newBudgetData);
+        }
+        
+        await batch.commit();
+
+        toast({ title: "¡Éxito!", description: `Se ha guardado el presupuesto para ${repeatCount + 1} mes(es).` });
+        router.push('/dashboard/budget');
 
     } catch (error) {
-        console.error("Unexpected error creating budget:", error);
-        toast({ variant: 'destructive', title: 'Error Inesperado', description: 'Ocurrió un error al guardar el presupuesto.' });
-    } finally {
-        // This is handled by the navigation, but as a fallback:
-        // setIsSubmitting(false);
+        console.error("Unexpected error creating budget(s):", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: 'budgets',
+            operation: 'create',
+            requestResourceData: 'Batch budget creation',
+        }));
+        setIsSubmitting(false);
     }
   };
   
@@ -171,13 +179,13 @@ export default function NewBudgetPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Crear Presupuesto Mensual</CardTitle>
-                        <CardDescription>Define un límite de gasto para una categoría en un mes específico.</CardDescription>
+                        <CardDescription>Define un límite de gasto para una categoría y repítelo en meses futuros si es necesario.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="month">Mes</Label>
+                                <Label htmlFor="month">Mes de Inicio</Label>
                                 <Controller
                                     name="month"
                                     control={control}
@@ -193,7 +201,7 @@ export default function NewBudgetPage() {
                                 {errors.month && <p className="text-sm text-destructive">{errors.month.message}</p>}
                             </div>
                              <div className="space-y-2">
-                                <Label htmlFor="year">Año</Label>
+                                <Label htmlFor="year">Año de Inicio</Label>
                                 <Controller
                                     name="year"
                                     control={control}
@@ -208,6 +216,16 @@ export default function NewBudgetPage() {
                                 />
                                 {errors.year && <p className="text-sm text-destructive">{errors.year.message}</p>}
                             </div>
+                        </div>
+
+                         <div className="space-y-2">
+                            <Label htmlFor="repeatCount">Repeticiones</Label>
+                            <Controller
+                                name="repeatCount"
+                                control={control}
+                                render={({ field }) => <Input id="repeatCount" type="number" min="0" {...field} />}
+                            />
+                            <p className="text-xs text-muted-foreground">0 = solo el mes de inicio, 1 = mes de inicio + 1 mes extra.</p>
                         </div>
 
                         <div className="space-y-2">
@@ -275,5 +293,3 @@ export default function NewBudgetPage() {
     </div>
   );
 }
-
-    
