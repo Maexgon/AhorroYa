@@ -323,17 +323,16 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         });
 
     const budgetChartData = (() => {
-        return periodFilteredBudgets
-            .reduce((acc, budget) => {
-                const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
-                if (!acc[categoryName]) {
-                    acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
-                }
-                acc[categoryName].Presupuestado += budget.amountARS;
-                return acc;
-            }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>)
-            
-            // Convert to array and calculate spent amount
+        const groupedData = periodFilteredBudgets.reduce((acc, budget) => {
+            const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
+            if (!acc[categoryName]) {
+                acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
+            }
+            acc[categoryName].Presupuestado += budget.amountARS;
+            return acc;
+        }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>);
+        
+        return Object.values(groupedData)
             .map(group => {
                 const categoryId = categories.find(c => c.name === group.name)?.id;
                 const spentInARS = periodFilteredExpenses
@@ -342,7 +341,6 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 group.Gastado = spentInARS;
                 return group;
             })
-             // Add percentage calculation after grouping and spending calculation
             .map(group => ({
                 ...group,
                 percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
@@ -840,7 +838,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/expenses/new">
+                <Link href="/dashboard/expenses">
                     <Plus className="mr-2 h-4 w-4" /> Crear Gasto
                 </Link>
             </Button>
