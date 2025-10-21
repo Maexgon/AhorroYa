@@ -20,7 +20,7 @@ import { DateRange } from 'react-day-picker';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area, PieChart, Pie } from 'recharts';
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -193,6 +193,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   
   const [dashboardLayout, setDashboardLayout] = useState([
+    { id: 'budgetDistribution', name: 'Distribución de Presupuestos', visible: true },
     { id: 'pendingInstallments', name: 'Cuotas Pendientes', visible: true },
     { id: 'monthlyFlow', name: 'Flujo de Caja Mensual', visible: true },
     { id: 'cumulativeBalance', name: 'Balance Acumulado', visible: true },
@@ -272,7 +273,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
 
     const fromDateFilter = date.from ? startOfMonth(date.from) : startOfYear(new Date());
     const toDateFilter = date.to ? endOfMonth(date.to) : endOfYear(new Date());
-
+    
     const periodFilteredExpenses = allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
         const categoryMatch = selectedCategoryId === 'all' || expense.categoryId === selectedCategoryId;
@@ -304,8 +305,8 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         return acc;
     }, {} as Record<string, number>))
     .map(([name, total]) => ({ name, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+    .sort((a, b) => b.total - a.total);
+
 
     const expenseIcons: { [key: string]: React.ElementType } = {
         default: Sparkles, 'Comestibles': Utensils, 'Ropa y Accesorios': ShoppingCart, 'Mobilidad': Bus, 'Vida y Entretenimiento': Film, 'Vivienda': Home,
@@ -497,6 +498,62 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
 
   const renderChart = (chartId: string) => {
     switch (chartId) {
+        case 'budgetDistribution':
+            return (
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Distribución de Presupuestos</CardTitle>
+                            <CardDescription>
+                                Cómo se divide tu presupuesto total.
+                            </CardDescription>
+                        </div>
+                         <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData.map(d => ({ Categoría: d.name, Presupuestado: d.Presupuestado })), "distribucion_presupuesto")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleChartVisibility('budgetDistribution')}>Cerrar</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                                <Pie
+                                    data={processedData.budgetChartData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    dataKey="Presupuestado"
+                                    nameKey="name"
+                                >
+                                    {processedData.budgetChartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                    <p className="font-bold">{payload[0].name}</p>
+                                                    <p>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            );
         case 'pendingInstallments':
             return (
                 <Card>
@@ -646,80 +703,80 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             );
         case 'expenseAnalysis':
              return (
-                <Card className="lg:col-span-4">
-                <CardHeader>
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <CardTitle>Análisis de Gastos</CardTitle>
-                            <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
-                        </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreVertical className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleChartVisibility('expenseAnalysis')}>Cerrar</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Análisis de Gastos</CardTitle>
+                        <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
                     </div>
-                    <div className="text-2xl font-bold font-headline text-primary pt-2">
-                        {processedData.formatCurrency(processedData.totalExpenses)}
-                        <p className="text-xs font-normal text-muted-foreground">Total de Gastos en {processedData.toCurrencyCode}</p>
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleChartVisibility('expenseAnalysis')}>Cerrar</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </CardHeader>
                 <CardContent className="pl-2">
-                    <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
-                        <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis hide={true} />
-                        <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                            <LabelList
-                                dataKey="total"
-                                position="top"
-                                offset={8}
-                                className="fill-foreground"
-                                fontSize={12}
-                                formatter={(value: number) => processedData.formatCurrency(value)}
+                    <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={processedData.barData} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} width={120} tick={<CustomizedYAxisTick />}/>
+                            <Tooltip
+                                content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                        return (
+                                            <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                <p className="font-bold">{label}</p>
+                                                <p style={{ color: COLORS[0] }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
                             />
-                        {processedData.barData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                        </Bar>
-                    </BarChart>
+                            <Bar dataKey="total" radius={[0, 4, 4, 0]}>
+                                <LabelList
+                                    dataKey="total"
+                                    position="right"
+                                    offset={8}
+                                    className="fill-foreground"
+                                    fontSize={12}
+                                    formatter={(value: number) => processedData.formatCurrency(value)}
+                                />
+                            {processedData.barData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                            </Bar>
+                        </BarChart>
                     </ResponsiveContainer>
                 </CardContent>
                 </Card>
             );
         case 'budgets':
             return (
-                <Card className="lg:col-span-3">
-                <CardHeader>
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <CardTitle>Presupuestos</CardTitle>
-                            <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
-                        </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreVertical className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuestos")}>Exportar a Excel</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleChartVisibility('budgets')}>Cerrar</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Presupuestos</CardTitle>
+                        <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
                     </div>
-                    <div className={`text-2xl font-bold font-headline pt-2 ${processedData.budgetBalance >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                        {processedData.formatCurrency(processedData.budgetBalance)}
-                        <p className="text-xs font-normal text-muted-foreground">
-                            {processedData.budgetBalance >= 0 ? 'Restante del presupuesto' : 'Excedido del presupuesto'}
-                        </p>
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuestos")}>Exportar a Excel</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleChartVisibility('budgets')}>Cerrar</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </CardHeader>
                 <CardContent>
                    <ResponsiveContainer width="100%" height={300}>
@@ -831,7 +888,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/expenses/new">
+                <Link href="/dashboard/expenses">
                     <Plus className="mr-2 h-4 w-4" /> Crear Gasto
                 </Link>
             </Button>
@@ -948,11 +1005,13 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             </div>
         </div>
         
-        {dashboardLayout.map(chart => chart.visible && (
-            <div key={chart.id}>
-                {renderChart(chart.id)}
-            </div>
-        ))}
+        <div className="grid gap-6 md:grid-cols-2">
+            {dashboardLayout.map(chart => chart.visible && (
+                <div key={chart.id}>
+                    {renderChart(chart.id)}
+                </div>
+            ))}
+        </div>
         
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-4">
