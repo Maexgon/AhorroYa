@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -125,7 +126,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-secondary/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 h-24 w-40">
+          <div className="mx-auto mb-4 h-24 w-auto">
             <AhorroYaLogo className="h-full w-full" />
           </div>
           <CardTitle className="font-headline text-2xl">Crea tu cuenta</CardTitle>
