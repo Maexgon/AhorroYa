@@ -520,15 +520,30 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
+                           <PieChart>
                                 <Pie
                                     data={processedData.budgetChartData}
-                                    cx="35%"
+                                    cx="40%" // Center the pie a bit more to the left to make space for legend
                                     cy="50%"
                                     labelLine={false}
-                                    label={false}
+                                    label={(props) => {
+                                        const RADIAN = Math.PI / 180;
+                                        const { cx, cy, midAngle, innerRadius = 0, outerRadius = 0, percent } = props;
+                                        if (typeof innerRadius !== 'number' || typeof outerRadius !== 'number' || typeof cx !== 'number' || typeof cy !== 'number' || typeof midAngle !== 'number' || typeof percent !== 'number') {
+                                            return null;
+                                        }
+                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+                                        return (
+                                        <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">
+                                            {`${(percent * 100).toFixed(0)}%`}
+                                        </text>
+                                        );
+                                    }}
                                     outerRadius={80}
-                                    innerRadius={40}
+                                    innerRadius={40} // Makes it a donut chart
                                     paddingAngle={2}
                                     fill="#8884d8"
                                     dataKey="Presupuestado"
@@ -551,7 +566,12 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                         return null;
                                     }}
                                 />
-                                <Legend layout="vertical" verticalAlign="middle" align="right" />
+                                <Legend 
+                                    layout="vertical" 
+                                    verticalAlign="middle" 
+                                    align="right" 
+                                    wrapperStyle={{ fontSize: '12px', lineHeight: '20px' }}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </CardContent>
