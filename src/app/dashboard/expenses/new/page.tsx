@@ -322,12 +322,27 @@ export default function NewExpensePage() {
     const writes: {path: string, data: any}[] = [];
 
     try {
+        let finalAmountARS = data.amount;
+        if (data.currency === 'USD') {
+            try {
+                const response = await fetch('https://dolarapi.com/v1/dolares/oficial');
+                if (!response.ok) throw new Error('No se pudo obtener el tipo de cambio.');
+                const rates = await response.json();
+                finalAmountARS = data.amount * rates.venta;
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Error de Red', description: 'No se pudo obtener el tipo de cambio del dólar. El gasto no fue guardado.' });
+                setIsSubmitting(false);
+                return;
+            }
+        }
+        
         const entityId = await findOrCreateEntity(firestore, tenantId, data);
         
         const batch = writeBatch(firestore);
 
         const installments = data.paymentMethod === 'credit' ? data.installments || 1 : 1;
         const installmentAmount = data.amount / installments;
+        const installmentAmountARS = finalAmountARS / installments;
         const originalNotes = data.notes || '';
         const createdExpenseIds: string[] = [];
 
@@ -335,13 +350,6 @@ export default function NewExpensePage() {
             const newExpenseRef = doc(collection(firestore, 'expenses'));
             createdExpenseIds.push(newExpenseRef.id);
             
-            let amountARS = installmentAmount;
-            if (data.currency === 'USD') {
-                const usdCurrencyDoc = currencies?.find(c => c.code === 'USD');
-                const exchangeRate = usdCurrencyDoc?.exchangeRate || 1;
-                amountARS = installmentAmount * exchangeRate;
-            }
-
             const expenseDate = addMonths(data.date, i);
             
             const notesWithInstallment = installments > 1 
@@ -355,7 +363,7 @@ export default function NewExpensePage() {
                 date: expenseDate.toISOString(),
                 amount: parseFloat(installmentAmount.toFixed(2)),
                 currency: data.currency,
-                amountARS: parseFloat(amountARS.toFixed(2)),
+                amountARS: parseFloat(installmentAmountARS.toFixed(2)),
                 categoryId: data.categoryId,
                 subcategoryId: data.subcategoryId || null,
                 entityId: entityId,
@@ -364,7 +372,7 @@ export default function NewExpensePage() {
                 paymentMethod: data.paymentMethod,
                 isRecurring: false,
                 notes: notesWithInstallment,
-                source: 'manual', // Overwritten from 'ocr' to 'manual'
+                source: 'manual',
                 status: 'posted',
                 deleted: false,
                 createdAt: new Date().toISOString(),
@@ -382,7 +390,6 @@ export default function NewExpensePage() {
         
         await batch.commit();
 
-        // Audit Log
         for (const expenseId of createdExpenseIds) {
             const finalData = writes.find(w => w.path.includes(expenseId))?.data;
             if (finalData) {

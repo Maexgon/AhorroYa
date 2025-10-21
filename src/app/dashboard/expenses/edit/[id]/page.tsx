@@ -141,9 +141,16 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
     
     let amountARS = data.amount;
     if (data.currency === 'USD') {
-        const usdCurrencyDoc = currencies?.find(c => c.code === 'USD');
-        const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1
-        amountARS = data.amount * exchangeRate;
+        try {
+            const response = await fetch('https://dolarapi.com/v1/dolares/oficial');
+            if (!response.ok) throw new Error('No se pudo obtener el tipo de cambio.');
+            const rates = await response.json();
+            amountARS = data.amount * rates.venta;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error de Red', description: 'No se pudo obtener el tipo de cambio del dólar. El gasto no fue actualizado.' });
+            setIsSubmitting(false);
+            return;
+        }
     }
     
     const entityId = await findOrCreateEntity(firestore, tenantId, data);
