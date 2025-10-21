@@ -63,5 +63,10 @@ export const defaultCategories = [
         name: "Vivienda",
         color: "#b30000",
         subcategories: ["Alquileres", "Expensas", "Seguros", "ABL", "Limpieza", "Otros"]
+    },
+    {
+        name: "Créditos",
+        color: "#6c5ce7",
+        subcategories: ["Préstamos Personales", "Créditos Hipotecarios", "Tarjetas de Crédito"]
     }
 ];
