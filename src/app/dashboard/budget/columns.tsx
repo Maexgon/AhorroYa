@@ -1,3 +1,4 @@
+
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
@@ -19,7 +20,6 @@ export type BudgetRow = {
   remaining: number;
   percentage: number;
   categoryId: string;
-  description?: string;
 }
 
 export const getColumns = (
@@ -53,14 +53,9 @@ export const getColumns = (
     header: "Categoría",
     cell: ({ row }) => {
       return (
-        <div className="flex flex-col">
-            <Badge style={{ backgroundColor: row.original.categoryColor, color: '#fff' }} className="w-fit">
-                {row.original.categoryName}
-            </Badge>
-            {row.original.description && (
-                <p className="text-xs text-muted-foreground mt-1">{row.original.description}</p>
-            )}
-        </div>
+        <Badge style={{ backgroundColor: row.original.categoryColor, color: '#fff' }} className="w-fit">
+            {row.original.categoryName}
+        </Badge>
       )
     },
   },
@@ -114,30 +109,5 @@ export const getColumns = (
             </div>
         )
     }
-  },
-  {
-    id: "actions",
-    header: () => <div className="text-center">Acciones</div>,
-    cell: ({ row }) => {
-      const budget = row.original
-
-      return (
-        <div className="flex items-center justify-center gap-1">
-           <Button variant="ghost" size="icon" asChild>
-                <Link href={`/dashboard/budget/edit/${budget.id}`}>
-                    <Pencil className="h-4 w-4" />
-                </Link>
-           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:text-destructive"
-            onClick={() => onDelete(budget.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      )
-    },
   },
 ]

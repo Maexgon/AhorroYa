@@ -55,7 +55,7 @@ export default function BudgetPage() {
         }
     }, [userData]);
 
-    const ready = !!firestore && !!user && !isAuthLoading && !!tenantId;
+    const ready = !!firestore && !!user && !isAuthLoading && !isUserDocLoading && !!tenantId;
 
     const budgetsQuery = useMemoFirebase(() => {
         if (!ready) return null;
@@ -65,7 +65,7 @@ export default function BudgetPage() {
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!ready) return null;
-        return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
+        return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
     }, [firestore, tenantId, ready]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
@@ -81,28 +81,41 @@ export default function BudgetPage() {
 
     const budgetData = React.useMemo(() => {
         if (!budgets || !categories || !expenses) return [];
-        
+    
         const categoryMap = new Map(categories.map(c => [c.id, c]));
-        
-        return budgets.map(budget => {
-            const category = categoryMap.get(budget.categoryId);
+        const groupedBudgets: { [key: string]: any } = {};
+    
+        // Group and sum budgets
+        budgets.forEach(budget => {
+            const key = `${budget.year}-${budget.month}-${budget.categoryId}`;
+            if (!groupedBudgets[key]) {
+                const category = categoryMap.get(budget.categoryId);
+                groupedBudgets[key] = {
+                    id: key, // Composite key for the group
+                    categoryId: budget.categoryId,
+                    categoryName: category?.name || 'N/A',
+                    categoryColor: category?.color || '#888888',
+                    year: budget.year,
+                    month: budget.month,
+                    amountARS: 0,
+                    spent: 0,
+                };
+            }
+            groupedBudgets[key].amountARS += budget.amountARS;
+        });
+    
+        // Calculate expenses for each group
+        Object.values(groupedBudgets).forEach(group => {
             const spent = expenses
-                .filter(e => e.categoryId === budget.categoryId && new Date(e.date).getMonth() + 1 === budget.month && new Date(e.date).getFullYear() === budget.year)
+                .filter(e => e.categoryId === group.categoryId && new Date(e.date).getMonth() + 1 === group.month && new Date(e.date).getFullYear() === group.year)
                 .reduce((acc, e) => acc + e.amountARS, 0);
             
-            const remaining = budget.amountARS - spent;
-            const percentage = budget.amountARS > 0 ? (spent / budget.amountARS) * 100 : 0;
-
-            return {
-                ...budget,
-                categoryName: category?.name || 'N/A',
-                categoryColor: category?.color || '#888888',
-                spent,
-                remaining,
-                percentage,
-                description: budget.description,
-            };
+            group.spent = spent;
+            group.remaining = group.amountARS - spent;
+            group.percentage = group.amountARS > 0 ? (spent / group.amountARS) * 100 : 0;
         });
+    
+        return Object.values(groupedBudgets);
     }, [budgets, categories, expenses]);
 
     const handleOpenDeleteDialog = (id: string) => {
@@ -164,13 +177,14 @@ export default function BudgetPage() {
             const batch = writeBatch(firestore);
             let duplicatedCount = 0;
             let skippedCount = 0;
-            const writes: {path: string, data: any}[] = [];
+            
+            const originalBudgetsToDuplicate = budgets?.filter(b => 
+                budgetsToDuplicate.some(bd => bd.categoryId === b.categoryId && bd.month === b.month && bd.year === b.year)
+            ) || [];
 
-            budgetsToDuplicate.forEach(budget => {
-                if (existingCategoryIds.has(budget.categoryId)) {
-                    skippedCount++;
-                } else {
-                    const newBudgetRef = doc(collection(firestore, 'budgets'));
+            originalBudgetsToDuplicate.forEach(budget => {
+                if (!existingCategoryIds.has(budget.categoryId)) {
+                     const newBudgetRef = doc(collection(firestore, 'budgets'));
                     const newBudgetData = {
                         tenantId: budget.tenantId,
                         year: targetYear,
@@ -178,11 +192,14 @@ export default function BudgetPage() {
                         categoryId: budget.categoryId,
                         subcategoryId: budget.subcategoryId || null,
                         amountARS: budget.amountARS,
-                        rolloverFromPrevARS: 0, // Reset rollover for new month
+                        description: budget.description || "",
+                        rolloverFromPrevARS: 0, 
                     };
                     batch.set(newBudgetRef, newBudgetData);
-                    writes.push({path: newBudgetRef.path, data: newBudgetData});
                     duplicatedCount++;
+                    existingCategoryIds.add(budget.categoryId);
+                } else {
+                    skippedCount++;
                 }
             });
 
@@ -192,14 +209,14 @@ export default function BudgetPage() {
 
             toast({
                 title: "Proceso completado",
-                description: `${duplicatedCount} presupuestos duplicados. ${skippedCount} omitidos por ya existir.`
+                description: `${duplicatedCount} presupuestos únicos duplicados. ${skippedCount} entradas omitidas por ya existir en el mes de destino.`
             });
 
         } catch (error) {
              errorEmitter.emit('permission-error', new FirestorePermissionError({
                 path: 'batch-write',
                 operation: 'write',
-                requestResourceData: 'Duplicating budgets' // simplified data for error
+                requestResourceData: 'Duplicating budgets'
             }));
         } finally {
             setIsDuplicating(false);
