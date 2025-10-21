@@ -127,7 +127,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4">
-            <AhorroYaLogo className="h-12 w-12 text-primary" />
+            <AhorroYaLogo className="h-16 w-16 text-primary" />
           </div>
           <CardTitle className="font-headline text-2xl">Crea tu cuenta</CardTitle>
           <CardDescription>Comienza a tomar el control de tus finanzas hoy mismo.</CardDescription>
