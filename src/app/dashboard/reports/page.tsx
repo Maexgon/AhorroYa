@@ -146,7 +146,7 @@ export default function ReportsPage() {
         let current = from;
         while (current <= to) {
             const monthKey = format(current, 'yyyy-MM');
-            dataMap.set(monthKey, { month: format(current, 'MMM yy', { locale: es }) });
+            dataMap.set(monthKey, { date: current, month: format(current, 'MMM yy', { locale: es }) });
             current = addMonths(current, 1);
         }
         
@@ -188,9 +188,8 @@ export default function ReportsPage() {
 
         dynamicKeys.forEach(({ key, type }) => {
              for (const monthData of dataMap.values()) {
-                const [monthStr, yearStr] = format(new Date(monthData.month), 'MMM-yyyy', { locale: es }).split('-');
-                const currentMonth = new Date(monthData.month).getMonth();
-                const currentYear = new Date(monthData.month).getFullYear();
+                const currentMonth = monthData.date.getMonth();
+                const currentYear = monthData.date.getFullYear();
 
                 if (type === 'income') {
                     const relevantIncomes = key === 'ingresos' ? filteredIncomes : filteredIncomes.filter(i => i.category === key);
