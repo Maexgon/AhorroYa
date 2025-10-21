@@ -128,7 +128,7 @@ export default function NewExpensePage() {
   const { data: entities, isLoading: isLoadingEntities } = useCollection<Entity>(entitiesQuery);
 
   React.useEffect(() => {
-    if (entityNameValue && entityNameValue.length >= 5 && entities) {
+    if (entityNameValue && entityNameValue.length >= 3 && entities) {
       const searchLower = entityNameValue.toLowerCase();
       const matches = entities.filter(e => e.razonSocial.toLowerCase().includes(searchLower));
       if (matches.length > 0) {
@@ -144,7 +144,7 @@ export default function NewExpensePage() {
 
   const handleEntitySelect = (entity: Entity) => {
     setValue('entityName', entity.razonSocial);
-    setValue('entityCuit', entity.cuit || '');
+    if(entity.cuit) setValue('entityCuit', entity.cuit);
     setIsEntityPopupOpen(false);
   }
 
@@ -271,53 +271,45 @@ export default function NewExpensePage() {
       setReceiptFiles(files => files.filter((_, i) => i !== index));
   }
   
-    /**
-   * Finds an existing entity by CUIT or name, or creates a new one if not found.
-   * Returns the ID of the found or created entity.
-   */
-  const findOrCreateEntity = async (
-    firestore: Firestore,
-    tenantId: string,
-    data: ExpenseFormValues
-  ): Promise<{ entityId: string | null; batchOperations: ((batch: any) => void)[] }> => {
+  async function findOrCreateEntity(firestore: Firestore, tenantId: string, data: ExpenseFormValues): Promise<string | null> {
     const entityName = data.entityName?.trim();
-    if (!entityName) return { entityId: null, batchOperations: [] };
+    if (!entityName) return null;
 
     const entityCuit = data.entityCuit?.trim();
     const entitiesRef = collection(firestore, 'entities');
-    
+
     // 1. Try to find by CUIT if it's valid
     if (entityCuit && entityCuit.length === 11) {
-      const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        return { entityId: querySnapshot.docs[0].id, batchOperations: [] };
-      }
+        const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            return querySnapshot.docs[0].id;
+        }
     }
 
     // 2. If not found by CUIT, try by name
     const qByName = query(entitiesRef, where('tenantId', '==', tenantId), where('razonSocial', '==', entityName));
     const byNameSnapshot = await getDocs(qByName);
     if (!byNameSnapshot.empty) {
-      return { entityId: byNameSnapshot.docs[0].id, batchOperations: [] };
+        return byNameSnapshot.docs[0].id;
     }
 
     // 3. Create a new entity if none was found
     const newEntityRef = doc(entitiesRef);
     const newEntityData = {
-      id: newEntityRef.id,
-      tenantId: tenantId,
-      cuit: entityCuit || '',
-      razonSocial: entityName,
-      tipo: 'comercio',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+        id: newEntityRef.id,
+        tenantId: tenantId,
+        cuit: entityCuit || '',
+        razonSocial: entityName,
+        tipo: 'comercio',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
     };
     
-    const batchOperation = (batch: any) => batch.set(newEntityRef, newEntityData);
+    await setDoc(newEntityRef, newEntityData);
 
-    return { entityId: newEntityRef.id, batchOperations: [batchOperation] };
-  };
+    return newEntityRef.id;
+  }
 
   const onSubmit = async (data: ExpenseFormValues) => {
     if (!tenantId || !user || !firestore) {
@@ -330,10 +322,9 @@ export default function NewExpensePage() {
     const writes: {path: string, data: any}[] = [];
 
     try {
-        const { entityId, batchOperations: entityBatchOps } = await findOrCreateEntity(firestore, tenantId, data);
+        const entityId = await findOrCreateEntity(firestore, tenantId, data);
         
         const batch = writeBatch(firestore);
-        entityBatchOps.forEach(op => op(batch)); // Apply entity creation if needed
 
         const installments = data.paymentMethod === 'credit' ? data.installments || 1 : 1;
         const installmentAmount = data.amount / installments;
@@ -351,7 +342,7 @@ export default function NewExpensePage() {
                 amountARS = installmentAmount * exchangeRate;
             }
 
-            const expenseDate = addMonths(data.date, installments > 1 ? i + 1 : 0);
+            const expenseDate = addMonths(data.date, i);
             
             const notesWithInstallment = installments > 1 
                 ? `${originalNotes} (Cuota ${i + 1}/${installments})`.trim()
@@ -387,28 +378,6 @@ export default function NewExpensePage() {
 
             batch.set(newExpenseRef, expenseData);
             writes.push({ path: newExpenseRef.path, data: expenseData });
-            
-            // Handle Receipt - only once
-            if (i === 0 && receiptFiles.length > 0) {
-                const receipt = receiptFiles[0];
-                 const base64Content = await fileToBase64(receipt.file);
-
-                if (base64Content) {
-                    const newReceiptRef = doc(collection(firestore, 'receipts_raw'));
-                    const receiptData = {
-                        id: newReceiptRef.id,
-                        tenantId: tenantId,
-                        userId: user.uid,
-                        expenseId: newExpenseRef.id,
-                        base64Content: base64Content,
-                        fileType: receipt.file.type.startsWith('image/') ? 'image' : 'pdf',
-                        status: 'processed',
-                        createdAt: new Date().toISOString(),
-                    };
-                    batch.set(newReceiptRef, receiptData);
-                    writes.push({path: newReceiptRef.path, data: receiptData});
-                }
-            }
         }
         
         await batch.commit();
@@ -504,7 +473,7 @@ export default function NewExpensePage() {
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full gap-4">
-                                <input id="receipt-file-input" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" capture="environment" />
+                                <input id="receipt-file-input" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" />
                                 <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" onClick={() => document.getElementById('receipt-file-input')?.removeAttribute('capture')}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
@@ -512,7 +481,13 @@ export default function NewExpensePage() {
                                         <p className="text-xs text-muted-foreground">Imágenes o PDF (MAX 5MB)</p>
                                     </div>
                                 </label>
-                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" onClick={() => document.getElementById('receipt-file-input')?.setAttribute('capture', 'environment')}>
+                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" onClick={() => {
+                                  const input = document.getElementById('receipt-file-input');
+                                  if (input) {
+                                      input.setAttribute('capture', 'environment')
+                                      input.click();
+                                  }
+                                }}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Tomar Foto</span></p>
@@ -542,8 +517,9 @@ export default function NewExpensePage() {
                                         />
                                     </div>
                                 </PopoverTrigger>
+                                {foundEntities.length > 0 && (
                                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                                    <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
+                                    <div className="space-y-1 max-h-60 overflow-y-auto">
                                         {foundEntities.map(entity => (
                                             <div key={entity.id} className="p-3 border-b last:border-b-0 rounded-md hover:bg-accent cursor-pointer" onClick={() => handleEntitySelect(entity)}>
                                                 <p className="font-semibold">{entity.razonSocial}</p>
@@ -552,6 +528,7 @@ export default function NewExpensePage() {
                                         ))}
                                     </div>
                                 </PopoverContent>
+                                )}
                             </Popover>
                             {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
                         </div>

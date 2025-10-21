@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, doc, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, getDocs, setDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -88,17 +88,46 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
-  
-  const entitiesQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, 'entities'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
-  const { data: entities } = useCollection<Entity>(entitiesQuery);
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
     if (!allSubcategories || !selectedCategoryId) return [];
     return allSubcategories.filter(s => s.categoryId === selectedCategoryId);
   }, [allSubcategories, selectedCategoryId]);
+
+  async function findOrCreateEntity(firestore: any, tenantId: string, data: ExpenseFormValues): Promise<string | null> {
+    const entityName = data.entityName?.trim();
+    if (!entityName) return null;
+
+    const entityCuit = data.entityCuit?.trim();
+    const entitiesRef = collection(firestore, 'entities');
+
+    if (entityCuit && entityCuit.length === 11) {
+        const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            return querySnapshot.docs[0].id;
+        }
+    }
+    
+    const qByName = query(entitiesRef, where('tenantId', '==', tenantId), where('razonSocial', '==', entityName));
+    const byNameSnapshot = await getDocs(qByName);
+    if (!byNameSnapshot.empty) {
+        return byNameSnapshot.docs[0].id;
+    }
+
+    const newEntityRef = doc(entitiesRef);
+    const newEntityData = {
+        id: newEntityRef.id,
+        tenantId: tenantId,
+        cuit: entityCuit || '',
+        razonSocial: entityName,
+        tipo: 'comercio',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+    await setDoc(newEntityRef, newEntityData);
+    return newEntityRef.id;
+  }
 
   const onSubmit = async (data: ExpenseFormValues) => {
      if (!firestore || !expenseId || !tenantId || !user) {
@@ -116,39 +145,17 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
         const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1
         amountARS = data.amount * exchangeRate;
     }
-
-    let entityIdToUse = expenseData.entityId || null;
-    const entityCuit = data.entityCuit?.trim();
-    const entityName = data.entityName?.trim();
-    const entitiesRef = collection(firestore, 'entities');
     
-    if (entityName && !entityIdToUse) {
-        let foundEntity = null;
-        if (entityCuit && entityCuit.length === 11) {
-            const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                foundEntity = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as Entity;
-            }
-        }
-        if (!foundEntity) {
-            const existingByName = entities?.find(e => e.razonSocial.toLowerCase() === entityName.toLowerCase());
-            if (existingByName) {
-                foundEntity = existingByName;
-            }
-        }
-
-        if (foundEntity) {
-            entityIdToUse = foundEntity.id;
-        }
-    }
+    const entityId = await findOrCreateEntity(firestore, tenantId, data);
     
     const updatedData = {
         ...data,
         date: data.date.toISOString(),
         amountARS: amountARS,
         subcategoryId: data.subcategoryId || null,
-        entityId: entityIdToUse,
+        entityId: entityId,
+        entityCuit: data.entityCuit?.trim() || '',
+        entityName: data.entityName?.trim(),
         updatedAt: new Date().toISOString(),
     };
 
