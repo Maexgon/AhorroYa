@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError, useStorage } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -23,9 +23,9 @@ import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceiptAction } from '../actions';
+import { processReceiptAction, uploadAndProcessPdfAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
-import type { Category, Subcategory, User as UserType, FxRate, Currency, Entity } from '@/lib/types';
+import type { Category, Subcategory, User as UserType, Currency, Entity } from '@/lib/types';
 import { Combobox } from '@/components/ui/combobox';
 import { logAuditEvent } from '../../audit/actions';
 
@@ -49,7 +49,6 @@ type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
 interface FilePreview {
     file: File;
     previewUrl: string;
-    base64?: string;
 }
 
 export default function NewExpensePage() {
@@ -57,7 +56,6 @@ export default function NewExpensePage() {
   const { toast } = useToast();
   const { user } = useUser();
   const firestore = useFirestore();
-  const storage = useStorage();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   const [receiptFiles, setReceiptFiles] = React.useState<FilePreview[]>([]);
@@ -76,10 +74,16 @@ export default function NewExpensePage() {
       subcategoryId: '',
       paymentMethod: 'cash',
       notes: '',
-      date: new Date(),
+      // date is set in useEffect to avoid hydration issues
       installments: 1,
     }
   });
+
+  React.useEffect(() => {
+    // Set date default value on client side to avoid hydration error
+    setValue('date', new Date());
+  }, [setValue]);
+
 
   const selectedCategoryId = watch('categoryId');
   const paymentMethod = watch('paymentMethod');
@@ -154,41 +158,54 @@ export default function NewExpensePage() {
       });
   };
 
-  const handleReceiptChange = async (files: FileList | null) => {
+ const handleReceiptChange = async (files: FileList | null) => {
     if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) return;
-    
+
     setIsProcessingReceipt(true);
     toast({ title: 'Procesando recibo(s)...' });
-    console.log('[CLIENT] Files selected. Reading as Base64...');
-    
+
+    const file = files[0];
+    const isPdf = file.type === 'application/pdf';
+
     try {
-        const filePreviews: FilePreview[] = [];
-        const base64Promises: Promise<string>[] = [];
-        
-        for (const file of Array.from(files)) {
-            base64Promises.push(fileToBase64(file));
-            filePreviews.push({ file, previewUrl: URL.createObjectURL(file) });
+        let result;
+        if (isPdf) {
+            console.log('[CLIENT] PDF selected. Creating FormData...');
+            setReceiptFiles([{ file, previewUrl: '' }]); // No preview for PDF direct upload
+            
+            const formData = new FormData();
+            formData.append('pdf', file);
+            formData.append('tenantId', tenantId);
+            formData.append('userId', user.uid);
+            formData.append('categories', categoriesForAI);
+
+            result = await uploadAndProcessPdfAction(formData);
+
+        } else {
+            // Handle multiple images
+            const filePreviews: FilePreview[] = [];
+            const base64Promises: Promise<string>[] = [];
+            
+            for (const f of Array.from(files)) {
+                if (f.type.startsWith('image/')) {
+                    base64Promises.push(fileToBase64(f));
+                    filePreviews.push({ file: f, previewUrl: URL.createObjectURL(f) });
+                }
+            }
+            
+            setReceiptFiles(prev => [...prev, ...filePreviews]);
+            const base64Contents = await Promise.all(base64Promises);
+
+            result = await processReceiptAction({
+                base64Contents: base64Contents,
+                tenantId,
+                userId: user.uid,
+                categories: categoriesForAI,
+            });
         }
         
-        setReceiptFiles(prev => [...prev, ...filePreviews]);
-        
-        const base64Contents = await Promise.all(base64Promises);
-        const fileType = files[0].type.startsWith('image/') ? 'image' : 'pdf';
-        
-        console.log(`[CLIENT] Converted ${base64Contents.length} files to Base64. Calling server action.`);
-
-        const result = await processReceiptAction({
-            receiptId: `temp-${crypto.randomUUID()}`,
-            base64Contents: base64Contents,
-            tenantId,
-            userId: user.uid,
-            fileType,
-            categories: categoriesForAI
-        });
-
-        console.log('[CLIENT] Received result from action:', result);
         handleAIResult(result);
-        
+
     } catch (error: any) {
         console.error("Error processing receipt:", error);
         toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
@@ -196,8 +213,8 @@ export default function NewExpensePage() {
     } finally {
         setIsProcessingReceipt(false);
     }
-  };
-  
+};
+
   const handleAIResult = (result: { success: boolean; data?: ProcessReceiptOutput; error?: string; }) => {
     if (!result.success || !result.data) {
         toast({
@@ -673,4 +690,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-

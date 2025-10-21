@@ -48,16 +48,21 @@ export default function NewIncomePage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { errors } } = useForm<IncomeFormValues>({
+  const { control, handleSubmit, formState: { errors }, setValue } = useForm<IncomeFormValues>({
     resolver: zodResolver(incomeFormSchema),
     defaultValues: {
-      date: new Date(),
       amount: 0,
       currency: 'ARS',
       category: '',
       description: '',
     }
   });
+
+  React.useEffect(() => {
+    // Set date default value on client side to avoid hydration error
+    setValue('date', new Date());
+  }, [setValue]);
+
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;

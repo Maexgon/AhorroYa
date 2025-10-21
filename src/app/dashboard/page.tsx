@@ -189,10 +189,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
   const { toast } = useToast();
 
   const [isSeeding, setIsSeeding] = useState(false);
-  const [date, setDate] = React.useState<DateRange | undefined>({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
-  });
+  const [date, setDate] = React.useState<DateRange | undefined>(undefined);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   
   const [dashboardLayout, setDashboardLayout] = useState([
@@ -202,6 +199,15 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     { id: 'expenseAnalysis', name: 'Análisis de Gastos', visible: true },
     { id: 'budgets', name: 'Presupuestos', visible: true },
   ]);
+
+  useEffect(() => {
+    // Set initial date range on client side to avoid hydration error
+    setDate({
+      from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
+    });
+  }, []);
+
 
   const toggleChartVisibility = (chartId: string) => {
     setDashboardLayout(prevLayout =>
