@@ -366,6 +366,13 @@ export default function SettingsPage() {
   
   const firestore = useFirestore();
 
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+
+
   const membershipsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
@@ -405,6 +412,27 @@ export default function SettingsPage() {
   const { data: licenses } = useCollection<License>(licenseQuery);
 
   const activeLicense = licenses?.[0];
+
+  const tableData = useMemo(() => {
+      if (!members) return [];
+      
+      const ownerInList = members.some(m => m.uid === user?.uid);
+
+      if (isOwner && !ownerInList && user && userData) {
+           const ownerMembership: Membership = {
+                tenantId: derivedTenantId!,
+                uid: user.uid,
+                displayName: userData.displayName || user.displayName || 'Owner',
+                email: userData.email || user.email || '',
+                role: 'owner',
+                status: 'active',
+                joinedAt: memberships?.[0]?.joinedAt || new Date().toISOString(),
+           };
+           return [...members, ownerMembership];
+      }
+
+      return members;
+  }, [members, user, userData, isOwner, derivedTenantId, memberships]);
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !derivedTenantId || !activeLicense) {
@@ -493,7 +521,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
   
-  if (isUserLoading || isLoading) {
+  if (isUserLoading || isLoading || isUserDocLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -550,14 +578,14 @@ export default function SettingsPage() {
                                 </div>
                                 <Button 
                                     onClick={() => setIsInviteDialogOpen(true)}
-                                    disabled={!activeLicense || (members?.length ?? 0) >= activeLicense.maxUsers}
+                                    disabled={!activeLicense || (tableData?.length ?? 0) >= activeLicense.maxUsers}
                                 >
                                     <UserPlus className="mr-2 h-4 w-4" />
                                     Invitar usuarios
                                 </Button>
                             </CardHeader>
                             <CardContent>
-                            {isLoadingMembers ? <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : <MembersDataTable columns={columns} data={members || []} />}
+                            {isLoadingMembers ? <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : <MembersDataTable columns={columns} data={tableData || []} />}
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -580,7 +608,7 @@ export default function SettingsPage() {
                                 <>
                                     <div><strong>Plan:</strong> <Badge>{activeLicense.plan}</Badge></div>
                                     <div><strong>Estado:</strong> <Badge variant={activeLicense.status === 'active' ? 'default' : 'destructive'} className={activeLicense.status === 'active' ? 'bg-green-500' : ''}>{activeLicense.status}</Badge></div>
-                                    <div><strong>Usuarios:</strong> {members?.length || 0} de {activeLicense.maxUsers}</div>
+                                    <div><strong>Usuarios:</strong> {tableData?.length || 0} de {activeLicense.maxUsers}</div>
                                     <div><strong>Válida hasta:</strong> {new Date(activeLicense.endDate).toLocaleDateString()}</div>
                                 </>
                             )}
