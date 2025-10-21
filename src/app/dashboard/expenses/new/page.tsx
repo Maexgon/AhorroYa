@@ -474,31 +474,30 @@ export default function NewExpensePage() {
                                     </div>
                                 ))}
                                 {receiptFiles.length > 0 && !receiptFiles.some(f => f.file.type === 'application/pdf') && (
-                                <label htmlFor="dropzone-file-extra" className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center">
                                         <Plus className="w-8 h-8 text-muted-foreground" />
                                     </div>
-                                    <input id="dropzone-file-extra" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg"/>
+                                    <input id="receipt-file-input" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg"/>
                                 </label>
                                 )}
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full gap-4">
-                                <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <input id="receipt-file-input" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" capture="environment" />
+                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" onClick={() => document.getElementById('receipt-file-input')?.removeAttribute('capture')}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Subir archivo</span></p>
                                         <p className="text-xs text-muted-foreground">Imágenes o PDF (MAX 5MB)</p>
                                     </div>
-                                    <input id="dropzone-file" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" />
                                 </label>
-                                <label htmlFor="camera-file" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" onClick={() => document.getElementById('receipt-file-input')?.setAttribute('capture', 'environment')}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Tomar Foto</span></p>
                                         <p className="text-xs text-muted-foreground">Usa la cámara de tu dispositivo</p>
                                     </div>
-                                    <input id="camera-file" type="file" capture="environment" className="hidden" onChange={(e) => handleReceiptChange(e.target.files)} accept="image/jpeg, image/png"/>
                                 </label>
                             </div>
                         )}
@@ -708,3 +707,4 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
