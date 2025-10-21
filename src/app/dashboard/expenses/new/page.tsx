@@ -23,7 +23,7 @@ import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import { processReceiptAction, uploadAndProcessPdfAction } from '../actions';
+import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, Currency, Entity } from '@/lib/types';
 import { Combobox } from '@/components/ui/combobox';
@@ -74,7 +74,6 @@ export default function NewExpensePage() {
       subcategoryId: '',
       paymentMethod: 'cash',
       notes: '',
-      // date is set in useEffect to avoid hydration issues
       installments: 1,
     }
   });
@@ -158,51 +157,42 @@ export default function NewExpensePage() {
       });
   };
 
- const handleReceiptChange = async (files: FileList | null) => {
+  const handleReceiptChange = async (files: FileList | null) => {
     if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) return;
 
     setIsProcessingReceipt(true);
     toast({ title: 'Procesando recibo(s)...' });
 
-    const file = files[0];
-    const isPdf = file.type === 'application/pdf';
-
     try {
-        let result;
-        if (isPdf) {
-            console.log('[CLIENT] PDF selected. Creating FormData...');
-            setReceiptFiles([{ file, previewUrl: '' }]); // No preview for PDF direct upload
-            
-            const formData = new FormData();
-            formData.append('pdf', file);
-            formData.append('tenantId', tenantId);
-            formData.append('userId', user.uid);
-            formData.append('categories', categoriesForAI);
+        const filePreviews: FilePreview[] = [];
+        const base64Promises: Promise<string>[] = [];
 
-            result = await uploadAndProcessPdfAction(formData);
-
+        const isPdfUpload = files[0].type === 'application/pdf';
+        
+        if (isPdfUpload) {
+            const file = files[0];
+            filePreviews.push({ file, previewUrl: '' }); // No preview for PDF
+            base64Promises.push(fileToBase64(file));
         } else {
-            // Handle multiple images
-            const filePreviews: FilePreview[] = [];
-            const base64Promises: Promise<string>[] = [];
-            
-            for (const f of Array.from(files)) {
+             for (const f of Array.from(files)) {
                 if (f.type.startsWith('image/')) {
                     base64Promises.push(fileToBase64(f));
                     filePreviews.push({ file: f, previewUrl: URL.createObjectURL(f) });
                 }
             }
-            
-            setReceiptFiles(prev => [...prev, ...filePreviews]);
-            const base64Contents = await Promise.all(base64Promises);
-
-            result = await processReceiptAction({
-                base64Contents: base64Contents,
-                tenantId,
-                userId: user.uid,
-                categories: categoriesForAI,
-            });
         }
+        
+        setReceiptFiles(prev => [...prev, ...filePreviews]);
+        const base64Contents = await Promise.all(base64Promises);
+        
+        const result = await processReceiptAction({
+            receiptId: crypto.randomUUID(),
+            base64Contents: base64Contents,
+            tenantId,
+            userId: user.uid,
+            fileType: isPdfUpload ? 'pdf' : 'image',
+            categories: categoriesForAI,
+        });
         
         handleAIResult(result);
 
@@ -237,9 +227,13 @@ export default function NewExpensePage() {
     if (processedData.cuit) setValue('entityCuit', processedData.cuit.replace(/[^0-9]/g, ''));
     if (processedData.total) setValue('amount', processedData.total);
     if (processedData.fecha) {
-        const parsedDate = parseISO(processedData.fecha);
-        if (!isNaN(parsedDate.getTime())) {
-            setValue('date', parsedDate);
+        try {
+            const parsedDate = parseISO(processedData.fecha);
+            if (!isNaN(parsedDate.getTime())) {
+                setValue('date', parsedDate);
+            }
+        } catch (e) {
+            console.warn("Could not parse date from AI", processedData.fecha);
         }
     }
     if (processedData.categoryId) setValue('categoryId', processedData.categoryId);
