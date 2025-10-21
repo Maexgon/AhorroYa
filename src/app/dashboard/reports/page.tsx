@@ -5,7 +5,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
@@ -497,3 +497,4 @@ export default function ReportsPage() {
         </div>
     );
 }
+
