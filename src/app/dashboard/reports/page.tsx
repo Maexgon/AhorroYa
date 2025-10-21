@@ -5,7 +5,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical, MoreVertical } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
@@ -119,9 +119,15 @@ export default function ReportsPage() {
     }, [tenantId]);
     const { data: members, isLoading: isLoadingMembers } = useCollection<UserType>(membersQuery);
     
-    const entityOptions = React.useMemo<MultiSelectOption[]>(() => 
-        entities?.map(e => ({ value: e.id, label: e.razonSocial })) || [], 
-    [entities]);
+    const entityOptions = React.useMemo<MultiSelectOption[]>(() => {
+        const entityMap = new Map<string, string>();
+        allExpenses?.forEach(exp => {
+            if(exp.entityName && !entityMap.has(exp.entityName)) {
+                entityMap.set(exp.entityName, exp.entityName);
+            }
+        });
+        return Array.from(entityMap.entries()).map(([value, label]) => ({value, label}));
+    }, [allExpenses]);
 
     const userOptions = React.useMemo<MultiSelectOption[]>(() => 
         members?.map(m => ({ value: m.uid, label: m.displayName })) || [], 
@@ -173,7 +179,7 @@ export default function ReportsPage() {
             else if (col.value.startsWith('budget-')) {
                  const cat = expenseCategories?.find(c => `budget-${c.id}` === col.value);
                  if (cat) {
-                    key = col.value; label = `Ppto: ${col.label}`; color = '#60a5fa'; type = 'budget';
+                    key = col.value; label = `Ppto: ${cat.name}`; color = '#60a5fa'; type = 'budget';
                  } else return;
             } else {
                 const incomeCat = staticIncomeCategories.find(c => c.value === col.value);
@@ -193,8 +199,20 @@ export default function ReportsPage() {
             dynamicKeys.forEach(k => monthData[k.key] = 0);
         }
 
-        const filteredIncomes = allIncomes.filter(inc => new Date(inc.date) >= from && new Date(inc.date) <= to);
-        const filteredExpenses = allExpenses.filter(exp => new Date(exp.date) >= from && new Date(exp.date) <= to);
+        const filteredExpenses = allExpenses.filter(exp => {
+            const expDate = new Date(exp.date);
+            return expDate >= from && expDate <= to &&
+                (selectedPaymentMethods.length === 0 || selectedPaymentMethods.includes(exp.paymentMethod)) &&
+                (selectedEntities.length === 0 || (exp.entityName && selectedEntities.includes(exp.entityName))) &&
+                (selectedUsers.length === 0 || selectedUsers.includes(exp.userId));
+        });
+
+        const filteredIncomes = allIncomes.filter(inc => {
+            const incDate = new Date(inc.date);
+            return incDate >= from && incDate <= to &&
+                (selectedUsers.length === 0 || selectedUsers.includes(inc.userId));
+        });
+        
         const filteredBudgets = allBudgets.filter(b => {
              const budgetDate = startOfMonth(new Date(b.year, b.month - 1));
              return budgetDate >= from && budgetDate <= to;
@@ -253,7 +271,7 @@ export default function ReportsPage() {
 
         return { chartData: finalChartData, totalIncome, totalExpense, totalBudget, lineKeys: dynamicKeys };
 
-    }, [allIncomes, allExpenses, allBudgets, date, selectedColumns, expenseCategories]);
+    }, [allIncomes, allExpenses, allBudgets, date, selectedColumns, expenseCategories, selectedPaymentMethods, selectedEntities, selectedUsers]);
 
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
@@ -304,9 +322,9 @@ export default function ReportsPage() {
         XLSX.writeFile(wb, "reporte_flujo_caja.xlsx");
     };
     
-    const showIncomeTotal = selectedColumns.some(c => c.value.includes('all-incomes') || staticIncomeCategories.some(sc => sc.value === c.value));
-    const showExpenseTotal = selectedColumns.some(c => c.value.includes('all-expenses') || expenseCategories?.some(ec => ec.id === c.value));
-    const showBudgetTotal = selectedColumns.some(c => c.value.includes('all-budgets') || c.value.startsWith('budget-'));
+    const showIncomeTotal = selectedColumns.some(c => staticIncomeCategories.some(sc => sc.value === c.value) || c.value === 'all-incomes');
+    const showExpenseTotal = selectedColumns.some(c => expenseCategories?.some(ec => ec.id === c.value) || c.value === 'all-expenses');
+    const showBudgetTotal = selectedColumns.some(c => c.value.startsWith('budget-'));
 
 
     return (
@@ -369,20 +387,20 @@ export default function ReportsPage() {
                                 options={paymentMethodOptions}
                                 selected={selectedPaymentMethods}
                                 onChange={setSelectedPaymentMethods}
-                                placeholder="Todos los medios de pago"
+                                placeholder="Medios de pago"
                             />
                             <MultiSelect
                                 options={entityOptions}
                                 selected={selectedEntities}
                                 onChange={setSelectedEntities}
-                                placeholder="Todas las entidades"
+                                placeholder="Entidades"
                             />
                             {tenantData?.type !== 'PERSONAL' && (
                                 <MultiSelect
                                     options={userOptions}
                                     selected={selectedUsers}
                                     onChange={setSelectedUsers}
-                                    placeholder="Todos los usuarios"
+                                    placeholder="Usuarios"
                                 />
                             )}
                         </div>
@@ -534,7 +552,7 @@ export default function ReportsPage() {
                                             </div>
                                        ) : (
                                             <div className="text-center text-muted-foreground">
-                                                <p>Haz clic en las columnas de la derecha para agregarlas aquí</p>
+                                                <p>Haz clic en las columnas de la izquierda para agregarlas aquí</p>
                                             </div>
                                        )}
                                     </CardContent>
@@ -553,4 +571,3 @@ export default function ReportsPage() {
         </div>
     );
 }
-
