@@ -6,7 +6,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ChevronsRight, Wallet, PiggyBank, FileDown } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ChevronsRight, Wallet, PiggyBank, FileDown, Settings } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';

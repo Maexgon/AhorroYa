@@ -10,7 +10,7 @@ import { getAuth, createUserWithEmailAndPassword, updateProfile, sendPasswordRes
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, UserPlus, Repeat, Copy, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, UserPlus, Repeat, Copy, RefreshCw, Settings } from 'lucide-react';
 import { MembersDataTable } from './data-table-members';
 import { getColumns } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
@@ -621,4 +621,3 @@ export default function SettingsPage() {
     </>
   );
 }
-

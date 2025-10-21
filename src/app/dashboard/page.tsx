@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, TableIcon, ArrowLeft, Settings, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -46,6 +46,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { useSessionTimeout } from '@/hooks/use-session-timeout';
 
 
 const SAFE_DEFAULTS = {
@@ -811,17 +812,17 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         <div className="flex flex-wrap gap-2">
             <Button asChild>
                 <Link href="/dashboard/budget">
-                    <TableIcon className="mr-2 h-4 w-4" /> Ver Presupuesto
+                    <Settings className="mr-2 h-4 w-4" /> Ver Presupuesto
                 </Link>
             </Button>
             <Button asChild>
                 <Link href="/dashboard/expenses">
-                    <TableIcon className="mr-2 h-4 w-4" /> Ver Gastos
+                    <Settings className="mr-2 h-4 w-4" /> Ver Gastos
                 </Link>
             </Button>
             <Button asChild>
                 <Link href="/dashboard/income">
-                    <TableIcon className="mr-2 h-4 w-4" /> Ver Ingresos
+                    <Settings className="mr-2 h-4 w-4" /> Ver Ingresos
                 </Link>
             </Button>
         </div>
@@ -1154,6 +1155,8 @@ export default function DashboardPageContainer() {
   const router = useRouter();
   const { toast } = useToast();
   const firestore = useFirestore();
+  const { InactivityWarningDialog } = useSessionTimeout();
+
 
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'owner' | 'member' | null>(null);
@@ -1278,6 +1281,7 @@ export default function DashboardPageContainer() {
   
   return (
     <div className="flex min-h-screen flex-col">
+       <InactivityWarningDialog />
        <header className="sticky top-0 z-40 w-full border-b bg-background">
         <div className="container flex h-16 items-center">
           <div  className="mr-6 flex items-center space-x-2">

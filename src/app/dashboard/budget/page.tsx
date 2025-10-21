@@ -5,7 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft, Loader2, Repeat } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, Repeat, Settings } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -209,7 +209,7 @@ export default function BudgetPage() {
     
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR").format(amount);
     
-    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), [handleOpenDeleteDialog]);
+    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), []);
 
     const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
     const currentYear = new Date().getFullYear();
