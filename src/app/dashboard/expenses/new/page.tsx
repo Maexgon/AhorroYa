@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -289,6 +288,52 @@ export default function NewExpensePage() {
         const originalNotes = data.notes || '';
         const createdExpenseIds: string[] = [];
 
+        let entityIdToUse: string | null = null;
+        const entityCuit = data.entityCuit?.trim();
+        const entityName = data.entityName?.trim();
+        const entitiesRef = collection(firestore, 'entities');
+
+        // 1. Find or Create Entity
+        if (entityName) {
+            let foundEntity = null;
+            // First, try to find by CUIT if it's valid
+            if (entityCuit && entityCuit.length === 11) {
+                const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    foundEntity = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as Entity;
+                }
+            }
+            
+            // If not found by CUIT, try by name
+            if (!foundEntity) {
+                const existingByName = entities?.find(e => e.razonSocial.toLowerCase() === entityName.toLowerCase());
+                 if (existingByName) {
+                    foundEntity = existingByName;
+                }
+            }
+
+            if (foundEntity) {
+                entityIdToUse = foundEntity.id;
+            } else {
+                // Create a new entity if none was found
+                const newEntityRef = doc(entitiesRef);
+                entityIdToUse = newEntityRef.id;
+                const newEntityData = {
+                    id: entityIdToUse,
+                    tenantId: tenantId,
+                    cuit: entityCuit || '',
+                    razonSocial: entityName,
+                    tipo: 'comercio',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                };
+                batch.set(newEntityRef, newEntityData);
+                writes.push({ path: newEntityRef.path, data: newEntityData });
+            }
+        }
+
+
         for (let i = 0; i < installments; i++) {
             const newExpenseRef = doc(collection(firestore, 'expenses'));
             createdExpenseIds.push(newExpenseRef.id);
@@ -316,6 +361,7 @@ export default function NewExpensePage() {
                 amountARS: parseFloat(amountARS.toFixed(2)),
                 categoryId: data.categoryId,
                 subcategoryId: data.subcategoryId || null,
+                entityId: entityIdToUse, // Use the determined entity ID
                 entityCuit: data.entityCuit?.trim() || '',
                 entityName: data.entityName?.trim(),
                 paymentMethod: data.paymentMethod,
@@ -335,44 +381,7 @@ export default function NewExpensePage() {
 
             batch.set(newExpenseRef, expenseData);
             writes.push({ path: newExpenseRef.path, data: expenseData });
-
-            // Handle Entity - only once
-            if (i === 0) {
-              const entityCuit = data.entityCuit?.trim();
-              const entityName = data.entityName?.trim();
-              let entityAlreadyExists = false;
-
-              // Search by CUIT if available
-              if (entityCuit) {
-                  const q = query(collection(firestore, 'entities'), where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
-                  const entitySnapshot = await getDocs(q);
-                  if (!entitySnapshot.empty) {
-                      entityAlreadyExists = true;
-                  }
-              }
-              // If not found by CUIT, search by name
-              if (!entityAlreadyExists && entityName) {
-                   if (entities?.some(e => e.razonSocial.toLowerCase() === entityName.toLowerCase())) {
-                       entityAlreadyExists = true;
-                   }
-              }
-              
-              if (!entityAlreadyExists && entityName) {
-                  const newEntityRef = doc(collection(firestore, 'entities'));
-                  const entityData = {
-                      id: newEntityRef.id,
-                      tenantId: tenantId,
-                      cuit: entityCuit || '',
-                      razonSocial: entityName,
-                      tipo: 'comercio',
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                  };
-                  batch.set(newEntityRef, entityData);
-                  writes.push({path: newEntityRef.path, data: entityData});
-              }
-            }
-
+            
             // Handle Receipt - only once
             if (i === 0 && receiptFiles.length > 0) {
                 const receipt = receiptFiles[0];
@@ -712,4 +721,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-

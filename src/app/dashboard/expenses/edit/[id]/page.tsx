@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,7 +22,7 @@ import { CalendarIcon, ArrowLeft, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
-import type { Category, Subcategory, Expense, Currency } from '@/lib/types';
+import type { Category, Subcategory, Expense, Currency, Entity } from '@/lib/types';
 import { logAuditEvent } from '../../../audit/actions';
 
 const expenseFormSchema = z.object({
@@ -88,6 +88,12 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
     return collection(firestore, 'currencies');
   }, [firestore]);
   const { data: currencies } = useCollection<Currency>(currenciesQuery);
+  
+  const entitiesQuery = useMemoFirebase(() => {
+    if (!firestore || !tenantId) return null;
+    return query(collection(firestore, 'entities'), where('tenantId', '==', tenantId));
+  }, [firestore, tenantId]);
+  const { data: entities } = useCollection<Entity>(entitiesQuery);
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
     if (!allSubcategories || !selectedCategoryId) return [];
@@ -110,12 +116,39 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
         const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1
         amountARS = data.amount * exchangeRate;
     }
+
+    let entityIdToUse = expenseData.entityId || null;
+    const entityCuit = data.entityCuit?.trim();
+    const entityName = data.entityName?.trim();
+    const entitiesRef = collection(firestore, 'entities');
+    
+    if (entityName && !entityIdToUse) {
+        let foundEntity = null;
+        if (entityCuit && entityCuit.length === 11) {
+            const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                foundEntity = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as Entity;
+            }
+        }
+        if (!foundEntity) {
+            const existingByName = entities?.find(e => e.razonSocial.toLowerCase() === entityName.toLowerCase());
+            if (existingByName) {
+                foundEntity = existingByName;
+            }
+        }
+
+        if (foundEntity) {
+            entityIdToUse = foundEntity.id;
+        }
+    }
     
     const updatedData = {
         ...data,
         date: data.date.toISOString(),
         amountARS: amountARS,
         subcategoryId: data.subcategoryId || null,
+        entityId: entityIdToUse,
         updatedAt: new Date().toISOString(),
     };
 
