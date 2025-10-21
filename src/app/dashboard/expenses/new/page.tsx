@@ -336,36 +336,41 @@ export default function NewExpensePage() {
             batch.set(newExpenseRef, expenseData);
             writes.push({ path: newExpenseRef.path, data: expenseData });
 
-             // Handle Entity - only once
+            // Handle Entity - only once
             if (i === 0) {
-                const entityCuit = data.entityCuit?.trim();
-                const entityName = data.entityName?.trim();
-                let entityAlreadyExists = false;
+              const entityCuit = data.entityCuit?.trim();
+              const entityName = data.entityName?.trim();
+              let entityAlreadyExists = false;
 
-                if (entities?.some(e => e.razonSocial === entityName)) {
-                    entityAlreadyExists = true;
-                } else if (entityCuit) {
-                    const q = query(collection(firestore, 'entities'), where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
-                    const entitySnapshot = await getDocs(q);
-                    if (!entitySnapshot.empty) {
-                        entityAlreadyExists = true;
-                    }
-                }
-                
-                if (!entityAlreadyExists && entityName) {
-                    const newEntityRef = doc(collection(firestore, 'entities'));
-                    const entityData = {
-                        id: newEntityRef.id,
-                        tenantId: tenantId,
-                        cuit: entityCuit || '',
-                        razonSocial: entityName,
-                        tipo: 'comercio',
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                    };
-                    batch.set(newEntityRef, entityData);
-                    writes.push({path: newEntityRef.path, data: entityData});
-                }
+              // Search by CUIT if available
+              if (entityCuit) {
+                  const q = query(collection(firestore, 'entities'), where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+                  const entitySnapshot = await getDocs(q);
+                  if (!entitySnapshot.empty) {
+                      entityAlreadyExists = true;
+                  }
+              }
+              // If not found by CUIT, search by name
+              if (!entityAlreadyExists && entityName) {
+                   if (entities?.some(e => e.razonSocial.toLowerCase() === entityName.toLowerCase())) {
+                       entityAlreadyExists = true;
+                   }
+              }
+              
+              if (!entityAlreadyExists && entityName) {
+                  const newEntityRef = doc(collection(firestore, 'entities'));
+                  const entityData = {
+                      id: newEntityRef.id,
+                      tenantId: tenantId,
+                      cuit: entityCuit || '',
+                      razonSocial: entityName,
+                      tipo: 'comercio',
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                  };
+                  batch.set(newEntityRef, entityData);
+                  writes.push({path: newEntityRef.path, data: entityData});
+              }
             }
 
             // Handle Receipt - only once
