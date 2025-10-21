@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import {
   Command,
   CommandEmpty,
+  CommandInput,
   CommandGroup,
   CommandItem,
   CommandList,
@@ -18,8 +19,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Input } from "@/components/ui/input"
-
 
 interface ComboboxProps {
     options: { label: string; value: string; cuit?: string; }[];
@@ -41,83 +40,69 @@ export function Combobox({
     className,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
-  const [inputValue, setInputValue] = React.useState("")
-  const [searchTerm, setSearchTerm] = React.useState("")
-
-  React.useEffect(() => {
-    // Sync external value with internal input value
-    const selectedOption = options.find(opt => opt.value === value || opt.label === value);
-    setInputValue(selectedOption?.label || value);
-  }, [value, options]);
 
   const handleSelect = (currentValue: string) => {
+    // Find the full option object from the `currentValue` which is the label
     const selectedOption = options.find(opt => opt.label.toLowerCase() === currentValue.toLowerCase());
+    
+    // Call the onSelect prop passed from the parent form
+    // If an option was found, pass its label. Otherwise, pass the raw text the user typed.
     onSelect(selectedOption ? selectedOption.label : currentValue);
-    setInputValue(selectedOption ? selectedOption.label : currentValue);
+    
+    // Close the popover
     setOpen(false);
-    setSearchTerm(""); // Reset search term
-  }
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setInputValue(newValue);
-    setSearchTerm(newValue); // Update search term
-    onSelect(newValue); // Update the form state continuously
   }
 
-  const filteredOptions = React.useMemo(() => {
-    if (searchTerm.length < 5) return [];
-    return options.filter(option =>
-      option.label.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm, options]);
+  const selectedLabel = options.find(option => option.label === value)?.label || value;
 
-  React.useEffect(() => {
-    if (searchTerm.length >= 5 && filteredOptions.length > 0) {
-      if (!open) setOpen(true);
-    } else {
-      if (open) setOpen(false);
-    }
-  }, [searchTerm, filteredOptions, open]);
-  
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <div className="relative w-full">
-            <Input
-                placeholder={placeholder}
-                value={inputValue}
-                onChange={handleInputChange}
-                className={cn("w-full justify-between", className)}
-            />
-            <ChevronsUpDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 shrink-0 opacity-50" />
+            <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                className={cn("w-full justify-between font-normal", className)}
+            >
+                {selectedLabel || placeholder}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
         </div>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-        <Command>
-          <CommandList>
-            {filteredOptions.length > 0 ? (
+        <Command
+            filter={(optionValue, search) => {
+                const option = options.find(opt => opt.label.toLowerCase() === optionValue.toLowerCase());
+                if (option?.label.toLowerCase().includes(search.toLowerCase())) {
+                    return 1;
+                }
+                return 0;
+            }}
+        >
+            <CommandInput 
+                placeholder={searchPlaceholder}
+            />
+            <CommandList>
+                <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
                 <CommandGroup>
-                {filteredOptions.map((option) => (
+                    {options.map((option) => (
                     <CommandItem
                         key={option.value}
                         value={option.label}
-                        onSelect={() => handleSelect(option.label)}
+                        onSelect={handleSelect}
                     >
-                    <Check
+                        <Check
                         className={cn(
-                        "mr-2 h-4 w-4",
-                        value === option.label ? "opacity-100" : "opacity-0"
+                            "mr-2 h-4 w-4",
+                            value === option.label ? "opacity-100" : "opacity-0"
                         )}
-                    />
-                    {option.label}
+                        />
+                        {option.label}
                     </CommandItem>
-                ))}
+                    ))}
                 </CommandGroup>
-            ) : (
-                searchTerm.length >= 5 && <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
-            )}
-          </CommandList>
+            </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
