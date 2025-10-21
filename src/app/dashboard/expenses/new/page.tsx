@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, query, where, writeBatch, doc, getDocs } from 'firebase/firestore';
+import { collection, query, where, writeBatch, doc, getDocs, Firestore } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -271,6 +271,54 @@ export default function NewExpensePage() {
       setReceiptFiles(files => files.filter((_, i) => i !== index));
   }
   
+    /**
+   * Finds an existing entity by CUIT or name, or creates a new one if not found.
+   * Returns the ID of the found or created entity.
+   */
+  const findOrCreateEntity = async (
+    firestore: Firestore,
+    tenantId: string,
+    data: ExpenseFormValues
+  ): Promise<{ entityId: string | null; batchOperations: ((batch: any) => void)[] }> => {
+    const entityName = data.entityName?.trim();
+    if (!entityName) return { entityId: null, batchOperations: [] };
+
+    const entityCuit = data.entityCuit?.trim();
+    const entitiesRef = collection(firestore, 'entities');
+    
+    // 1. Try to find by CUIT if it's valid
+    if (entityCuit && entityCuit.length === 11) {
+      const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        return { entityId: querySnapshot.docs[0].id, batchOperations: [] };
+      }
+    }
+
+    // 2. If not found by CUIT, try by name
+    const qByName = query(entitiesRef, where('tenantId', '==', tenantId), where('razonSocial', '==', entityName));
+    const byNameSnapshot = await getDocs(qByName);
+    if (!byNameSnapshot.empty) {
+      return { entityId: byNameSnapshot.docs[0].id, batchOperations: [] };
+    }
+
+    // 3. Create a new entity if none was found
+    const newEntityRef = doc(entitiesRef);
+    const newEntityData = {
+      id: newEntityRef.id,
+      tenantId: tenantId,
+      cuit: entityCuit || '',
+      razonSocial: entityName,
+      tipo: 'comercio',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    const batchOperation = (batch: any) => batch.set(newEntityRef, newEntityData);
+
+    return { entityId: newEntityRef.id, batchOperations: [batchOperation] };
+  };
+
   const onSubmit = async (data: ExpenseFormValues) => {
     if (!tenantId || !user || !firestore) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar al usuario o tenant.' });
@@ -279,60 +327,18 @@ export default function NewExpensePage() {
     setIsSubmitting(true);
     toast({ title: "Procesando...", description: "Guardando el gasto." });
 
-    const batch = writeBatch(firestore);
-    let writes: {path: string, data: any}[] = [];
+    const writes: {path: string, data: any}[] = [];
 
     try {
+        const { entityId, batchOperations: entityBatchOps } = await findOrCreateEntity(firestore, tenantId, data);
+        
+        const batch = writeBatch(firestore);
+        entityBatchOps.forEach(op => op(batch)); // Apply entity creation if needed
+
         const installments = data.paymentMethod === 'credit' ? data.installments || 1 : 1;
         const installmentAmount = data.amount / installments;
         const originalNotes = data.notes || '';
         const createdExpenseIds: string[] = [];
-
-        let entityIdToUse: string | null = null;
-        const entityCuit = data.entityCuit?.trim();
-        const entityName = data.entityName?.trim();
-        const entitiesRef = collection(firestore, 'entities');
-
-        // 1. Find or Create Entity
-        if (entityName) {
-            let foundEntity = null;
-            // First, try to find by CUIT if it's valid
-            if (entityCuit && entityCuit.length === 11) {
-                const q = query(entitiesRef, where('tenantId', '==', tenantId), where('cuit', '==', entityCuit));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) {
-                    foundEntity = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as Entity;
-                }
-            }
-            
-            // If not found by CUIT, try by name
-            if (!foundEntity) {
-                const existingByName = entities?.find(e => e.razonSocial.toLowerCase() === entityName.toLowerCase());
-                 if (existingByName) {
-                    foundEntity = existingByName;
-                }
-            }
-
-            if (foundEntity) {
-                entityIdToUse = foundEntity.id;
-            } else {
-                // Create a new entity if none was found
-                const newEntityRef = doc(entitiesRef);
-                entityIdToUse = newEntityRef.id;
-                const newEntityData = {
-                    id: entityIdToUse,
-                    tenantId: tenantId,
-                    cuit: entityCuit || '',
-                    razonSocial: entityName,
-                    tipo: 'comercio',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                };
-                batch.set(newEntityRef, newEntityData);
-                writes.push({ path: newEntityRef.path, data: newEntityData });
-            }
-        }
-
 
         for (let i = 0; i < installments; i++) {
             const newExpenseRef = doc(collection(firestore, 'expenses'));
@@ -341,7 +347,7 @@ export default function NewExpensePage() {
             let amountARS = installmentAmount;
             if (data.currency === 'USD') {
                 const usdCurrencyDoc = currencies?.find(c => c.code === 'USD');
-                const exchangeRate = usdCurrencyDoc?.exchangeRate || 1; // Fallback to 1 if not found
+                const exchangeRate = usdCurrencyDoc?.exchangeRate || 1;
                 amountARS = installmentAmount * exchangeRate;
             }
 
@@ -361,7 +367,7 @@ export default function NewExpensePage() {
                 amountARS: parseFloat(amountARS.toFixed(2)),
                 categoryId: data.categoryId,
                 subcategoryId: data.subcategoryId || null,
-                entityId: entityIdToUse, // Use the determined entity ID
+                entityId: entityId,
                 entityCuit: data.entityCuit?.trim() || '',
                 entityName: data.entityName?.trim(),
                 paymentMethod: data.paymentMethod,
@@ -393,8 +399,8 @@ export default function NewExpensePage() {
                         id: newReceiptRef.id,
                         tenantId: tenantId,
                         userId: user.uid,
-                        expenseId: newExpenseRef.id, // Associate with the first installment
-                        base64Content: base64Content, // Just store the first image/pdf for now
+                        expenseId: newExpenseRef.id,
+                        base64Content: base64Content,
                         fileType: receipt.file.type.startsWith('image/') ? 'image' : 'pdf',
                         status: 'processed',
                         createdAt: new Date().toISOString(),
@@ -423,11 +429,11 @@ export default function NewExpensePage() {
             }
         }
 
-
         toast({ title: "¡Éxito!", description: "El gasto ha sido guardado correctamente." });
         router.push('/dashboard/expenses');
 
     } catch (error) {
+        console.error("Error in onSubmit:", error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: 'batch-write',
             operation: 'write',
