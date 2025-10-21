@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
@@ -257,7 +257,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
   const isLoading = isLoadingTenant || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes || isLoadingSubcategories;
   
  const processedData = useMemo(() => {
-    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user || !allSubcategories) {
+    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user || !allSubcategories || !date?.from) {
       return SAFE_DEFAULTS;
     }
 
@@ -270,33 +270,31 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         }).format(amount);
     };
 
-    const fromDateFilter = date?.from ? new Date(date.from.setHours(0, 0, 0, 0)) : null;
-    const toDateFilter = date?.to ? new Date(date.to.setHours(23, 59, 59, 999)) : (fromDateFilter ? new Date(fromDateFilter.setHours(23, 59, 59, 999)) : null);
+    const fromDateFilter = date.from ? new Date(date.from.setHours(0, 0, 0, 0)) : startOfYear(new Date());
+    const toDateFilter = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : endOfYear(new Date());
 
-    // Filter all data based on selected category first
-    const categoryFilteredExpenses = selectedCategoryId === 'all'
-      ? allExpenses
-      : allExpenses.filter(e => e.categoryId === selectedCategoryId);
-
-    const categoryFilteredBudgets = selectedCategoryId === 'all'
-      ? allBudgets
-      : allBudgets.filter(b => b.categoryId === selectedCategoryId);
-
-
-    const periodFilteredExpenses = categoryFilteredExpenses.filter(expense => {
-        if (!fromDateFilter) return false;
+    const getPeriodExpenses = (source: Expense[]) => {
+      const categoryFiltered = selectedCategoryId === 'all'
+        ? source
+        : source.filter(e => e.categoryId === selectedCategoryId);
+      return categoryFiltered.filter(expense => {
         const expenseDate = new Date(expense.date);
         return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
-    });
+      });
+    };
 
+    const periodFilteredExpenses = getPeriodExpenses(allExpenses);
+    
     const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
 
-    const currentMonth = date?.from?.getMonth() ?? new Date().getMonth();
-    const currentYear = date?.from?.getFullYear() ?? new Date().getFullYear();
+    const periodFilteredBudgets = allBudgets.filter(b => {
+        const budgetDate = new Date(b.year, b.month - 1);
+        const isInDateRange = budgetDate >= startOfMonth(fromDateFilter) && budgetDate <= endOfMonth(toDateFilter);
+        const categoryMatch = selectedCategoryId === 'all' || b.categoryId === selectedCategoryId;
+        return isInDateRange && categoryMatch;
+    });
 
-    const totalBudgetForPeriod = categoryFilteredBudgets
-      .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
-      .reduce((acc, budget) => acc + budget.amountARS, 0);
+    const totalBudgetForPeriod = periodFilteredBudgets.reduce((acc, budget) => acc + budget.amountARS, 0);
 
     const budgetBalance = totalBudgetForPeriod - totalExpenses;
 
@@ -325,58 +323,72 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         });
 
     const budgetChartData = (() => {
-        return categoryFilteredBudgets
-            .filter(b => b.month === currentMonth + 1 && b.year === currentYear)
-            .map(budget => {
+        return periodFilteredBudgets
+            .reduce((acc, budget) => {
+                const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
+                if (!acc[categoryName]) {
+                    acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
+                }
+                acc[categoryName].Presupuestado += budget.amountARS;
+                return acc;
+            }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>)
+            
+            // Convert to array and calculate spent amount
+            .map(group => {
+                const categoryId = categories.find(c => c.name === group.name)?.id;
                 const spentInARS = periodFilteredExpenses
-                    .filter(e => e.categoryId === budget.categoryId)
+                    .filter(e => e.categoryId === categoryId)
                     .reduce((acc, e) => acc + e.amountARS, 0);
-
-                const percentage = budget.amountARS > 0 ? Math.round((spentInARS / budget.amountARS) * 100) : 0;
-                
-                return {
-                    name: categories.find(c => c.id === budget.categoryId)?.name || 'N/A', 
-                    Presupuestado: budget.amountARS, 
-                    Gastado: spentInARS,
-                    percentage: percentage,
-                };
-            }).slice(0, 5);
+                group.Gastado = spentInARS;
+                return group;
+            })
+             // Add percentage calculation after grouping and spending calculation
+            .map(group => ({
+                ...group,
+                percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
+            }))
+            .slice(0, 5);
     })();
     
-    let cumulativeExpenses = 0;
-    let cumulativeIncomes = 0;
+    const intervalMonths = eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
     
-    const monthlyData = Array.from({ length: 12 }).map((_, i) => {
-        const monthDate = subMonths(new Date(), 11 - i); // Iterate from 12 months ago to now
+    const monthlyData = intervalMonths.map(monthDate => {
         const month = monthDate.getMonth();
         const year = monthDate.getFullYear();
-        
-        const monthlyExpenses = categoryFilteredExpenses
+
+        const monthExpenses = (selectedCategoryId === 'all' ? allExpenses : allExpenses.filter(e => e.categoryId === selectedCategoryId))
           .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
           .reduce((sum, e) => sum + e.amountARS, 0);
           
-        const monthlyIncomes = allIncomes // Incomes are not filtered by category
+        const monthIncomes = allIncomes
           .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
           .reduce((sum, inc) => sum + inc.amountARS, 0);
 
-        cumulativeExpenses += monthlyExpenses;
-        cumulativeIncomes += monthlyIncomes;
-
         return {
-          month: format(monthDate, 'MMM', { locale: es }),
-          ingresos: monthlyIncomes,
-          gastos: monthlyExpenses,
-          ingresosAcumulados: cumulativeIncomes,
-          gastosAcumulados: cumulativeExpenses,
+          month: format(monthDate, 'MMM yy', { locale: es }),
+          ingresos: monthIncomes,
+          gastos: monthExpenses,
         };
     });
 
-    const installmentsChartData = (() => {
-      const pendingInstallments = categoryFilteredExpenses.filter(e => 
-        e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday())
-      );
+    let cumulativeIncomes = 0;
+    let cumulativeExpenses = 0;
+    const cumulativeChartData = monthlyData.map(data => {
+        cumulativeIncomes += data.ingresos;
+        cumulativeExpenses += data.gastos;
+        return {
+            ...data,
+            ingresosAcumulados: cumulativeIncomes,
+            gastosAcumulados: cumulativeExpenses,
+        };
+    });
     
-      const monthlyTotals = pendingInstallments.reduce((acc, expense) => {
+
+    const installmentsChartData = (() => {
+      const allPendingInstallments = (selectedCategoryId === 'all' ? allExpenses : allExpenses.filter(e => e.categoryId === selectedCategoryId))
+        .filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
+
+      const monthlyTotals = allPendingInstallments.reduce((acc, expense) => {
         const monthKey = format(new Date(expense.date), 'yyyy-MM');
         if (!acc[monthKey]) {
           acc[monthKey] = 0;
@@ -391,9 +403,9 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
           total,
         }))
         .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime())
-        .slice(0, 6); // Show next 6 months
+        .slice(0, 6);
       
-      const totalPending = pendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
+      const totalPending = allPendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
 
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
@@ -407,7 +419,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         formatCurrency: finalFormatCurrency, 
         toCurrencyCode: 'ARS', 
         monthlyOverviewData: monthlyData,
-        cumulativeChartData: monthlyData,
+        cumulativeChartData,
         isOwner: !!isOwner,
         installmentsChartData
     };
@@ -541,7 +553,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                         <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
-                        <CardDescription>Ingresos vs. Gastos de los últimos 12 meses.</CardDescription>
+                        <CardDescription>Ingresos vs. Gastos del período.</CardDescription>
                     </div>
                      <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -584,8 +596,8 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
-                            <CardTitle>Balance Acumulado Anual</CardTitle>
-                            <CardDescription>Evolución de ingresos y gastos acumulados.</CardDescription>
+                            <CardTitle>Balance Acumulado</CardTitle>
+                            <CardDescription>Evolución de ingresos y gastos acumulados en el período.</CardDescription>
                         </div>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -828,7 +840,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 </Link>
             </Button>
             <Button asChild>
-                <Link href="/dashboard/expenses">
+                <Link href="/dashboard/expenses/new">
                     <Plus className="mr-2 h-4 w-4" /> Crear Gasto
                 </Link>
             </Button>
@@ -1050,17 +1062,16 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
   const isLoading = isLoadingExpenses || isLoadingIncomes || isLoadingBudgets || isLoadingCategories;
 
   const processedData = useMemo(() => {
-    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !user) {
+    if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !user || !date?.from) {
       return SAFE_DEFAULTS;
     }
 
     const finalFormatCurrency = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
     
-    const fromDateFilter = date?.from ? new Date(date.from.setHours(0, 0, 0, 0)) : null;
-    const toDateFilter = date?.to ? new Date(date.to.setHours(23, 59, 59, 999)) : (fromDateFilter ? new Date(fromDateFilter.setHours(23, 59, 59, 999)) : null);
+    const fromDateFilter = date.from ? new Date(date.from.setHours(0, 0, 0, 0)) : startOfYear(new Date());
+    const toDateFilter = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : endOfYear(new Date());
 
     const periodFilteredExpenses = allExpenses.filter(expense => {
-        if (!fromDateFilter) return false;
         const expenseDate = new Date(expense.date);
         return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
     });
@@ -1077,19 +1088,39 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-    let cumulativeExpenses = 0;
-    let cumulativeIncomes = 0;
-    const monthlyData = Array.from({ length: 12 }).map((_, i) => {
-        const monthDate = subMonths(new Date(), 11 - i);
+    const intervalMonths = eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
+
+    const monthlyData = intervalMonths.map(monthDate => {
         const month = monthDate.getMonth();
         const year = monthDate.getFullYear();
-        const monthlyExpenses = allExpenses.filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year).reduce((sum, e) => sum + e.amountARS, 0);
-        const monthlyIncomes = allIncomes.filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year).reduce((sum, inc) => sum + inc.amountARS, 0);
-        cumulativeExpenses += monthlyExpenses;
-        cumulativeIncomes += monthlyIncomes;
-        return { month: format(monthDate, 'MMM', { locale: es }), ingresos: monthlyIncomes, gastos: monthlyExpenses, ingresosAcumulados: cumulativeIncomes, gastosAcumulados: cumulativeExpenses };
+
+        const monthlyExpenses = allExpenses
+          .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
+          .reduce((sum, e) => sum + e.amountARS, 0);
+          
+        const monthlyIncomes = allIncomes
+          .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
+          .reduce((sum, inc) => sum + inc.amountARS, 0);
+
+        return {
+          month: format(monthDate, 'MMM yy', { locale: es }),
+          ingresos: monthlyIncomes,
+          gastos: monthlyExpenses,
+        };
     });
 
+    let cumulativeIncomes = 0;
+    let cumulativeExpenses = 0;
+    const cumulativeChartData = monthlyData.map(data => {
+        cumulativeIncomes += data.ingresos;
+        cumulativeExpenses += data.gastos;
+        return {
+            ...data,
+            ingresosAcumulados: cumulativeIncomes,
+            gastosAcumulados: cumulativeExpenses,
+        };
+    });
+    
     const installmentsChartData = (() => {
       const pendingInstallments = allExpenses.filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
       const monthlyTotals = pendingInstallments.reduce((acc, expense) => {
@@ -1103,7 +1134,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
     
-    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, monthlyOverviewData: monthlyData, cumulativeChartData: monthlyData, installmentsChartData };
+    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, monthlyOverviewData: monthlyData, cumulativeChartData: cumulativeChartData, installmentsChartData };
   }, [isLoading, allExpenses, allIncomes, allBudgets, categories, date, user]);
 
   if (licenseStatus !== 'active') {
@@ -1137,7 +1168,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
       <CurrencyRates />
       <div className="flex flex-wrap gap-2">
           <Button asChild>
-              <Link href="/dashboard/expenses">
+              <Link href="/dashboard/expenses/new">
                   <Plus className="mr-2 h-4 w-4" /> Crear Gasto
               </Link>
           </Button>
@@ -1182,7 +1213,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
             <Card>
                 <CardHeader>
                     <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
-                    <CardDescription>Ingresos vs. Gastos de los últimos 12 meses.</CardDescription>
+                    <CardDescription>Ingresos vs. Gastos del período.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
@@ -1201,8 +1232,8 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Balance Acumulado Anual</CardTitle>
-                    <CardDescription>Evolución de ingresos y gastos acumulados.</CardDescription>
+                    <CardTitle>Balance Acumulado</CardTitle>
+                    <CardDescription>Evolución de ingresos y gastos acumulados en el período.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
@@ -1434,5 +1465,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
-    
