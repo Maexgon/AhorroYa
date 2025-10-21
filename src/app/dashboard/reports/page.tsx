@@ -150,7 +150,7 @@ export default function ReportsPage() {
         let current = from;
         while (current <= to) {
             const monthKey = format(current, 'yyyy-MM');
-            dataMap.set(monthKey, { date: current, month: format(current, 'MMM yy', { locale: es }) });
+            dataMap.set(monthKey, { date: new Date(current), month: format(current, 'MMM yy', { locale: es }) });
             current = addMonths(current, 1);
         }
         
@@ -219,9 +219,29 @@ export default function ReportsPage() {
         });
         
         const finalChartData = Array.from(dataMap.values());
-        const totalIncome = finalChartData.reduce((acc, data) => acc + (data['ingresos'] || 0), 0);
-        const totalExpense = finalChartData.reduce((acc, data) => acc + (data['egresos'] || 0), 0);
-        const totalBudget = finalChartData.reduce((acc, data) => acc + (data['presupuesto'] || 0), 0);
+        
+        const incomeKeys = dynamicKeys.filter(k => k.type === 'income').map(k => k.key);
+        const expenseKeys = dynamicKeys.filter(k => k.type === 'expense').map(k => k.key);
+        const budgetKeys = dynamicKeys.filter(k => k.type === 'budget').map(k => k.key);
+
+        const totalIncome = finalChartData.reduce((acc, data) => {
+            let monthTotal = 0;
+            incomeKeys.forEach(key => monthTotal += (data[key] || 0));
+            return acc + monthTotal;
+        }, 0);
+        
+        const totalExpense = finalChartData.reduce((acc, data) => {
+            let monthTotal = 0;
+            expenseKeys.forEach(key => monthTotal += (data[key] || 0));
+            return acc + monthTotal;
+        }, 0);
+
+        const totalBudget = finalChartData.reduce((acc, data) => {
+            let monthTotal = 0;
+            budgetKeys.forEach(key => monthTotal += (data[key] || 0));
+            return acc + monthTotal;
+        }, 0);
+
 
         return { chartData: finalChartData, totalIncome, totalExpense, totalBudget, lineKeys: dynamicKeys };
 
@@ -262,8 +282,8 @@ export default function ReportsPage() {
         }
     };
     
-    const showIncomeTotal = selectedColumns.some(c => c.value.includes('income'));
-    const showExpenseTotal = selectedColumns.some(c => c.value.includes('expense'));
+    const showIncomeTotal = selectedColumns.some(c => c.value.includes('income') || staticIncomeCategories.some(sc => sc.value === c.value));
+    const showExpenseTotal = selectedColumns.some(c => c.value.includes('expense') || expenseCategories?.some(ec => ec.id === c.value));
     const showBudgetTotal = selectedColumns.some(c => c.value.includes('budget'));
 
 
@@ -497,4 +517,3 @@ export default function ReportsPage() {
         </div>
     );
 }
-
