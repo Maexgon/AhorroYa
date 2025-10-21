@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area } from 'recharts';
@@ -270,16 +270,14 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         }).format(amount);
     };
 
-    const fromDateFilter = date.from ? new Date(date.from.setHours(0, 0, 0, 0)) : startOfYear(new Date());
-    const toDateFilter = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : endOfYear(new Date());
+    const fromDateFilter = date.from ? startOfMonth(date.from) : startOfYear(new Date());
+    const toDateFilter = date.to ? endOfMonth(date.to) : endOfYear(new Date());
 
     const getPeriodExpenses = (source: Expense[]) => {
-      const categoryFiltered = selectedCategoryId === 'all'
-        ? source
-        : source.filter(e => e.categoryId === selectedCategoryId);
-      return categoryFiltered.filter(expense => {
+      return source.filter(expense => {
         const expenseDate = new Date(expense.date);
-        return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
+        const categoryMatch = selectedCategoryId === 'all' || expense.categoryId === selectedCategoryId;
+        return expenseDate >= fromDateFilter && expenseDate <= toDateFilter && categoryMatch;
       });
     };
 
@@ -312,7 +310,11 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         default: Sparkles, 'Comestibles': Utensils, 'Ropa y Accesorios': ShoppingCart, 'Mobilidad': Bus, 'Vida y Entretenimiento': Film, 'Vivienda': Home,
     };
 
-    const recentExpenses = periodFilteredExpenses
+    const recentExpenses = allExpenses
+        .filter(expense => {
+            const expenseDate = new Date(expense.date);
+            return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
+        })
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
         .map(expense => {
@@ -473,6 +475,10 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     switch (preset) {
         case 'currentMonth':
             setDate({ from: startOfMonth(now), to: endOfMonth(now) });
+            break;
+        case 'nextMonth':
+            const nextMonth = addMonths(now, 1);
+            setDate({ from: startOfMonth(nextMonth), to: endOfMonth(nextMonth) });
             break;
         case 'currentYear':
             setDate({ from: startOfYear(now), to: endOfYear(now) });
@@ -892,6 +898,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                     <PopoverContent className="w-auto p-0 flex" align="start">
                         <div className="flex flex-col space-y-2 border-r p-4">
                             <Button variant="ghost" className="justify-start" onClick={() => setDateRange('currentMonth')}>Mes Actual</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('nextMonth')}>Mes Siguiente</Button>
                             <Button variant="ghost" className="justify-start" onClick={() => setDateRange('currentYear')}>Año Actual</Button>
                             <Button variant="ghost" className="justify-start" onClick={() => setDateRange('ytd')}>Year-to-Date</Button>
                             <Button variant="ghost" className="justify-start" onClick={() => setDateRange('lastQuarter')}>Último Cuatrimestre</Button>
