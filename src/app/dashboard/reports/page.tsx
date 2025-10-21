@@ -5,13 +5,13 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import type { Category, Entity, User as UserType, Tenant } from '@/lib/types';
+import type { Category, Entity, User as UserType, Tenant, Expense, Income } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
@@ -19,6 +19,8 @@ import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } f
 import { es } from 'date-fns/locale';
 import { MultiSelect, type MultiSelectOption } from '@/components/shared/multi-select';
 import { Separator } from '@/components/ui/separator';
+import { ResponsiveContainer, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line, Brush, Area } from 'recharts';
+
 
 const paymentMethodOptions: MultiSelectOption[] = [
     { value: 'cash', label: 'Efectivo' },
@@ -52,8 +54,8 @@ export default function ReportsPage() {
 
     React.useEffect(() => {
         setDate({
-          from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-          to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
+          from: startOfYear(new Date()),
+          to: endOfYear(new Date()),
         });
     }, []);
 
@@ -75,6 +77,13 @@ export default function ReportsPage() {
         return doc(firestore, 'tenants', tenantId);
     }, [firestore, tenantId]);
     const { data: tenantData } = useDoc<Tenant>(tenantDocRef);
+    
+    const expensesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+    const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
+
+    const incomesQuery = useMemoFirebase(() => (tenantId && firestore ? query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId), where('deleted', '==', false)) : null), [firestore, tenantId]);
+    const { data: allIncomes, isLoading: isLoadingIncomes } = useCollection<WithId<Income>>(incomesQuery);
+
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!tenantId) return null;
@@ -118,6 +127,46 @@ export default function ReportsPage() {
     const budgetColumnOptions = React.useMemo<MultiSelectOption[]>(() => [
         { value: 'all-budgets', label: 'Todos los Presupuestos' },
     ], []);
+
+    const { chartData, totalIncome, totalExpense } = React.useMemo(() => {
+        if (!allIncomes || !allExpenses) return { chartData: [], totalIncome: 0, totalExpense: 0 };
+        
+        const dataMap = new Map<string, { month: string; ingresos: number; egresos: number }>();
+        const from = date?.from ? startOfMonth(date.from) : startOfYear(new Date());
+        const to = date?.to ? endOfMonth(date.to) : endOfYear(new Date());
+
+        let current = from;
+        while (current <= to) {
+            const monthKey = format(current, 'yyyy-MM');
+            dataMap.set(monthKey, { month: format(current, 'MMM yy', { locale: es }), ingresos: 0, egresos: 0 });
+            current = addMonths(current, 1);
+        }
+
+        let runningTotalIncome = 0;
+        let runningTotalExpense = 0;
+
+        allIncomes.forEach(income => {
+            const incomeDate = new Date(income.date);
+            const monthKey = format(incomeDate, 'yyyy-MM');
+            if (dataMap.has(monthKey)) {
+                dataMap.get(monthKey)!.ingresos += income.amountARS;
+                runningTotalIncome += income.amountARS;
+            }
+        });
+
+        allExpenses.forEach(expense => {
+            const expenseDate = new Date(expense.date);
+            const monthKey = format(expenseDate, 'yyyy-MM');
+            if (dataMap.has(monthKey)) {
+                dataMap.get(monthKey)!.egresos += expense.amountARS;
+                runningTotalExpense += expense.amountARS;
+            }
+        });
+
+        return { chartData: Array.from(dataMap.values()), totalIncome: runningTotalIncome, totalExpense: runningTotalExpense };
+    }, [allIncomes, allExpenses, date]);
+
+    const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
 
     const isLoading = isUserLoading || isUserDocLoading || isLoadingCategories || isLoadingEntities || (tenantData?.type !== 'PERSONAL' && isLoadingMembers);
@@ -165,80 +214,126 @@ export default function ReportsPage() {
                 </div>
             </header>
 
-            <main className="flex-1 p-4 md:p-8">
+            <main className="flex-1 p-4 md:p-8 space-y-8">
                 {isLoading ? (
                     <div className="flex justify-center items-center h-64">
                         <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     </div>
                 ) : (
+                <>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Filtros</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {date?.from ? (
+                                            date.to ? (<>
+                                                {format(date.from, "LLL dd, y", { locale: es })} - {format(date.to, "LLL dd, y", { locale: es })}
+                                            </>) : (format(date.from, "LLL dd, y", { locale: es }))
+                                        ) : (<span>Selecciona un rango</span>)}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <div className="flex flex-col space-y-1 border-r p-2">
+                                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentMonth')}>Mes Actual</Button>
+                                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentQuarter')}>Cuatrimestre</Button>
+                                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentSemester')}>Semestre</Button>
+                                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentYear')}>Año Actual</Button>
+                                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('ytd')}>Year-to-Date</Button>
+                                    </div>
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={date?.from}
+                                        selected={date}
+                                        onSelect={setDate}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                             <MultiSelect
+                                options={paymentMethodOptions}
+                                selected={selectedPaymentMethods}
+                                onChange={setSelectedPaymentMethods}
+                                placeholder="Todos los medios de pago"
+                            />
+                            <MultiSelect
+                                options={entityOptions}
+                                selected={selectedEntities}
+                                onChange={setSelectedEntities}
+                                placeholder="Todas las entidades"
+                            />
+                            {tenantData?.type !== 'PERSONAL' && (
+                                <MultiSelect
+                                    options={userOptions}
+                                    selected={selectedUsers}
+                                    onChange={setSelectedUsers}
+                                    placeholder="Todos los usuarios"
+                                />
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+                
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Análisis de Flujo de Caja</CardTitle>
+                        <div className="flex justify-between items-center">
+                            <CardDescription>Ingresos vs. Egresos en el período seleccionado.</CardDescription>
+                             <div className="flex gap-6 text-right">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Ingresos Totales</p>
+                                    <p className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Egresos Totales</p>
+                                    <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalExpense)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                                <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                                <Tooltip
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                    <p className="font-bold">{label}</p>
+                                                    <p style={{ color: '#22c55e' }}>Ingresos: {formatCurrency(payload[0].value as number)}</p>
+                                                    <p style={{ color: '#ea580c' }}>Egresos: {formatCurrency(payload[1].value as number)}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Legend />
+                                <Line type="monotone" dataKey="ingresos" stroke="#22c55e" strokeWidth={2} name="Ingresos" dot={false} />
+                                <Line type="monotone" dataKey="egresos" stroke="#ea580c" strokeWidth={2} name="Egresos" dot={false} />
+                                <Brush dataKey="month" height={30} stroke="hsl(var(--primary))" />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Constructor de Reportes</CardTitle>
                         <CardDescription>Crea y personaliza tus propios reportes financieros.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                        {/* --- FILTERS --- */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2">
-                                <Filter className="h-5 w-5 text-primary" />
-                                <h3 className="text-lg font-semibold">Filtros</h3>
-                            </div>
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {date?.from ? (
-                                                date.to ? (<>
-                                                    {format(date.from, "LLL dd, y", { locale: es })} - {format(date.to, "LLL dd, y", { locale: es })}
-                                                </>) : (format(date.from, "LLL dd, y", { locale: es }))
-                                            ) : (<span>Selecciona un rango</span>)}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0 flex" align="start">
-                                        <div className="flex flex-col space-y-1 border-r p-2">
-                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentMonth')}>Mes Actual</Button>
-                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentQuarter')}>Cuatrimestre</Button>
-                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentSemester')}>Semestre</Button>
-                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('currentYear')}>Año Actual</Button>
-                                            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setDateRange('ytd')}>Year-to-Date</Button>
-                                        </div>
-                                        <Calendar
-                                            initialFocus
-                                            mode="range"
-                                            defaultMonth={date?.from}
-                                            selected={date}
-                                            onSelect={setDate}
-                                            numberOfMonths={1}
-                                            locale={es}
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                                 <MultiSelect
-                                    options={paymentMethodOptions}
-                                    selected={selectedPaymentMethods}
-                                    onChange={setSelectedPaymentMethods}
-                                    placeholder="Todos los medios de pago"
-                                />
-                                <MultiSelect
-                                    options={entityOptions}
-                                    selected={selectedEntities}
-                                    onChange={setSelectedEntities}
-                                    placeholder="Todas las entidades"
-                                />
-                                {tenantData?.type !== 'PERSONAL' && (
-                                    <MultiSelect
-                                        options={userOptions}
-                                        selected={selectedUsers}
-                                        onChange={setSelectedUsers}
-                                        placeholder="Todos los usuarios"
-                                    />
-                                )}
-                            </div>
-                        </div>
-
-                        <Separator />
-                        
                         {/* --- COLUMNS --- */}
                         <div className="space-y-4">
                              <div className="flex items-center gap-2">
@@ -253,30 +348,30 @@ export default function ReportsPage() {
                                     </CardHeader>
                                     <CardContent className="p-2 space-y-4">
                                         <div>
-                                            <h4 className="font-semibold text-primary text-sm mb-2">Ingresos</h4>
+                                            <h4 className="font-semibold text-green-600 text-sm mb-2">Ingresos</h4>
                                             <div className="space-y-2">
                                                 {incomeColumnOptions.map(col => (
-                                                    <Button key={`inc-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
+                                                    <Button key={`inc-${col.value}`} variant="outline" className="w-full justify-start font-normal bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50" onClick={() => handleToggleColumn(col)}>
                                                         {col.label}
                                                     </Button>
                                                 ))}
                                             </div>
                                         </div>
                                          <div>
-                                            <h4 className="font-semibold text-destructive text-sm mb-2">Gastos</h4>
+                                            <h4 className="font-semibold text-orange-600 text-sm mb-2 mt-4">Gastos</h4>
                                             <div className="space-y-2">
                                                {expenseColumnOptions.map(col => (
-                                                    <Button key={`exp-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
+                                                    <Button key={`exp-${col.value}`} variant="outline" className="w-full justify-start font-normal bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-900/50" onClick={() => handleToggleColumn(col)}>
                                                         {col.label}
                                                     </Button>
                                                ))}
                                             </div>
                                         </div>
                                          <div>
-                                            <h4 className="font-semibold text-yellow-600 text-sm mb-2">Presupuestos</h4>
+                                            <h4 className="font-semibold text-sky-600 text-sm mb-2 mt-4">Presupuestos</h4>
                                             <div className="space-y-2">
                                                {budgetColumnOptions.map(col => (
-                                                    <Button key={`bud-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
+                                                    <Button key={`bud-${col.value}`} variant="outline" className="w-full justify-start font-normal bg-sky-100 hover:bg-sky-200 dark:bg-sky-900/30 dark:hover:bg-sky-900/50" onClick={() => handleToggleColumn(col)}>
                                                         {col.label}
                                                     </Button>
                                                ))}
@@ -293,7 +388,12 @@ export default function ReportsPage() {
                                        {selectedColumns.length > 0 ? (
                                             <div className="w-full space-y-2">
                                                 {selectedColumns.map(col => (
-                                                    <Button key={`sel-${col.value}`} variant="secondary" className="w-full justify-start font-semibold cursor-grab" onClick={() => handleToggleColumn(col)}>
+                                                    <Button 
+                                                        key={`sel-${col.value}`} 
+                                                        variant="secondary" 
+                                                        className="w-full justify-start font-semibold cursor-grab" 
+                                                        onClick={() => handleToggleColumn(col)}
+                                                    >
                                                         <GripVertical className="h-4 w-4 mr-2 text-muted-foreground" />
                                                         {col.label}
                                                     </Button>
@@ -314,6 +414,7 @@ export default function ReportsPage() {
                         <Button><Play className="mr-2 h-4 w-4" /> Ejecutar Reporte</Button>
                     </CardFooter>
                 </Card>
+                </>
                 )}
             </main>
         </div>
