@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -74,7 +75,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-secondary/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 h-24 w-40">
+          <div className="mx-auto mb-4 w-40 h-auto">
             <AhorroYaLogo className="h-full w-full" />
           </div>
           <CardTitle className="font-headline text-2xl">Bienvenido de vuelta</CardTitle>
@@ -87,7 +88,18 @@ export default function LoginPage() {
               <Input id="email" type="email" placeholder="tu@email.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-2 relative">
-              <Label htmlFor="password">Contraseña</Label>
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <Link
+                    href={{
+                        pathname: '/forgot-password',
+                        query: { email: email },
+                    }}
+                    className="text-sm text-muted-foreground hover:underline"
+                    >
+                    ¿Olvidaste tu contraseña?
+                    </Link>
+              </div>
               <Input 
                 id="password" 
                 type={showPassword ? 'text' : 'password'} 
