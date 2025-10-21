@@ -74,8 +74,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-secondary/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4">
-            <AhorroYaLogo className="h-16 w-16 text-primary" />
+          <div className="mx-auto mb-2">
+            <AhorroYaLogo className="h-24 w-auto text-primary" />
           </div>
           <CardTitle className="font-headline text-2xl">Bienvenido de vuelta</CardTitle>
           <CardDescription>Ingresa a tu cuenta para continuar</CardDescription>
