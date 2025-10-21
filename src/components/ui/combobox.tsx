@@ -42,15 +42,8 @@ export function Combobox({
   const [open, setOpen] = React.useState(false)
 
   const handleSelect = (currentValue: string) => {
-    // Find the full option object from the `currentValue` which is the label
-    const selectedOption = options.find(opt => opt.label.toLowerCase() === currentValue.toLowerCase());
-    
-    // Call the onSelect prop passed from the parent form
-    // If an option was found, pass its label. Otherwise, pass the raw text the user typed.
-    onSelect(selectedOption ? selectedOption.label : currentValue);
-    
-    // Close the popover
-    setOpen(false);
+    onSelect(currentValue === value ? "" : currentValue);
+    setOpen(false)
   }
 
   const selectedLabel = options.find(option => option.label === value)?.label || value;
@@ -72,13 +65,10 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command
-            filter={(optionValue, search) => {
-                const option = options.find(opt => opt.label.toLowerCase() === optionValue.toLowerCase());
-                if (option?.label.toLowerCase().includes(search.toLowerCase())) {
-                    return 1;
-                }
-                return 0;
-            }}
+          filter={(optionValue, search) => {
+              if (optionValue.toLowerCase().includes(search.toLowerCase())) return 1;
+              return 0;
+          }}
         >
             <CommandInput 
                 placeholder={searchPlaceholder}

@@ -26,8 +26,8 @@ import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, Currency, Entity } from '@/lib/types';
-import { Combobox } from '@/components/ui/combobox';
 import { logAuditEvent } from '../../audit/actions';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 
 const expenseFormSchema = z.object({
@@ -61,6 +61,8 @@ export default function NewExpensePage() {
   const [receiptFiles, setReceiptFiles] = React.useState<FilePreview[]>([]);
   const [isProcessingReceipt, setIsProcessingReceipt] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(null);
+  const [isEntityPopupOpen, setIsEntityPopupOpen] = React.useState(false);
+  const [foundEntities, setFoundEntities] = React.useState<Entity[]>([]);
 
 
   const { control, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<ExpenseFormValues>({
@@ -86,6 +88,7 @@ export default function NewExpensePage() {
 
   const selectedCategoryId = watch('categoryId');
   const paymentMethod = watch('paymentMethod');
+  const entityNameValue = watch('entityName');
 
   // 1. Fetch user's data to get the first tenantId
   const userDocRef = useMemoFirebase(() => {
@@ -126,10 +129,24 @@ export default function NewExpensePage() {
   }, [firestore, tenantId]);
   const { data: entities, isLoading: isLoadingEntities } = useCollection<Entity>(entitiesQuery);
 
-  const entityOptions = React.useMemo(() => {
-    if (!entities) return [];
-    return entities.map(e => ({ label: e.razonSocial, value: e.id, cuit: e.cuit }));
-  }, [entities]);
+  React.useEffect(() => {
+    if (entityNameValue && entityNameValue.length >= 5 && entities) {
+      const searchLower = entityNameValue.toLowerCase();
+      const matches = entities.filter(e => e.razonSocial.toLowerCase().includes(searchLower));
+      if (matches.length > 0) {
+        setFoundEntities(matches);
+        setIsEntityPopupOpen(true);
+      }
+    } else {
+        setIsEntityPopupOpen(false);
+    }
+  }, [entityNameValue, entities]);
+
+  const handleEntitySelect = (entity: Entity) => {
+    setValue('entityName', entity.razonSocial);
+    setValue('entityCuit', entity.cuit || '');
+    setIsEntityPopupOpen(false);
+  }
 
 
   const subcategoriesForSelectedCategory = React.useMemo(() => {
@@ -490,25 +507,7 @@ export default function NewExpensePage() {
                             <Controller
                                 name="entityName"
                                 control={control}
-                                render={({ field }) => (
-                                    <Combobox
-                                        options={entityOptions}
-                                        value={field.value}
-                                        onSelect={(value) => {
-                                            const selectedEntity = entityOptions.find(e => e.value === value || e.label === value);
-                                            if (selectedEntity) {
-                                                setValue('entityName', selectedEntity.label);
-                                                setValue('entityCuit', selectedEntity.cuit || '');
-                                            } else {
-                                                setValue('entityName', value); 
-                                                setValue('entityCuit', '');
-                                            }
-                                        }}
-                                        placeholder="Buscar o crear entidad..."
-                                        searchPlaceholder="Buscar entidad..."
-                                        emptyPlaceholder="No se encontró la entidad. Puedes crear una nueva."
-                                    />
-                                )}
+                                render={({ field }) => <Input id="entityName" {...field} />}
                             />
                             {errors.entityName && <p className="text-sm text-destructive">{errors.entityName.message}</p>}
                         </div>
@@ -679,6 +678,24 @@ export default function NewExpensePage() {
                     </CardFooter>
                 </Card>
             </form>
+            <Dialog open={isEntityPopupOpen} onOpenChange={setIsEntityPopupOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Entidades Encontradas</DialogTitle>
+                        <DialogDescription>
+                            Hemos encontrado estas entidades que coinciden con tu búsqueda. Selecciona una para autocompletar los datos o cierra esta ventana para crear una nueva.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
+                        {foundEntities.map(entity => (
+                            <div key={entity.id} className="p-3 border rounded-md hover:bg-accent cursor-pointer" onClick={() => handleEntitySelect(entity)}>
+                                <p className="font-semibold">{entity.razonSocial}</p>
+                                {entity.cuit && <p className="text-sm text-muted-foreground">CUIT: {entity.cuit}</p>}
+                            </div>
+                        ))}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
       </main>
     </div>
