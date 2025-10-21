@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown, Plus } from "lucide-react"
+import { Check, ChevronsUpDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
@@ -43,6 +43,7 @@ export function Combobox({
   const [inputValue, setInputValue] = React.useState("")
 
   React.useEffect(() => {
+    // Sync external value with internal input value
     const selectedOption = options.find(opt => opt.value === value || opt.label === value);
     setInputValue(selectedOption?.label || value);
   }, [value, options]);
@@ -58,21 +59,23 @@ export function Combobox({
     const newValue = e.target.value;
     setInputValue(newValue);
     onSelect(newValue); // Update the form state continuously
-    
-    // Open popover only if there are 2 or more characters
-    if (newValue.length >= 2) {
-      if (!open) setOpen(true);
-    } else {
-      if (open) setOpen(false);
-    }
   }
 
   const filteredOptions = React.useMemo(() => {
-    if (!inputValue) return options;
+    if (!inputValue) return [];
     return options.filter(option =>
       option.label.toLowerCase().includes(inputValue.toLowerCase())
     );
   }, [inputValue, options]);
+
+  // Logic to control popover visibility based on user requirements
+  React.useEffect(() => {
+    if (inputValue.length >= 5 && filteredOptions.length > 0) {
+      if (!open) setOpen(true);
+    } else {
+      if (open) setOpen(false);
+    }
+  }, [inputValue, filteredOptions, open]);
   
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -82,14 +85,7 @@ export function Combobox({
                 placeholder={placeholder}
                 value={inputValue}
                 onChange={handleInputChange}
-                onFocus={() => {
-                  if (inputValue && inputValue.length >= 2) setOpen(true)
-                }}
-                className={cn("w-full justify-between pr-8", className)}
-            />
-            <ChevronsUpDown 
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 shrink-0 opacity-50 cursor-pointer"
-                onClick={() => setOpen(!open)}
+                className={cn("w-full justify-between", className)}
             />
         </div>
       </PopoverTrigger>
@@ -113,15 +109,6 @@ export function Combobox({
                   </CommandItem>
               ))}
             </CommandGroup>
-            {inputValue && !options.some(opt => opt.label.toLowerCase() === inputValue.toLowerCase()) && (
-                <CommandItem onSelect={() => handleSelect(inputValue)}>
-                     <Plus className="mr-2 h-4 w-4" />
-                     Crear "{inputValue}"
-                </CommandItem>
-            )}
-             {filteredOptions.length === 0 && !inputValue && (
-                <CommandEmpty>{emptyPlaceholder}</CommandEmpty>
-             )}
           </CommandList>
         </Command>
       </PopoverContent>
