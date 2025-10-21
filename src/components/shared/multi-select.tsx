@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -84,15 +85,14 @@ function MultiSelect({
       <PopoverContent className="w-full p-0">
         <Command 
             className={className}
-            // This filter function allows searching by both label and value
             filter={(value, search) => {
-                const option = options.find(o => o.value.toLowerCase() === value.toLowerCase());
-                if (option) {
-                    // Search in label
-                    if (option.label.toLowerCase().includes(search.toLowerCase())) return 1;
+                const option = options.find(o => o.value === value);
+                if (option?.label?.toLowerCase().includes(search.toLowerCase())) {
+                    return 1;
                 }
-                // Default search in value
-                if (value.toLowerCase().includes(search.toLowerCase())) return 1;
+                if (value.toLowerCase().includes(search.toLowerCase())) {
+                    return 1;
+                }
                 return 0;
             }}
         >
