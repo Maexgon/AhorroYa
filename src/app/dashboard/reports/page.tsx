@@ -28,11 +28,11 @@ const paymentMethodOptions: MultiSelectOption[] = [
     { value: 'other', label: 'Otro' },
 ];
 
-const incomeCategories = [
-  { value: "salarios", label: "Salarios" },
-  { value: "inversiones", label: "Inversiones" },
-  { value: "premios o comisiones", label: "Premios o Comisiones" },
-  { value: "otros", label: "Otros" },
+const staticIncomeCategories: MultiSelectOption[] = [
+    { value: "salarios", label: "Salarios" },
+    { value: "inversiones", label: "Inversiones" },
+    { value: "premios o comisiones", label: "Premios o Comisiones" },
+    { value: "otros", label: "Otros" },
 ];
 
 
@@ -102,9 +102,23 @@ export default function ReportsPage() {
         members?.map(m => ({ value: m.uid, label: m.displayName })) || [], 
     [members]);
     
-    const availableExpenseCategories = React.useMemo<MultiSelectOption[]>(() => 
-        expenseCategories?.map(c => ({ value: c.id, label: c.name })) || [],
-    [expenseCategories]);
+    const incomeColumnOptions = React.useMemo<MultiSelectOption[]>(() => [
+        { value: 'all-incomes', label: 'Todos los Ingresos' },
+        ...staticIncomeCategories
+    ], []);
+
+    const expenseColumnOptions = React.useMemo<MultiSelectOption[]>(() => {
+        const expenseCols = expenseCategories?.map(c => ({ value: c.id, label: c.name })) || [];
+        return [
+            { value: 'all-expenses', label: 'Todos los Gastos' },
+            ...expenseCols
+        ];
+    },[expenseCategories]);
+    
+    const budgetColumnOptions = React.useMemo<MultiSelectOption[]>(() => [
+        { value: 'all-budgets', label: 'Todos los Presupuestos' },
+    ], []);
+
 
     const isLoading = isUserLoading || isUserDocLoading || isLoadingCategories || isLoadingEntities || (tenantData?.type !== 'PERSONAL' && isLoadingMembers);
 
@@ -175,7 +189,7 @@ export default function ReportsPage() {
                                     options={paymentMethodOptions}
                                     selected={selectedPaymentMethods}
                                     onChange={setSelectedPaymentMethods}
-                                    placeholder="Filtrar por método de pago..."
+                                    placeholder="Todos los medios de pago"
                                 />
                                 <MultiSelect
                                     options={entityOptions}
@@ -212,7 +226,7 @@ export default function ReportsPage() {
                                         <div>
                                             <h4 className="font-semibold text-primary text-sm mb-2">Ingresos</h4>
                                             <div className="space-y-2">
-                                                {incomeCategories.map(col => (
+                                                {incomeColumnOptions.map(col => (
                                                     <Button key={`inc-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
                                                         {col.label}
                                                     </Button>
@@ -222,8 +236,18 @@ export default function ReportsPage() {
                                          <div>
                                             <h4 className="font-semibold text-destructive text-sm mb-2">Gastos</h4>
                                             <div className="space-y-2">
-                                               {availableExpenseCategories.map(col => (
+                                               {expenseColumnOptions.map(col => (
                                                     <Button key={`exp-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
+                                                        {col.label}
+                                                    </Button>
+                                               ))}
+                                            </div>
+                                        </div>
+                                         <div>
+                                            <h4 className="font-semibold text-yellow-600 text-sm mb-2">Presupuestos</h4>
+                                            <div className="space-y-2">
+                                               {budgetColumnOptions.map(col => (
+                                                    <Button key={`bud-${col.value}`} variant="outline" className="w-full justify-start font-normal" onClick={() => handleToggleColumn(col)}>
                                                         {col.label}
                                                     </Button>
                                                ))}
