@@ -6,7 +6,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical } from 'lucide-react';
+import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical, MoreVertical } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -20,6 +20,13 @@ import { es } from 'date-fns/locale';
 import { MultiSelect, type MultiSelectOption } from '@/components/shared/multi-select';
 import { Separator } from '@/components/ui/separator';
 import { ResponsiveContainer, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line, Brush } from 'recharts';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import * as XLSX from 'xlsx';
 
 
 const paymentMethodOptions: MultiSelectOption[] = [
@@ -44,6 +51,7 @@ export default function ReportsPage() {
 
     const [tenantId, setTenantId] = React.useState<string | null>(null);
     const [date, setDate] = React.useState<DateRange | undefined>(undefined);
+    const [brushRange, setBrushRange] = React.useState<{ startIndex?: number; endIndex?: number }>({});
     
     const [selectedPaymentMethods, setSelectedPaymentMethods] = React.useState<string[]>([]);
     const [selectedEntities, setSelectedEntities] = React.useState<string[]>([]);
@@ -132,8 +140,8 @@ export default function ReportsPage() {
         ];
     },[expenseCategories]);
     
-    const budgetColumnOptions = React.useMemo<MultiSelectOption[]>(() => {
-        const budgetCols = expenseCategories?.map(c => ({ value: `budget-${c.id}`, label: c.name })) || [];
+     const budgetColumnOptions = React.useMemo<MultiSelectOption[]>(() => {
+        const budgetCols = expenseCategories?.map(c => ({ value: `budget-${c.id}`, label: `Presupuesto: ${c.name}` })) || [];
         return [
             { value: 'all-budgets', label: 'Todos los Presupuestos' },
             ...budgetCols
@@ -281,10 +289,24 @@ export default function ReportsPage() {
                 break;
         }
     };
+
+    const handleExport = () => {
+        const dataToExport = chartData.slice(brushRange.startIndex, brushRange.endIndex !== undefined ? brushRange.endIndex + 1 : undefined);
+        const ws = XLSX.utils.json_to_sheet(dataToExport.map(d => {
+            const row: any = { Mes: d.month };
+            lineKeys.forEach(lk => {
+                row[lk.label] = d[lk.key];
+            });
+            return row;
+        }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Datos del Gráfico");
+        XLSX.writeFile(wb, "reporte_flujo_caja.xlsx");
+    };
     
-    const showIncomeTotal = selectedColumns.some(c => c.value.includes('income') || staticIncomeCategories.some(sc => sc.value === c.value));
-    const showExpenseTotal = selectedColumns.some(c => c.value.includes('expense') || expenseCategories?.some(ec => ec.id === c.value));
-    const showBudgetTotal = selectedColumns.some(c => c.value.includes('budget'));
+    const showIncomeTotal = selectedColumns.some(c => c.value.includes('all-incomes') || staticIncomeCategories.some(sc => sc.value === c.value));
+    const showExpenseTotal = selectedColumns.some(c => c.value.includes('all-expenses') || expenseCategories?.some(ec => ec.id === c.value));
+    const showBudgetTotal = selectedColumns.some(c => c.value.includes('all-budgets') || c.value.startsWith('budget-'));
 
 
     return (
@@ -369,10 +391,25 @@ export default function ReportsPage() {
                 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Análisis de Flujo de Caja</CardTitle>
-                        <div className="flex justify-between items-center">
-                            <CardDescription>Ingresos vs. Egresos en el período seleccionado.</CardDescription>
-                             <div className="flex gap-6 text-right">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <CardTitle>Análisis de Flujo de Caja</CardTitle>
+                                <CardDescription>Ingresos vs. Egresos en el período seleccionado.</CardDescription>
+                            </div>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={handleExport}>
+                                        Exportar a Excel
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                        <div className="flex pt-4 gap-6 text-right">
                                 {showIncomeTotal && (
                                     <div>
                                         <p className="text-sm text-muted-foreground">Ingresos Totales</p>
@@ -391,7 +428,6 @@ export default function ReportsPage() {
                                         <p className="text-2xl font-bold text-sky-600">{formatCurrency(totalBudget)}</p>
                                     </div>
                                 )}
-                            </div>
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -419,7 +455,7 @@ export default function ReportsPage() {
                                 {lineKeys.map(line => (
                                     <Line key={line.key} type="monotone" dataKey={line.key} name={line.label} stroke={line.color} strokeWidth={2} dot={false} />
                                 ))}
-                                <Brush dataKey="month" height={30} stroke="hsl(var(--primary))" />
+                                <Brush dataKey="month" height={30} stroke="hsl(var(--primary))" onChange={(range) => setBrushRange(range)} />
                             </LineChart>
                         </ResponsiveContainer>
                     </CardContent>
@@ -517,3 +553,4 @@ export default function ReportsPage() {
         </div>
     );
 }
+
