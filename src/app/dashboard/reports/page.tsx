@@ -15,7 +15,7 @@ import type { Category, Entity, User as UserType, Tenant, Expense, Income } from
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MultiSelect, type MultiSelectOption } from '@/components/shared/multi-select';
 import { Separator } from '@/components/ui/separator';
