@@ -1285,7 +1285,7 @@ export default function DashboardPageContainer() {
        <header className="sticky top-0 z-40 w-full border-b bg-background">
         <div className="container flex h-16 items-center">
           <div  className="mr-6 flex items-center space-x-2">
-            <AhorroYaLogo className="h-8 w-8 text-primary" />
+            <AhorroYaLogo className="h-10 w-10 text-primary" />
             <span className="font-bold font-headline text-foreground">Ahorro Ya</span>
           </div>
           <div className="flex flex-1 items-center justify-end space-x-4">
