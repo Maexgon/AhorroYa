@@ -68,13 +68,13 @@ export default function BudgetPage() {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
-    const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets } = useCollection<Budget>(budgetsQuery);
+    const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets, error: budgetsError } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
     }, [firestore, tenantId]);
-    const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+    const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
@@ -84,7 +84,31 @@ export default function BudgetPage() {
             where('deleted', '==', false)
         );
     }, [firestore, tenantId]);
-    const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
+    const { data: expenses, isLoading: isLoadingExpenses, error: expensesError } = useCollection<Expense>(expensesQuery);
+
+    // 🔍 --- INICIO DEL CÓDIGO DE DIAGNÓSTICO ---
+    React.useEffect(() => {
+        console.log('🩺 Estado del Componente BudgetPage:', {
+            isAuthLoading,
+            isUserDocLoading,
+            isLoadingBudgets,
+            isLoadingCategories,
+            isLoadingExpenses,
+            hasTenantId: !!tenantId,
+            budgetsQuery: budgetsQuery ? 'definida' : 'null',
+            categoriesQuery: categoriesQuery ? 'definida' : 'null',
+            expensesQuery: expensesQuery ? 'definida' : 'null',
+            budgetsError: budgetsError?.message || null,
+            categoriesError: categoriesError?.message || null,
+            expensesError: expensesError?.message || null,
+        });
+    }, [
+        isAuthLoading, isUserDocLoading, isLoadingBudgets, isLoadingCategories, isLoadingExpenses, 
+        tenantId, budgetsQuery, categoriesQuery, expensesQuery,
+        budgetsError, categoriesError, expensesError
+    ]);
+    // 🔍 --- FIN DEL CÓDIGO DE DIAGNÓSTICO ---
+
 
     const budgetData = React.useMemo(() => {
         if (!budgets || !categories || !expenses) return [];
@@ -280,7 +304,7 @@ export default function BudgetPage() {
     
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(amount);
     
-    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), []);
+    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), [handleOpenDeleteDialog]);
 
     const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
     const uniqueYearsInBudgets = React.useMemo(() => {
@@ -451,5 +475,3 @@ export default function BudgetPage() {
 }
 
     
-
-  
