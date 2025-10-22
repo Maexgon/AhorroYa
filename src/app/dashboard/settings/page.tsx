@@ -2,11 +2,11 @@
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, doc, writeBatch, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, deleteUser } from 'firebase/auth';
+import { collection, query, where, doc, writeBatch } from 'firebase/firestore';
+import { getAuth, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -37,6 +37,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { updateMemberRoleAction, deleteMemberAction } from './actions';
 
 
 function ManageCategories({ tenantId }: { tenantId: string }) {
@@ -140,29 +141,26 @@ function ManageCategories({ tenantId }: { tenantId: string }) {
       setIsProcessing(true);
       
       try {
-        let docRef;
+        const batch = writeBatch(firestore);
+        let docRefToDelete = doc(firestore, type === 'category' ? 'categories' : 'subcategories', id);
+        
         if (type === 'category') {
-          const catToDelete = categories.find(c => c.id === id);
-          if (catToDelete && catToDelete.subcategories.length > 0) {
-            toast({ variant: 'destructive', title: "Error", description: "No puedes eliminar una categoría con subcategorías. Elimínalas primero." });
-            setIsProcessing(false);
-            setIsAlertOpen(false);
-            return;
-          }
-          docRef = doc(firestore, 'categories', id);
-        } else {
-          docRef = doc(firestore, 'subcategories', id);
+            const catToDelete = categories.find(c => c.id === id);
+            if (catToDelete && catToDelete.subcategories.length > 0) {
+                toast({ variant: 'destructive', title: "Error", description: "No puedes eliminar una categoría con subcategorías. Elimínalas primero." });
+                setIsProcessing(false);
+                setIsAlertOpen(false);
+                return;
+            }
         }
         
-        await deleteDoc(docRef);
+        batch.delete(docRefToDelete);
+        await batch.commit();
         
         toast({ title: "Eliminado", description: "El elemento ha sido eliminado." });
       } catch (e: any) {
         console.error("Error deleting item:", e);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: itemToDelete.type === 'category' ? `categories/${itemToDelete.id}` : `subcategories/${itemToDelete.id}`, 
-            operation: 'delete',
-        }));
+        toast({ variant: 'destructive', title: "Error", description: "No se pudo eliminar el elemento." });
       } finally {
         setIsProcessing(false);
         setIsAlertOpen(false);
@@ -361,7 +359,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   
-  const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [memberToAction, setMemberToAction] = useState<Membership | null>(null);
   const [actionType, setActionType] = useState<'delete' | 'promote' | 'demote' | null>(null);
 
@@ -432,6 +430,8 @@ export default function SettingsPage() {
 
     try {
         const auth = getAuth();
+        // This is a temporary solution for client-side user creation.
+        // In a real app, this should be a server-side action.
         const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
         const newUser = userCredential.user;
         const displayName = `${data.firstName} ${data.lastName}`;
@@ -474,34 +474,29 @@ export default function SettingsPage() {
   };
 
   const handleMemberAction = async () => {
-    if (!memberToAction || !actionType || !derivedTenantId || !user || !firestore) return;
-    
-    setIsDeletingMember(true);
+    if (!memberToAction || !actionType || !derivedTenantId || !user) return;
+
+    setIsProcessingAction(true);
     const actionInProgress = actionType === 'delete' ? 'Eliminando' : (actionType === 'promote' ? 'Promoviendo' : 'Revocando');
     toast({ title: `${actionInProgress} miembro...` });
     
-    const membershipRef = doc(firestore, 'memberships', `${derivedTenantId}_${memberToAction.uid}`);
-
-    try {
-        if(actionType === 'delete') {
-            await deleteDoc(membershipRef);
-            toast({ title: "Advertencia", description: "La membresía fue eliminada. La eliminación de la cuenta de Auth debe hacerse desde la consola de Firebase por seguridad." });
-        } else {
-            const newRole = actionType === 'promote' ? 'admin' : 'member';
-            await updateDoc(membershipRef, { role: newRole });
-            toast({ title: "¡Éxito!", description: "El rol del miembro ha sido actualizado." });
-        }
-    } catch (error: any) {
-        console.error(`Error performing action ${actionType}:`, error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `memberships/${derivedTenantId}_${memberToAction.uid}`, 
-            operation: actionType === 'delete' ? 'delete' : 'update',
-        }));
-    } finally {
-        setIsDeletingMember(false);
-        setMemberToAction(null);
-        setActionType(null);
+    let result;
+    if (actionType === 'delete') {
+        result = await deleteMemberAction({ tenantId: derivedTenantId, targetUserId: memberToAction.uid, actingUserId: user.uid });
+    } else {
+        const newRole = actionType === 'promote' ? 'admin' : 'member';
+        result = await updateMemberRoleAction({ tenantId: derivedTenantId, targetUserId: memberToAction.uid, actingUserId: user.uid, newRole });
     }
+
+    if (result.success) {
+        toast({ title: "¡Éxito!", description: "La operación se completó correctamente." });
+    } else {
+        toast({ variant: 'destructive', title: "Error", description: result.error || "No se pudo completar la acción." });
+    }
+
+    setIsProcessingAction(false);
+    setMemberToAction(null);
+    setActionType(null);
   };
 
 
@@ -629,15 +624,15 @@ export default function SettingsPage() {
             <AlertDialogHeader>
                 <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    {actionType === 'delete' && `Esta acción eliminará la membresía de ${memberToAction?.displayName} del tenant.`}
+                    {actionType === 'delete' && `Esta acción eliminará la membresía de ${memberToAction?.displayName} y desactivará su cuenta. Esta acción no se puede deshacer.`}
                     {actionType === 'promote' && `Esto le dará a ${memberToAction?.displayName} permisos de administrador.`}
                     {actionType === 'demote' && `Esto revocará los permisos de administrador de ${memberToAction?.displayName}.`}
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setMemberToAction(null)}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleMemberAction} disabled={isDeletingMember} className={actionType === 'delete' ? 'bg-destructive hover:bg-destructive/90' : ''}>
-                    {isDeletingMember ? 'Procesando...' : `Sí, ${actionType === 'delete' ? 'eliminar' : (actionType === 'promote' ? 'promover' : 'revocar')}`}
+                <AlertDialogAction onClick={handleMemberAction} disabled={isProcessingAction} className={actionType === 'delete' ? 'bg-destructive hover:bg-destructive/90' : ''}>
+                    {isProcessingAction ? 'Procesando...' : `Sí, ${actionType === 'delete' ? 'eliminar' : (actionType === 'promote' ? 'promover' : 'revocar')}`}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
