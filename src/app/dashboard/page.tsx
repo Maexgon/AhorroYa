@@ -53,8 +53,10 @@ const SAFE_DEFAULTS = {
     recentExpenses: [],
     budgetChartData: [],
     totalExpenses: 0,
+    totalExpensesUSD: 0,
     budgetBalance: 0,
     formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+    formatCurrencyUSD: (amount: number) => `$${amount.toFixed(2)}`,
     toCurrencyCode: 'ARS',
     periodData: [],
     cumulativeChartData: [],
@@ -271,6 +273,15 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             maximumFractionDigits: 0,
         }).format(amount);
     };
+    
+     const finalFormatCurrencyUSD = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(amount);
+    };
 
     const fromDateFilter = date.from ? startOfMonth(date.from) : startOfYear(new Date());
     const toDateFilter = date.to ? endOfMonth(date.to) : endOfYear(new Date());
@@ -287,6 +298,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     });
     
     const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
+    const totalExpensesUSD = periodFilteredExpenses.reduce((acc, expense) => acc + (expense.amountUSD || 0), 0);
 
     const periodFilteredBudgets = allBudgets.filter(b => {
         const budgetDate = new Date(b.year, b.month - 1);
@@ -425,8 +437,10 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         recentExpenses, 
         budgetChartData, 
         totalExpenses, 
+        totalExpensesUSD,
         budgetBalance, 
-        formatCurrency: finalFormatCurrency, 
+        formatCurrency: finalFormatCurrency,
+        formatCurrencyUSD: finalFormatCurrencyUSD,
         toCurrencyCode: 'ARS', 
         periodData,
         cumulativeChartData,
@@ -781,70 +795,80 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         case 'expenseAnalysis':
              return (
                 <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Análisis de Gastos</CardTitle>
-                        <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
-                    </div>
-                     <div className="flex items-center gap-2">
-                       <TooltipPrimitive>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
-                            <Info className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Compara el total gastado en cada categoría. Las categorías se ordenan de mayor a menor gasto.</p>
-                        </TooltipContent>
-                      </TooltipPrimitive>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleChartVisibility('expenseAnalysis')}>Cerrar</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                </CardHeader>
-                <CardContent className="pl-2">
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={processedData.barData} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis type="number" stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                            <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} width={120} tick={<CustomizedYAxisTick />}/>
-                            <Tooltip
-                                content={({ active, payload, label }) => {
-                                    if (active && payload && payload.length) {
-                                        return (
-                                            <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                                <p className="font-bold">{label}</p>
-                                                <p>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                }}
-                            />
-                            <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                                <LabelList
-                                    dataKey="total"
-                                    position="right"
-                                    offset={8}
-                                    className="fill-foreground"
-                                    fontSize={12}
-                                    formatter={(value: number) => processedData.formatCurrency(value)}
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Análisis de Gastos</CardTitle>
+                            <CardDescription>
+                                <p>Resumen por categoría del período seleccionado.</p>
+                                <p className="font-medium text-foreground">
+                                    Total Gastado (ARS): <span className="font-bold text-destructive">{processedData.formatCurrency(processedData.totalExpenses)}</span>
+                                </p>
+                                {processedData.totalExpensesUSD > 0 && (
+                                    <p className="font-medium text-foreground">
+                                        Total Gastado (USD): <span className="font-bold text-destructive">{processedData.formatCurrencyUSD(processedData.totalExpensesUSD)}</span>
+                                    </p>
+                                )}
+                            </CardDescription>
+                        </div>
+                         <div className="flex items-center gap-2">
+                           <TooltipPrimitive>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                                <Info className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Compara el total gastado en cada categoría. Las categorías se ordenan de mayor a menor gasto.</p>
+                            </TooltipContent>
+                          </TooltipPrimitive>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleChartVisibility('expenseAnalysis')}>Cerrar</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="pl-2">
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={processedData.barData} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                                <YAxis type="category" dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} width={120} tick={<CustomizedYAxisTick />}/>
+                                <Tooltip
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                    <p className="font-bold">{label}</p>
+                                                    <p>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
                                 />
-                            {processedData.barData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={categories.find(c => c.name === entry.name)?.color || '#888888'} />
-                            ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </CardContent>
+                                <Bar dataKey="total" radius={[0, 4, 4, 0]}>
+                                    <LabelList
+                                        dataKey="total"
+                                        position="right"
+                                        offset={8}
+                                        className="fill-foreground"
+                                        fontSize={12}
+                                        formatter={(value: number) => processedData.formatCurrency(value)}
+                                    />
+                                {processedData.barData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={categories.find(c => c.name === entry.name)?.color || '#888888'} />
+                                ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
                 </Card>
             );
         case 'budgets':
