@@ -392,7 +392,7 @@ export default function SettingsPage() {
 
   const allMembersQuery = useMemoFirebase(() => {
     if (!derivedTenantId) return null;
-    return query(collection(firestore, 'memberships'), where('tenantId', '==', derivedTenantId));
+    return query(collection(firestore, 'memberships'), where('tenantId', '==', derivedTenantId), where('status', '==', 'active'));
   }, [derivedTenantId]);
   const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(allMembersQuery);
 
@@ -461,9 +461,6 @@ export default function SettingsPage() {
 
         toast({ title: "¡Usuario Creado!", description: "Se ha enviado un correo al nuevo miembro para que establezca su contraseña." });
         setIsInviteDialogOpen(false);
-        if (members && setMembers) {
-            setMembers([...members, membershipData]);
-        }
 
     } catch (e: any) {
         console.error("Error inviting user:", e);
@@ -482,21 +479,28 @@ export default function SettingsPage() {
     const memberRef = doc(firestore, 'memberships', membershipId);
 
     try {
+        let updatedData;
         if (actionType === 'delete') {
-            await deleteDoc(memberRef);
-            setMembers(members.filter(m => m.uid !== memberToAction.uid));
+            updatedData = { status: 'revoked' };
         } else {
-            const newRole = actionType === 'promote' ? 'admin' : 'member';
-            await updateDoc(memberRef, { role: newRole });
-            setMembers(members.map(m => m.uid === memberToAction.uid ? { ...m, role: newRole } : m));
+            updatedData = { role: actionType === 'promote' ? 'admin' : 'member' };
         }
+        
+        await updateDoc(memberRef, updatedData);
+
+        if (actionType === 'delete') {
+             setMembers(members.filter(m => m.uid !== memberToAction.uid));
+        } else {
+             setMembers(members.map(m => m.uid === memberToAction.uid ? { ...m, ...updatedData } as Membership : m));
+        }
+        
         toast({ title: "¡Éxito!", description: "La operación se completó correctamente." });
 
     } catch (error) {
         console.error(`Error performing action ${actionType}:`, error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: memberRef.path, 
-            operation: 'update', // or 'delete'
+            operation: 'update',
         }));
     } finally {
         setIsProcessingAction(false);
@@ -630,7 +634,7 @@ export default function SettingsPage() {
             <AlertDialogHeader>
                 <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    {actionType === 'delete' && `Esta acción eliminará la membresía de ${memberToAction?.displayName} y desactivará su cuenta. Esta acción no se puede deshacer.`}
+                    {actionType === 'delete' && `Esta acción revocará el acceso de ${memberToAction?.displayName} al tenant. Ya no podrá ingresar.`}
                     {actionType === 'promote' && `Esto le dará a ${memberToAction?.displayName} permisos de administrador.`}
                     {actionType === 'demote' && `Esto revocará los permisos de administrador de ${memberToAction?.displayName}.`}
                 </AlertDialogDescription>
@@ -638,7 +642,7 @@ export default function SettingsPage() {
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setMemberToAction(null)}>Cancelar</AlertDialogCancel>
                 <AlertDialogAction onClick={handleMemberAction} disabled={isProcessingAction} className={actionType === 'delete' ? 'bg-destructive hover:bg-destructive/90' : ''}>
-                    {isProcessingAction ? 'Procesando...' : `Sí, ${actionType === 'delete' ? 'eliminar' : (actionType === 'promote' ? 'promover' : 'revocar')}`}
+                    {isProcessingAction ? 'Procesando...' : `Sí, ${actionType === 'delete' ? 'revocar acceso' : (actionType === 'promote' ? 'promover' : 'revocar admin')}`}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
