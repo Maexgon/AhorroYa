@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth, addMonths } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth, addMonths, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area, PieChart, Pie } from 'recharts';
@@ -55,7 +55,7 @@ const SAFE_DEFAULTS = {
     budgetBalance: 0,
     formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
     toCurrencyCode: 'ARS',
-    monthlyOverviewData: [],
+    periodData: [],
     cumulativeChartData: [],
     isOwner: false,
     installmentsChartData: {
@@ -351,30 +351,36 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             }));
     })();
     
-    const intervalMonths = eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
-    
-    const monthlyData = intervalMonths.map(monthDate => {
-        const month = monthDate.getMonth();
-        const year = monthDate.getFullYear();
+    const isMonthlyView = date.from && date.to && differenceInDays(date.to, date.from) <= 31;
+    const interval = isMonthlyView
+        ? eachDayOfInterval({ start: fromDateFilter, end: toDateFilter })
+        : eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
 
-        const monthExpenses = periodFilteredExpenses
-          .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
-          .reduce((sum, e) => sum + e.amountARS, 0);
+    const periodData = interval.map(dateItem => {
+        const key = isMonthlyView ? format(dateItem, 'yyyy-MM-dd') : format(dateItem, 'yyyy-MM');
+        const label = isMonthlyView ? format(dateItem, 'dd MMM', { locale: es }) : format(dateItem, 'MMM yy', { locale: es });
+
+        const expensesForPeriod = periodFilteredExpenses.filter(e => {
+            const d = new Date(e.date);
+            return isMonthlyView ? format(d, 'yyyy-MM-dd') === key : (d.getMonth() === dateItem.getMonth() && d.getFullYear() === dateItem.getFullYear());
+        }).reduce((sum, e) => sum + e.amountARS, 0);
           
-        const monthIncomes = periodFilteredIncomes
-          .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
-          .reduce((sum, inc) => sum + inc.amountARS, 0);
+        const incomesForPeriod = periodFilteredIncomes.filter(inc => {
+            const d = new Date(inc.date);
+            return isMonthlyView ? format(d, 'yyyy-MM-dd') === key : (d.getMonth() === dateItem.getMonth() && d.getFullYear() === dateItem.getFullYear());
+        }).reduce((sum, inc) => sum + inc.amountARS, 0);
 
         return {
-          month: format(monthDate, 'MMM yy', { locale: es }),
-          ingresos: monthIncomes,
-          gastos: monthExpenses,
+          label: label,
+          ingresos: incomesForPeriod,
+          gastos: expensesForPeriod,
         };
     });
+    
 
     let cumulativeIncomes = 0;
     let cumulativeExpenses = 0;
-    const cumulativeChartData = monthlyData.map(data => {
+    const cumulativeChartData = periodData.map(data => {
         cumulativeIncomes += data.ingresos;
         cumulativeExpenses += data.gastos;
         return {
@@ -419,7 +425,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         budgetBalance, 
         formatCurrency: finalFormatCurrency, 
         toCurrencyCode: 'ARS', 
-        monthlyOverviewData: monthlyData,
+        periodData,
         cumulativeChartData,
         isOwner: !!isOwner,
         installmentsChartData
@@ -641,16 +647,16 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                      <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleExport(processedData.monthlyOverviewData, "flujo_de_caja_mensual")}>Exportar a Excel</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport(processedData.periodData, "flujo_de_caja_mensual")}>Exportar a Excel</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => toggleChartVisibility('monthlyFlow')}>Cerrar</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
-                    <BarChart data={processedData.monthlyOverviewData}>
+                    <BarChart data={processedData.periodData}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                        <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
                         <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                         <Tooltip
                             content={({ active, payload, label }) => {
@@ -694,7 +700,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                         <ResponsiveContainer width="100%" height={350}>
                             <ComposedChart data={processedData.cumulativeChartData}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                                <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
                                 <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                                 <Tooltip
                                     content={({ active, payload, label }) => {
@@ -1143,14 +1149,19 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
 
     const finalFormatCurrency = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
     
-    const fromDateFilter = date.from ? new Date(date.from.setHours(0, 0, 0, 0)) : startOfYear(new Date());
-    const toDateFilter = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : endOfYear(new Date());
+    const fromDateFilter = date.from ? startOfMonth(date.from) : startOfYear(new Date());
+    const toDateFilter = date.to ? endOfMonth(date.to) : endOfYear(new Date());
 
     const periodFilteredExpenses = allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
         return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
     });
     
+     const periodFilteredIncomes = allIncomes.filter(income => {
+        const incomeDate = new Date(income.date);
+        return incomeDate >= fromDateFilter && incomeDate <= toDateFilter;
+    });
+
     const periodFilteredBudgets = allBudgets.filter(b => {
         const budgetDate = new Date(b.year, b.month - 1);
         return budgetDate >= startOfMonth(fromDateFilter) && budgetDate <= endOfMonth(toDateFilter);
@@ -1168,24 +1179,29 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-    const intervalMonths = eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
+    const isMonthlyView = date.from && date.to && differenceInDays(date.to, date.from) <= 31;
+    const interval = isMonthlyView
+        ? eachDayOfInterval({ start: fromDateFilter, end: toDateFilter })
+        : eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
 
-    const monthlyData = intervalMonths.map(monthDate => {
-        const month = monthDate.getMonth();
-        const year = monthDate.getFullYear();
+    const periodData = interval.map(dateItem => {
+        const key = isMonthlyView ? format(dateItem, 'yyyy-MM-dd') : format(dateItem, 'yyyy-MM');
+        const label = isMonthlyView ? format(dateItem, 'dd MMM', { locale: es }) : format(dateItem, 'MMM yy', { locale: es });
 
-        const monthlyExpenses = allExpenses
-          .filter(e => new Date(e.date).getMonth() === month && new Date(e.date).getFullYear() === year)
-          .reduce((sum, e) => sum + e.amountARS, 0);
+        const expensesForPeriod = periodFilteredExpenses.filter(e => {
+            const d = new Date(e.date);
+            return isMonthlyView ? format(d, 'yyyy-MM-dd') === key : (d.getMonth() === dateItem.getMonth() && d.getFullYear() === dateItem.getFullYear());
+        }).reduce((sum, e) => sum + e.amountARS, 0);
           
-        const monthlyIncomes = allIncomes
-          .filter(inc => new Date(inc.date).getMonth() === month && new Date(inc.date).getFullYear() === year)
-          .reduce((sum, inc) => sum + inc.amountARS, 0);
+        const incomesForPeriod = periodFilteredIncomes.filter(inc => {
+            const d = new Date(inc.date);
+            return isMonthlyView ? format(d, 'yyyy-MM-dd') === key : (d.getMonth() === dateItem.getMonth() && d.getFullYear() === dateItem.getFullYear());
+        }).reduce((sum, inc) => sum + inc.amountARS, 0);
 
         return {
-          month: format(monthDate, 'MMM yy', { locale: es }),
-          ingresos: monthlyIncomes,
-          gastos: monthlyExpenses,
+          label: label,
+          ingresos: incomesForPeriod,
+          gastos: expensesForPeriod,
         };
     });
     
@@ -1217,7 +1233,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
 
     let cumulativeIncomes = 0;
     let cumulativeExpenses = 0;
-    const cumulativeChartData = monthlyData.map(data => {
+    const cumulativeChartData = periodData.map(data => {
         cumulativeIncomes += data.ingresos;
         cumulativeExpenses += data.gastos;
         return {
@@ -1240,7 +1256,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
     
-    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, monthlyOverviewData: monthlyData, cumulativeChartData: cumulativeChartData, installmentsChartData, budgetChartData };
+    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, periodData, cumulativeChartData: cumulativeChartData, installmentsChartData, budgetChartData };
   }, [isLoading, allExpenses, allIncomes, allBudgets, categories, date, user]);
 
   if (licenseStatus !== 'active') {
@@ -1381,9 +1397,9 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={processedData.monthlyOverviewData}>
+                        <BarChart data={processedData.periodData}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
                             <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                             <Tooltip content={({ active, payload, label }) => active && payload?.length ? <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p><p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p></div> : null} />
                             <Legend />
@@ -1403,7 +1419,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                     <ResponsiveContainer width="100%" height={350}>
                         <ComposedChart data={processedData.cumulativeChartData}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="month" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
                             <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                             <Tooltip content={({ active, payload, label }) => { if (active && payload?.length) { const income = payload.find(p => p.dataKey === 'ingresosAcumulados')?.value || 0; const expense = payload.find(p => p.dataKey === 'gastosAcumulados')?.value || 0; return <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p style={{ color: 'hsl(var(--chart-3))' }}>Ing. Acum: {processedData.formatCurrency(income as number)}</p><p style={{ color: 'hsl(var(--destructive))' }}>Gas. Acum: {processedData.formatCurrency(expense as number)}</p><p className="font-semibold mt-1">Balance: {processedData.formatCurrency(income as number - (expense as number))}</p></div>; } return null; }} />
                             <Legend />
@@ -1553,6 +1569,10 @@ export default function DashboardPageContainer() {
       });
     }
   };
+  
+  const userDocRef = useMemoFirebase(() => (user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
+  const { data: userData } = useDoc<UserType>(userDocRef);
+
 
   if (isLoading) {
     return (
@@ -1629,3 +1649,4 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
+
