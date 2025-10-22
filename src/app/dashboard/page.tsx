@@ -408,29 +408,35 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     
     const installmentsFilteredExpenses = (selectedCategoryId === 'all' ? allExpenses : allExpenses.filter(e => e.categoryId === selectedCategoryId));
     const installmentsChartData = (() => {
-      const allPendingInstallments = installmentsFilteredExpenses
-        .filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
+        const allPendingInstallments = installmentsFilteredExpenses
+            .filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
 
-      const monthlyTotals = allPendingInstallments.reduce((acc, expense) => {
-        const monthKey = format(new Date(expense.date), 'yyyy-MM');
-        if (!acc[monthKey]) {
-          acc[monthKey] = 0;
-        }
-        acc[monthKey] += expense.amountARS;
-        return acc;
-      }, {} as Record<string, number>);
+        const today = new Date();
+        const sixMonthsFromNow = addMonths(today, 5); // 1 (current) + 5 = 6 months
+        const monthInterval = eachMonthOfInterval({ start: today, end: sixMonthsFromNow });
 
-      const sortedMonthlyTotals = Object.entries(monthlyTotals)
-        .map(([key, total]) => ({
-          name: format(new Date(key), 'MMM yy', { locale: es }),
-          total,
-        }))
-        .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime())
-        .slice(0, 6);
-      
-      const totalPending = allPendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
+        const monthlyTotalsMap = new Map<string, number>();
+        monthInterval.forEach(month => {
+            const monthKey = format(month, 'yyyy-MM');
+            monthlyTotalsMap.set(monthKey, 0);
+        });
 
-      return { totalPending, monthlyTotals: sortedMonthlyTotals };
+        allPendingInstallments.forEach(expense => {
+            const monthKey = format(new Date(expense.date), 'yyyy-MM');
+            if (monthlyTotalsMap.has(monthKey)) {
+                monthlyTotalsMap.set(monthKey, monthlyTotalsMap.get(monthKey)! + expense.amountARS);
+            }
+        });
+
+        const sortedMonthlyTotals = Array.from(monthlyTotalsMap.entries())
+            .map(([key, total]) => ({
+                name: format(new Date(`${key}-02`), 'MMM yy', { locale: es }), // Use day 02 to avoid TZ issues
+                total,
+            }));
+        
+        const totalPending = allPendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
+
+        return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
 
     return { 
@@ -1362,15 +1368,34 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     });
     
     const installmentsChartData = (() => {
-      const pendingInstallments = allExpenses.filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
-      const monthlyTotals = pendingInstallments.reduce((acc, expense) => {
+      const allPendingInstallments = allExpenses
+        .filter(e => e.paymentMethod === 'credit' && isAfter(new Date(e.date), endOfToday()));
+
+      const today = new Date();
+      const sixMonthsFromNow = addMonths(today, 5);
+      const monthInterval = eachMonthOfInterval({ start: today, end: sixMonthsFromNow });
+
+      const monthlyTotalsMap = new Map<string, number>();
+      monthInterval.forEach(month => {
+        const monthKey = format(month, 'yyyy-MM');
+        monthlyTotalsMap.set(monthKey, 0);
+      });
+
+      allPendingInstallments.forEach(expense => {
         const monthKey = format(new Date(expense.date), 'yyyy-MM');
-        if (!acc[monthKey]) { acc[monthKey] = 0; }
-        acc[monthKey] += expense.amountARS;
-        return acc;
-      }, {} as Record<string, number>);
-      const sortedMonthlyTotals = Object.entries(monthlyTotals).map(([key, total]) => ({ name: format(new Date(key), 'MMM yy', { locale: es }), total })).sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime()).slice(0, 6);
-      const totalPending = pendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
+        if (monthlyTotalsMap.has(monthKey)) {
+          monthlyTotalsMap.set(monthKey, monthlyTotalsMap.get(monthKey)! + expense.amountARS);
+        }
+      });
+
+      const sortedMonthlyTotals = Array.from(monthlyTotalsMap.entries())
+        .map(([key, total]) => ({
+          name: format(new Date(`${key}-02`), 'MMM yy', { locale: es }),
+          total,
+        }));
+      
+      const totalPending = allPendingInstallments.reduce((sum, e) => sum + e.amountARS, 0);
+
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
     
@@ -1544,7 +1569,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                     </ResponsiveContainer>
                 </CardContent>
             </Card>
-             <Card>
+            <Card>
                 <CardHeader>
                     <CardTitle>Presupuestos</CardTitle>
                     <CardDescription>Tu progreso de gastos del mes.</CardDescription>
@@ -1826,3 +1851,5 @@ export default function DashboardPageContainer() {
     </TooltipProvider>
   );
 }
+
+    
