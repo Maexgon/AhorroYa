@@ -1252,9 +1252,9 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
 function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licenseStatus: 'active' | 'grace_period' | 'expired' | 'loading' }) {
   const { user } = useUser();
   const firestore = useFirestore();
-  const { toast } = useToast();
 
   const [date, setDate] = React.useState<DateRange | undefined>(undefined);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
 
   useEffect(() => {
     // Set initial date range on client side to avoid hydration error
@@ -1264,7 +1264,6 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     });
   }, []);
   
-  // --- Data Fetching for Member ---
   const expensesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId), where('deleted', '==', false), where('userId', '==', user?.uid)) : null), [firestore, tenantId, user]);
   const { data: allExpenses, isLoading: isLoadingExpenses } = useCollection<WithId<Expense>>(expensesQuery);
   
@@ -1285,13 +1284,15 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     }
 
     const finalFormatCurrency = (amount: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+    const finalFormatCurrencyUSD = (amount: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
     
     const fromDateFilter = date.from ? startOfMonth(date.from) : startOfYear(new Date());
     const toDateFilter = date.to ? endOfMonth(date.to) : endOfYear(new Date());
 
     const periodFilteredExpenses = allExpenses.filter(expense => {
         const expenseDate = new Date(expense.date);
-        return expenseDate >= fromDateFilter && expenseDate <= toDateFilter;
+        const categoryMatch = selectedCategoryId === 'all' || expense.categoryId === selectedCategoryId;
+        return expenseDate >= fromDateFilter && expenseDate <= toDateFilter && categoryMatch;
     });
     
      const periodFilteredIncomes = allIncomes.filter(income => {
@@ -1301,7 +1302,8 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
 
     const periodFilteredBudgets = allBudgets.filter(b => {
         const budgetDate = new Date(b.year, b.month - 1);
-        return budgetDate >= startOfMonth(fromDateFilter) && budgetDate <= endOfMonth(toDateFilter);
+        const categoryMatch = selectedCategoryId === 'all' || b.categoryId === selectedCategoryId;
+        return budgetDate >= startOfMonth(fromDateFilter) && budgetDate <= endOfMonth(toDateFilter) && categoryMatch;
     });
 
     const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
@@ -1396,8 +1398,14 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
     
-    return { barData, totalExpenses, totalExpensesUSD, formatCurrency: finalFormatCurrency, periodData, cumulativeChartData: cumulativeChartData, installmentsChartData, budgetChartData };
-  }, [isLoading, allExpenses, allIncomes, allBudgets, categories, date, user]);
+    return { barData, totalExpenses, totalExpensesUSD, formatCurrency: finalFormatCurrency, formatCurrencyUSD: finalFormatCurrencyUSD, periodData, cumulativeChartData: cumulativeChartData, installmentsChartData, budgetChartData };
+  }, [isLoading, allExpenses, allIncomes, allBudgets, categories, date, user, selectedCategoryId]);
+  
+  const categoryOptions = useMemo(() => {
+    if (!categories) return [];
+    const options = categories.map(c => ({ label: c.name, value: c.id }));
+    return [{ label: 'Todas las categorías', value: 'all' }, ...options];
+  }, [categories]);
 
   const setDateRange = (preset: string) => {
     const now = new Date();
@@ -1468,7 +1476,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
 
        <div className="bg-card shadow rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Filtros</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Popover>
                     <PopoverTrigger asChild>
                         <Button
@@ -1510,6 +1518,14 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                         />
                     </PopoverContent>
                 </Popover>
+                 <DropdownCat
+                    options={categoryOptions}
+                    value={selectedCategoryId}
+                    onSelect={(value) => setSelectedCategoryId(value === 'all' ? 'all' : value)}
+                    placeholder="Seleccionar categoría"
+                    searchPlaceholder="Buscar categoría..."
+                    emptyPlaceholder="No se encontró la categoría."
+                />
             </div>
         </div>
         
