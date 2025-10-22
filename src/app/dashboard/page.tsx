@@ -1195,30 +1195,32 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole }: { tenantId
               </Table>
             </CardContent>
           </Card>
-          <Card className="lg:col-span-3 flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-accent" />
-                Recomendaciones IA
-              </CardTitle>
-              <CardDescription>Sugerencias para optimizar tus finanzas.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1 flex items-center justify-center">
-                <div className="text-center p-4 border-2 border-dashed rounded-lg">
-                    <p className="text-sm text-muted-foreground">
-                        Notamos que tus gastos en <span className="text-foreground font-medium">"Vida y Entretenimiento"</span> superaron el presupuesto.
-                    </p>
-                    <p className="mt-2 font-medium text-foreground">
-                        Considera reasignar <span className="text-primary">{processedData.formatCurrency(2500)}</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
-                    </p>
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button variant="outline" className="w-full" asChild>
-                    <Link href="/dashboard/insights">Ver más insights</Link>
-                </Button>
-            </CardFooter>
-          </Card>
+          {userRole === 'owner' && (
+            <Card className="lg:col-span-3 flex flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-accent" />
+                  Recomendaciones IA
+                </CardTitle>
+                <CardDescription>Sugerencias para optimizar tus finanzas.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 flex items-center justify-center">
+                  <div className="text-center p-4 border-2 border-dashed rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                          Notamos que tus gastos en <span className="text-foreground font-medium">"Vida y Entretenimiento"</span> superaron el presupuesto.
+                      </p>
+                      <p className="mt-2 font-medium text-foreground">
+                          Considera reasignar <span className="text-primary">{processedData.formatCurrency(2500)}</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
+                      </p>
+                  </div>
+              </CardContent>
+              <CardFooter>
+                  <Button variant="outline" className="w-full" asChild>
+                      <Link href="/dashboard/insights">Ver más insights</Link>
+                  </Button>
+              </CardFooter>
+            </Card>
+          )}
         </div>
 
 
