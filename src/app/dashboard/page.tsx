@@ -328,28 +328,30 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         });
 
     const budgetChartData = (() => {
-      const groupedData = periodFilteredBudgets.reduce((acc, budget) => {
-        const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
-        if (!acc[categoryName]) {
-          acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
-        }
-        acc[categoryName].Presupuestado += budget.amountARS;
-        return acc;
-      }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>);
-      
-      return Object.values(groupedData)
-        .map(group => {
-          const categoryId = categories.find(c => c.name === group.name)?.id;
-          const spentInARS = periodFilteredExpenses
-            .filter(e => e.categoryId === categoryId)
-            .reduce((acc, e) => acc + e.amountARS, 0);
-          group.Gastado = spentInARS;
-          return group;
-        })
-        .map(group => ({
-          ...group,
-          percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
-        }));
+        const groupedData = periodFilteredBudgets.reduce((acc, budget) => {
+            const category = categories.find(c => c.id === budget.categoryId);
+            const categoryName = category?.name || 'N/A';
+            const categoryColor = category?.color || '#888888';
+            if (!acc[categoryName]) {
+                acc[categoryName] = { name: categoryName, color: categoryColor, Presupuestado: 0, Gastado: 0 };
+            }
+            acc[categoryName].Presupuestado += budget.amountARS;
+            return acc;
+        }, {} as Record<string, { name: string; color: string; Presupuestado: number; Gastado: number }>);
+        
+        return Object.values(groupedData)
+            .map(group => {
+                const categoryId = categories.find(c => c.name === group.name)?.id;
+                const spentInARS = periodFilteredExpenses
+                    .filter(e => e.categoryId === categoryId)
+                    .reduce((acc, e) => acc + e.amountARS, 0);
+                group.Gastado = spentInARS;
+                return group;
+            })
+            .map(group => ({
+                ...group,
+                percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
+            }));
     })();
     
     const isMonthlyView = date.from && date.to && differenceInDays(date.to, date.from) <= 31;
@@ -461,8 +463,6 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
     }
   };
 
-
-  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
   
   const categoryOptions = useMemo(() => {
     if (!categories) return [];
@@ -568,7 +568,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                     nameKey="name"
                                 >
                                     {processedData.budgetChartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
                                     ))}
                                 </Pie>
                                 <TooltipPrimitive
@@ -822,7 +822,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                         return (
                                             <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
                                                 <p className="font-bold">{label}</p>
-                                                <p style={{ color: COLORS[0] }}>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                                <p>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
                                             </div>
                                         );
                                     }
@@ -839,7 +839,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                     formatter={(value: number) => processedData.formatCurrency(value)}
                                 />
                             {processedData.barData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                <Cell key={`cell-${index}`} fill={categories.find(c => c.name === entry.name)?.color || '#888888'} />
                             ))}
                             </Bar>
                         </BarChart>
@@ -1231,8 +1231,6 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
   const { toast } = useToast();
 
   const [date, setDate] = React.useState<DateRange | undefined>(undefined);
-  const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
-
 
   useEffect(() => {
     // Set initial date range on client side to avoid hydration error
@@ -1322,13 +1320,15 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     
     const budgetChartData = (() => {
         const groupedData = periodFilteredBudgets.reduce((acc, budget) => {
-            const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
+            const category = categories.find(c => c.id === budget.categoryId);
+            const categoryName = category?.name || 'N/A';
+            const categoryColor = category?.color || '#888888';
             if (!acc[categoryName]) {
-                acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
+                acc[categoryName] = { name: categoryName, color: categoryColor, Presupuestado: 0, Gastado: 0 };
             }
             acc[categoryName].Presupuestado += budget.amountARS;
             return acc;
-        }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>);
+        }, {} as Record<string, { name: string; color: string; Presupuestado: number; Gastado: number }>);
         
         return Object.values(groupedData)
             .map(group => {
@@ -1459,7 +1459,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                                 dataKey="Presupuestado"
                                 nameKey="name"
                             >
-                                {processedData.budgetChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                {processedData.budgetChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                             </Pie>
                             <Tooltip content={({ active, payload }) => active && payload && payload.length ? <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{payload[0].name}</p><p>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p></div> : null} />
                             <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px', lineHeight: '20px' }}/>
@@ -1557,9 +1557,22 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                         <BarChart data={processedData.barData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
                             <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tickLine={false} axisLine={false} />
                             <YAxis hide={true} />
+                            <Tooltip
+                                content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                        return (
+                                            <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                <p className="font-bold">{label}</p>
+                                                <p>Total: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
+                            />
                             <Bar dataKey="total" radius={[4, 4, 0, 0]}>
                                 <LabelList dataKey="total" position="top" offset={8} className="fill-foreground" fontSize={12} formatter={(value: number) => processedData.formatCurrency(value)} />
-                                {processedData.barData.map((entry, index) => <Cell key={`cell-${index}`} fill={["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"][index % 5]} />)}
+                                {processedData.barData.map((entry, index) => <Cell key={`cell-${index}`} fill={categories.find(c => c.name === entry.name)?.color || '#888888'} />)}
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
@@ -1766,4 +1779,3 @@ export default function DashboardPageContainer() {
     </TooltipProvider>
   );
 }
-
