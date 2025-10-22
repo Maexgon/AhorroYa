@@ -3,48 +3,24 @@
 
 import admin from 'firebase-admin';
 
-/**
- * Initializes the Firebase Admin SDK, ensuring it only happens once.
- * This function is designed to be robust for Next.js Server Actions and environments
- * where environment variables might not be loaded via a .env file.
- */
+// Re-implement the initializeAdminApp function to be self-contained and robust.
 export async function initializeAdminApp() {
-  // If the default app already exists, return it to prevent re-initialization errors.
-  if (admin.apps.length > 0 && admin.apps[0]?.name === '[DEFAULT]') {
+  // If the default app is already initialized, return it to prevent errors.
+  if (admin.apps.length > 0 && admin.apps[0]) {
     return admin.apps[0];
   }
 
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "studio-211410928-89967";
-
-  // Try to parse the service account from the environment variable.
-  // This is the most secure way to handle credentials in production.
-  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
-  let credential;
-
-  if (serviceAccountEnv) {
-    try {
-      const serviceAccount = JSON.parse(serviceAccountEnv);
-      credential = admin.credential.cert(serviceAccount);
-    } catch (e) {
-      console.warn("Could not parse FIREBASE_SERVICE_ACCOUNT. Falling back to Application Default Credentials. Error:", e);
-      // Fallback to application default credentials if parsing fails
-      credential = admin.credential.applicationDefault();
-    }
-  } else {
-    // If the environment variable is not set, use Application Default Credentials.
-    // This is common in Google Cloud environments (like Cloud Run, Cloud Functions).
-    console.log("FIREBASE_SERVICE_ACCOUNT not set. Using Application Default Credentials.");
-    credential = admin.credential.applicationDefault();
-  }
-
+  // Use Application Default Credentials. This is the standard and most secure way 
+  // to authenticate in Google Cloud environments, which this runtime emulates.
+  // It avoids needing to manage service account keys directly in code.
   try {
     return admin.initializeApp({
-      credential,
-      projectId: projectId,
+      credential: admin.credential.applicationDefault(),
     });
   } catch (error: any) {
-    // Catch potential initialization errors, e.g., if default creds are not found.
     console.error("Firebase Admin SDK initialization failed:", error.message);
-    throw new Error("Could not initialize Firebase Admin SDK. Please check server configuration.");
+    // This provides a clear error if the environment is not set up correctly,
+    // which is more helpful for debugging than the previous access token errors.
+    throw new Error("Could not initialize Firebase Admin SDK. The server environment may be missing credentials.");
   }
 }
