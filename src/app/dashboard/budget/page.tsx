@@ -74,13 +74,13 @@ export default function BudgetPage() {
     const budgetsQuery = useMemoFirebase(() => {
         if (!ready) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-    }, [firestore, tenantId, ready]);
+    }, [firestore, ready]);
     const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!ready) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-    }, [firestore, tenantId, ready]);
+    }, [firestore, ready]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
@@ -90,7 +90,7 @@ export default function BudgetPage() {
             where('tenantId', '==', tenantId),
             where('deleted', '==', false)
         );
-    }, [firestore, tenantId, ready]);
+    }, [firestore, ready]);
     const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
     const budgetData = React.useMemo(() => {
@@ -242,6 +242,7 @@ export default function BudgetPage() {
                     if (!existingBudgets.has(budgetKey)) {
                         const newBudgetRef = doc(collection(firestore, 'budgets'));
                         const newBudgetData = {
+                            id: newBudgetRef.id,
                             tenantId: budget.tenantId,
                             year: currentTargetYear,
                             month: currentTargetMonth,
@@ -455,5 +456,7 @@ export default function BudgetPage() {
         </>
     );
 }
+
+    
 
     
