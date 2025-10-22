@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
@@ -354,7 +355,6 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member' | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   
   const [isProcessingAction, setIsProcessingAction] = useState(false);
@@ -364,13 +364,6 @@ export default function SettingsPage() {
   
   const firestore = useFirestore();
 
-  const userDocRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-
-
   const membershipsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
@@ -378,22 +371,23 @@ export default function SettingsPage() {
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
   const derivedTenantId = memberships?.[0]?.tenantId;
-  
+  const derivedUserRole = memberships?.[0]?.role as ('owner' | 'admin' | 'member');
+
   useEffect(() => {
-    if (!isLoadingMemberships) {
-      if (memberships && memberships.length > 0) {
-        setTenantId(derivedTenantId);
-        setUserRole(memberships[0].role as 'owner' | 'admin' | 'member');
-      }
-      setIsLoading(false);
+    if (derivedTenantId) {
+      setTenantId(derivedTenantId);
     }
-  }, [memberships, isLoadingMemberships, derivedTenantId]);
+    if (derivedUserRole) {
+      setUserRole(derivedUserRole);
+    }
+  }, [derivedTenantId, derivedUserRole]);
 
 
   const allMembersQuery = useMemoFirebase(() => {
-    if (!derivedTenantId) return null;
+    if (!derivedTenantId || !firestore) return null;
+    // This query is now secure because the security rule allows listing by tenantId for members.
     return query(collection(firestore, 'memberships'), where('tenantId', '==', derivedTenantId), where('status', '==', 'active'));
-  }, [derivedTenantId]);
+  }, [derivedTenantId, firestore]);
   const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(allMembersQuery);
 
   const tenantDocRef = useMemoFirebase(() => {
@@ -521,7 +515,7 @@ export default function SettingsPage() {
 
   const columns = useMemo(() => getColumns(), []);
   
-  if (isUserLoading || isLoading || isUserDocLoading) {
+  if (isUserLoading || isLoadingMemberships) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

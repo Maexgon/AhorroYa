@@ -187,7 +187,7 @@ const CurrencyRates = () => {
 };
 
 
-function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole }: { tenantId: string, licenseStatus: 'active' | 'grace_period' | 'expired' | 'loading', userRole: 'owner' | 'admin' }) {
+function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }: { tenantId: string, licenseStatus: 'active' | 'grace_period' | 'expired' | 'loading', userRole: 'owner' | 'admin', tenantData: Tenant | null }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -236,8 +236,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole }: { tenantId
   };
   
   // --- Data Fetching ---
-  const tenantRef = useMemoFirebase(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [firestore, tenantId]);
-  const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
+  const activeTenant = tenantData;
   
   const categoriesQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'categories'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: categories, isLoading: isLoadingCategories } = useCollection<WithId<Category>>(categoriesQuery);
@@ -254,7 +253,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole }: { tenantId
   const budgetsQuery = useMemoFirebase(() => (tenantId ? query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)) : null), [firestore, tenantId]);
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
-  const isLoading = isLoadingTenant || isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes || isLoadingSubcategories;
+  const isLoading = isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes || isLoadingSubcategories;
   
  const processedData = useMemo(() => {
     if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user || !allSubcategories || !date?.from) {
@@ -1667,9 +1666,11 @@ export default function DashboardPageContainer() {
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [isReady, setIsReady] = useState(false);
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
+  const [tenantData, setTenantData] = useState<Tenant | null>(null);
 
   const membershipsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
+    // This query is allowed by the security rules because it filters by the current user's UID.
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
   }, [user, firestore]);
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
@@ -1678,15 +1679,25 @@ export default function DashboardPageContainer() {
   const derivedUserRole = memberships?.[0]?.role as UserRole;
   
   const licenseQuery = useMemoFirebase(() => {
-    const isReadyForQuery = !!derivedTenantId && !!firestore;
-    if (!isReadyForQuery) return null;
+    if (!derivedTenantId || !firestore) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
-}, [derivedTenantId, firestore]);
+  }, [derivedTenantId, firestore]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
+  const tenantDocRef = useMemoFirebase(() => {
+    if (!derivedTenantId || !firestore || derivedUserRole !== 'owner') return null;
+    return doc(firestore, 'tenants', derivedTenantId);
+  }, [derivedTenantId, firestore, derivedUserRole]);
+  const { data: ownerTenantData, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantDocRef);
 
   useEffect(() => {
-    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses;
+    if (ownerTenantData) {
+      setTenantData(ownerTenantData);
+    }
+  }, [ownerTenantData]);
+
+  useEffect(() => {
+    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses || (derivedUserRole === 'owner' && isLoadingTenant);
     if (isLoading) return;
 
     if (!user) {
@@ -1721,11 +1732,11 @@ export default function DashboardPageContainer() {
           setLicenseStatus('expired');
       }
       setIsReady(true);
-    } else {
+    } else if (!isLoadingMemberships) { // Ensure we don't redirect while memberships are still loading
         router.push('/subscribe');
     }
 
-  }, [user, isUserLoading, memberships, isLoadingMemberships, licenses, isLoadingLicenses, router, derivedTenantId, derivedUserRole, toast]);
+  }, [user, isUserLoading, memberships, isLoadingMemberships, licenses, isLoadingLicenses, router, derivedTenantId, derivedUserRole, toast, isLoadingTenant]);
 
 
   const getInitials = (name: string = "") => {
@@ -1828,12 +1839,10 @@ export default function DashboardPageContainer() {
           </div>
         </header>
         <main className="flex-1">
-          {(userRole === 'owner' || userRole === 'admin') && tenantId && <AdminOrOwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} userRole={userRole} />}
+          {(userRole === 'owner' || userRole === 'admin') && tenantId && <AdminOrOwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} userRole={userRole} tenantData={tenantData} />}
           {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
         </main>
       </div>
     </TooltipProvider>
   );
 }
-
-    
