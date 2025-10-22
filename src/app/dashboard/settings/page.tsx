@@ -474,22 +474,28 @@ export default function SettingsPage() {
   };
 
   const handleMemberAction = async () => {
-    if (!memberToAction || !actionType || !derivedTenantId || !user) return;
+    if (!memberToAction || !actionType || !derivedTenantId || !user || !members || !setMembers) return;
 
     setIsProcessingAction(true);
     const actionInProgress = actionType === 'delete' ? 'Eliminando' : (actionType === 'promote' ? 'Promoviendo' : 'Revocando');
     toast({ title: `${actionInProgress} miembro...` });
     
     let result;
+    const newRole = actionType === 'promote' ? 'admin' : 'member';
+
     if (actionType === 'delete') {
         result = await deleteMemberAction({ tenantId: derivedTenantId, targetUserId: memberToAction.uid, actingUserId: user.uid });
     } else {
-        const newRole = actionType === 'promote' ? 'admin' : 'member';
         result = await updateMemberRoleAction({ tenantId: derivedTenantId, targetUserId: memberToAction.uid, actingUserId: user.uid, newRole });
     }
 
     if (result.success) {
         toast({ title: "¡Éxito!", description: "La operación se completó correctamente." });
+        if (actionType === 'delete') {
+            setMembers(members.filter(m => m.uid !== memberToAction.uid));
+        } else {
+            setMembers(members.map(m => m.uid === memberToAction.uid ? { ...m, role: newRole } : m));
+        }
     } else {
         toast({ variant: 'destructive', title: "Error", description: result.error || "No se pudo completar la acción." });
     }
