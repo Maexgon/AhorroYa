@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import type { Membership } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 export type TableMeta = {
     onPromote: (member: Membership) => void;
