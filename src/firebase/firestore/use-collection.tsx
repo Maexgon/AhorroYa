@@ -53,7 +53,6 @@ export function useCollection<T = any>(
 
   useEffect(() => {
     if (!q) {
-      console.debug('[useCollection] skipped listener (q=null)');
       setIsLoading(true); 
       setData(null);
       setError(null);
