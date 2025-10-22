@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income, Subcategory } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert, View, FileBarChart } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert, View, FileBarChart, Info } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -45,6 +45,7 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { useSessionTimeout } from '@/hooks/use-session-timeout';
+import { TooltipProvider, Tooltip as TooltipPrimitive, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 
 const SAFE_DEFAULTS = {
@@ -327,28 +328,28 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         });
 
     const budgetChartData = (() => {
-        const groupedData = periodFilteredBudgets.reduce((acc, budget) => {
-            const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
-            if (!acc[categoryName]) {
-                acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
-            }
-            acc[categoryName].Presupuestado += budget.amountARS;
-            return acc;
-        }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>);
-        
-        return Object.values(groupedData)
-            .map(group => {
-                const categoryId = categories.find(c => c.name === group.name)?.id;
-                const spentInARS = periodFilteredExpenses
-                    .filter(e => e.categoryId === categoryId)
-                    .reduce((acc, e) => acc + e.amountARS, 0);
-                group.Gastado = spentInARS;
-                return group;
-            })
-            .map(group => ({
-                ...group,
-                percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
-            }));
+      const groupedData = periodFilteredBudgets.reduce((acc, budget) => {
+        const categoryName = categories.find(c => c.id === budget.categoryId)?.name || 'N/A';
+        if (!acc[categoryName]) {
+          acc[categoryName] = { name: categoryName, Presupuestado: 0, Gastado: 0 };
+        }
+        acc[categoryName].Presupuestado += budget.amountARS;
+        return acc;
+      }, {} as Record<string, { name: string; Presupuestado: number; Gastado: number }>);
+      
+      return Object.values(groupedData)
+        .map(group => {
+          const categoryId = categories.find(c => c.name === group.name)?.id;
+          const spentInARS = periodFilteredExpenses
+            .filter(e => e.categoryId === categoryId)
+            .reduce((acc, e) => acc + e.amountARS, 0);
+          group.Gastado = spentInARS;
+          return group;
+        })
+        .map(group => ({
+          ...group,
+          percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
+        }));
     })();
     
     const isMonthlyView = date.from && date.to && differenceInDays(date.to, date.from) <= 31;
@@ -514,18 +515,30 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                 Cómo se divide tu presupuesto total.
                             </CardDescription>
                         </div>
-                         <DropdownMenu>
+                        <div className="flex items-center gap-2">
+                          <TooltipPrimitive>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                                <Info className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Este gráfico muestra la proporción de cada categoría en tu presupuesto total para el período seleccionado.</p>
+                            </TooltipContent>
+                          </TooltipPrimitive>
+                          <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData.map(d => ({ Categoría: d.name, Presupuestado: d.Presupuestado })), "distribucion_presupuesto")}>Exportar a Excel</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleChartVisibility('budgetDistribution')}>Cerrar</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData.map(d => ({ Categoría: d.name, Presupuestado: d.Presupuestado })), "distribucion_presupuesto")}>Exportar a Excel</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleChartVisibility('budgetDistribution')}>Cerrar</DropdownMenuItem>
                             </DropdownMenuContent>
-                        </DropdownMenu>
+                          </DropdownMenu>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={200}>
+                       <ResponsiveContainer width="100%" height={200}>
                            <PieChart>
                                 <Pie
                                     data={processedData.budgetChartData}
@@ -542,7 +555,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                         const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
                                         return (
-                                            <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">
+                                            <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={10} fontWeight="bold">
                                                 {`${(percent * 100).toFixed(0)}%`}
                                             </text>
                                         );
@@ -558,7 +571,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip
+                                <TooltipPrimitive
                                     content={({ active, payload }) => {
                                         if (active && payload && payload.length) {
                                             return (
@@ -575,7 +588,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                     layout="vertical" 
                                     verticalAlign="middle" 
                                     align="right" 
-                                    wrapperStyle={{ fontSize: '12px', lineHeight: '20px' }}
+                                    wrapperStyle={{ fontSize: '10px', lineHeight: '16px' }}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
@@ -592,15 +605,27 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                 Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
                             </CardDescription>
                         </div>
-                         <DropdownMenu>
+                        <div className="flex items-center gap-2">
+                           <TooltipPrimitive>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                                <Info className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Muestra el total de cuotas futuras de tus compras con tarjeta de crédito, agrupadas por mes.</p>
+                            </TooltipContent>
+                          </TooltipPrimitive>
+                          <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleExport(processedData.installmentsChartData.monthlyTotals, "cuotas_pendientes")}>Exportar a Excel</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleChartVisibility('pendingInstallments')}>Cerrar</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleExport(processedData.installmentsChartData.monthlyTotals, "cuotas_pendientes")}>Exportar a Excel</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleChartVisibility('pendingInstallments')}>Cerrar</DropdownMenuItem>
                             </DropdownMenuContent>
-                        </DropdownMenu>
+                          </DropdownMenu>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={200}>
@@ -641,16 +666,28 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                        <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
+                        <CardTitle>Resumen de Flujo de Caja</CardTitle>
                         <CardDescription>Ingresos vs. Gastos del período.</CardDescription>
                     </div>
-                     <DropdownMenu>
+                    <div className="flex items-center gap-2">
+                       <TooltipPrimitive>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                            <Info className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Compara el total de tus ingresos y gastos para cada mes o día en el período seleccionado.</p>
+                        </TooltipContent>
+                      </TooltipPrimitive>
+                      <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleExport(processedData.periodData, "flujo_de_caja_mensual")}>Exportar a Excel</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => toggleChartVisibility('monthlyFlow')}>Cerrar</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
@@ -688,13 +725,25 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                             <CardTitle>Balance Acumulado</CardTitle>
                             <CardDescription>Evolución de ingresos y gastos acumulados en el período.</CardDescription>
                         </div>
-                        <DropdownMenu>
+                        <div className="flex items-center gap-2">
+                           <TooltipPrimitive>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                                <Info className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Muestra cómo tu balance (ingresos menos gastos) ha evolucionado a lo largo del tiempo seleccionado.</p>
+                            </TooltipContent>
+                          </TooltipPrimitive>
+                          <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => handleExport(processedData.cumulativeChartData, "balance_acumulado")}>Exportar a Excel</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => toggleChartVisibility('cumulativeBalance')}>Cerrar</DropdownMenuItem>
                             </DropdownMenuContent>
-                        </DropdownMenu>
+                          </DropdownMenu>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={350}>
@@ -737,7 +786,18 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                         <CardTitle>Análisis de Gastos</CardTitle>
                         <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
                     </div>
-                    <DropdownMenu>
+                     <div className="flex items-center gap-2">
+                       <TooltipPrimitive>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                            <Info className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Compara el total gastado en cada categoría. Las categorías se ordenan de mayor a menor gasto.</p>
+                        </TooltipContent>
+                      </TooltipPrimitive>
+                      <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <MoreVertical className="h-4 w-4" />
@@ -747,7 +807,8 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                             <DropdownMenuItem onClick={() => handleExport(processedData.barData, "analisis_de_gastos")}>Exportar a Excel</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => toggleChartVisibility('expenseAnalysis')}>Cerrar</DropdownMenuItem>
                         </DropdownMenuContent>
-                    </DropdownMenu>
+                      </DropdownMenu>
+                    </div>
                 </CardHeader>
                 <CardContent className="pl-2">
                     <ResponsiveContainer width="100%" height={300}>
@@ -794,7 +855,18 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                         <CardTitle>Presupuestos</CardTitle>
                         <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
                     </div>
-                    <DropdownMenu>
+                    <div className="flex items-center gap-2">
+                       <TooltipPrimitive>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                            <Info className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Compara tus gastos reales (línea) con el presupuesto asignado (barra) para cada categoría.</p>
+                        </TooltipContent>
+                      </TooltipPrimitive>
+                      <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <MoreVertical className="h-4 w-4" />
@@ -804,7 +876,8 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                             <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuestos")}>Exportar a Excel</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => toggleChartVisibility('budgets')}>Cerrar</DropdownMenuItem>
                         </DropdownMenuContent>
-                    </DropdownMenu>
+                      </DropdownMenu>
+                    </div>
                 </CardHeader>
                 <CardContent>
                    <ResponsiveContainer width="100%" height={300}>
@@ -910,33 +983,68 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         )}
 
         <div className="flex flex-wrap gap-2">
-            <Button asChild>
-                <Link href="/dashboard/budget">
-                    <Plus className="mr-2 h-4 w-4" /> Crear Presupuesto
-                </Link>
-            </Button>
-            <Button asChild>
-                <Link href="/dashboard/expenses">
-                    <Plus className="mr-2 h-4 w-4" /> Crear Gasto
-                </Link>
-            </Button>
-            <Button asChild>
-                <Link href="/dashboard/income">
-                    <Plus className="mr-2 h-4 w-4" /> Crear Ingreso
-                </Link>
-            </Button>
+            <TooltipPrimitive>
+              <TooltipTrigger asChild>
+                <Button asChild>
+                    <Link href="/dashboard/budget">
+                        <Plus className="mr-2 h-4 w-4" /> Crear Presupuesto
+                    </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Define límites de gasto mensuales por categoría.</p>
+              </TooltipContent>
+            </TooltipPrimitive>
+             <TooltipPrimitive>
+              <TooltipTrigger asChild>
+                <Button asChild>
+                    <Link href="/dashboard/expenses">
+                        <Plus className="mr-2 h-4 w-4" /> Crear Gasto
+                    </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Registra una nueva transacción o gasto.</p>
+              </TooltipContent>
+            </TooltipPrimitive>
+            <TooltipPrimitive>
+                <TooltipTrigger asChild>
+                    <Button asChild>
+                        <Link href="/dashboard/income">
+                            <Plus className="mr-2 h-4 w-4" /> Crear Ingreso
+                        </Link>
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>Registra cualquier ingreso de dinero.</p>
+                </TooltipContent>
+            </TooltipPrimitive>
              {processedData.isOwner && (
                 <>
-                <Button asChild>
-                    <Link href="/dashboard/reports">
-                        <FileBarChart className="mr-2 h-4 w-4" /> Reportes Manuales
-                    </Link>
-                </Button>
-                <Button asChild>
-                    <Link href="/dashboard/insights">
-                        <Sparkles className="mr-2 h-4 w-4" /> Análisis con IA
-                    </Link>
-                </Button>
+                <TooltipPrimitive>
+                    <TooltipTrigger asChild>
+                        <Button asChild>
+                            <Link href="/dashboard/reports">
+                                <FileBarChart className="mr-2 h-4 w-4" /> Reportes Manuales
+                            </Link>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Genera reportes personalizados con filtros avanzados.</p>
+                    </TooltipContent>
+                </TooltipPrimitive>
+                <TooltipPrimitive>
+                    <TooltipTrigger asChild>
+                        <Button asChild>
+                            <Link href="/dashboard/insights">
+                                <Sparkles className="mr-2 h-4 w-4" /> Análisis con IA
+                            </Link>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Obtén análisis y recomendaciones automáticas de tus finanzas.</p>
+                    </TooltipContent>
+                </TooltipPrimitive>
                 </>
             )}
         </div>
@@ -1598,61 +1706,64 @@ export default function DashboardPageContainer() {
   }
   
   return (
-    <div className="flex min-h-screen flex-col">
-       <InactivityWarningDialog />
-       <header className="sticky top-0 z-40 w-full border-b bg-background">
-        <div className="container flex h-16 items-center">
-          <div  className="mr-6 flex items-center space-x-2">
-            <AhorroYaLogo className="h-10 w-10 text-primary" />
-            <span className="font-bold font-headline text-foreground">Ahorro Ya</span>
+    <TooltipProvider>
+      <div className="flex min-h-screen flex-col">
+        <InactivityWarningDialog />
+        <header className="sticky top-0 z-40 w-full border-b bg-background">
+          <div className="container flex h-16 items-center">
+            <div  className="mr-6 flex items-center space-x-2">
+              <AhorroYaLogo className="h-10 w-10 text-primary" />
+              <span className="font-bold font-headline text-foreground">Ahorro Ya</span>
+            </div>
+            <div className="flex flex-1 items-center justify-end space-x-4">
+              {licenses && licenses.length > 0 && userRole === 'owner' && (
+                  <Badge variant={licenseStatus === 'active' ? 'default' : 'destructive'} className={licenseStatus === 'active' ? 'bg-green-500 hover:bg-green-600' : ''}>
+                      {licenseStatus === 'active' ? 'Licencia Activa' : (licenseStatus === 'grace_period' ? 'Período de Gracia' : 'Licencia Expirada')}
+                  </Badge>
+              )}
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                          <Avatar className="h-9 w-9">
+                              <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "Usuario"} />
+                              <AvatarFallback>{getInitials(user.displayName || "")}</AvatarFallback>
+                          </Avatar>
+                      </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>
+                          <p className="font-medium">{user.displayName}</p>
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                          <Link href="/dashboard/profile">
+                              <UserIcon className="mr-2 h-4 w-4" />
+                              <span>Perfil</span>
+                          </Link>
+                      </DropdownMenuItem>
+                      {userRole === 'owner' && (
+                          <DropdownMenuItem asChild>
+                              <Link href="/dashboard/settings">
+                                  <FileText className="mr-2 h-4 w-4" />Administrar
+                              </Link>
+                          </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={handleLogout}>
+                          <LogOut className="mr-2 h-4 w-4" />
+                          <span>Cerrar Sesión</span>
+                      </DropdownMenuItem>
+                  </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-          <div className="flex flex-1 items-center justify-end space-x-4">
-             {licenses && licenses.length > 0 && userRole === 'owner' && (
-                <Badge variant={licenseStatus === 'active' ? 'default' : 'destructive'} className={licenseStatus === 'active' ? 'bg-green-500 hover:bg-green-600' : ''}>
-                    {licenseStatus === 'active' ? 'Licencia Activa' : (licenseStatus === 'grace_period' ? 'Período de Gracia' : 'Licencia Expirada')}
-                </Badge>
-            )}
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                        <Avatar className="h-9 w-9">
-                            <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "Usuario"} />
-                            <AvatarFallback>{getInitials(user.displayName || "")}</AvatarFallback>
-                        </Avatar>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>
-                        <p className="font-medium">{user.displayName}</p>
-                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                        <Link href="/dashboard/profile">
-                            <UserIcon className="mr-2 h-4 w-4" />
-                            <span>Perfil</span>
-                        </Link>
-                    </DropdownMenuItem>
-                    {userRole === 'owner' && (
-                        <DropdownMenuItem asChild>
-                            <Link href="/dashboard/settings">
-                                <FileText className="mr-2 h-4 w-4" />Administrar
-                            </Link>
-                        </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={handleLogout}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        <span>Cerrar Sesión</span>
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
-      <main className="flex-1">
-        {userRole === 'owner' && tenantId && <OwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
-        {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
-      </main>
-    </div>
+        </header>
+        <main className="flex-1">
+          {userRole === 'owner' && tenantId && <OwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
+          {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }
+
