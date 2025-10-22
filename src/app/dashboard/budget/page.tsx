@@ -35,7 +35,6 @@ export default function BudgetPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
     const { toast } = useToast();
-    const [tenantId, setTenantId] = React.useState<string | null>(null);
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [budgetToDelete, setBudgetToDelete] = React.useState<string | null>(null);
@@ -63,11 +62,7 @@ export default function BudgetPage() {
 
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-    React.useEffect(() => {
-        if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
-        }
-    }, [userData]);
+    const tenantId = userData?.tenantIds?.[0];
 
     const ready = !!firestore && !!user && !isAuthLoading && !isUserDocLoading && !!tenantId;
 
