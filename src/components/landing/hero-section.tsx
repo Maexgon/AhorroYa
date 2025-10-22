@@ -8,7 +8,7 @@ export default function HeroSection() {
     <section className="relative text-white">
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=2070&auto=format&fit=crop')" }}
+        style={{ backgroundImage: "url('/img/hero-background.jpg')" }}
       />
       <div className="absolute inset-0 bg-black/60" />
       <div className="container relative py-12 md:py-20 lg:py-24">
