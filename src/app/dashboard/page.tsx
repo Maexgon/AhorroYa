@@ -1668,16 +1668,16 @@ export default function DashboardPageContainer() {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
   const [tenantData, setTenantData] = useState<Tenant | null>(null);
 
+  // This is the main query to get the user's memberships
   const membershipsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
-    // This query is allowed by the security rules because it filters by the current user's UID.
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
   }, [user, firestore]);
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
-
+  
   const derivedTenantId = memberships?.[0]?.tenantId;
   const derivedUserRole = memberships?.[0]?.role as UserRole;
-  
+
   const licenseQuery = useMemoFirebase(() => {
     if (!derivedTenantId || !firestore) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
@@ -1685,9 +1685,9 @@ export default function DashboardPageContainer() {
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
   const tenantDocRef = useMemoFirebase(() => {
-    if (!derivedTenantId || !firestore || derivedUserRole !== 'owner') return null;
+    if (!derivedTenantId || !firestore) return null;
     return doc(firestore, 'tenants', derivedTenantId);
-  }, [derivedTenantId, firestore, derivedUserRole]);
+  }, [derivedTenantId, firestore]);
   const { data: ownerTenantData, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantDocRef);
 
   useEffect(() => {
@@ -1697,7 +1697,7 @@ export default function DashboardPageContainer() {
   }, [ownerTenantData]);
 
   useEffect(() => {
-    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses || (derivedUserRole === 'owner' && isLoadingTenant);
+    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses || isLoadingTenant;
     if (isLoading) return;
 
     if (!user) {
@@ -1732,7 +1732,7 @@ export default function DashboardPageContainer() {
           setLicenseStatus('expired');
       }
       setIsReady(true);
-    } else if (!isLoadingMemberships) { // Ensure we don't redirect while memberships are still loading
+    } else if (!isLoadingMemberships) {
         router.push('/subscribe');
     }
 
@@ -1840,9 +1840,11 @@ export default function DashboardPageContainer() {
         </header>
         <main className="flex-1">
           {(userRole === 'owner' || userRole === 'admin') && tenantId && <AdminOrOwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} userRole={userRole} tenantData={tenantData} />}
-          {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
+          {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseBicenseStatus} />}
         </main>
       </div>
     </TooltipProvider>
   );
 }
+
+    

@@ -35,6 +35,7 @@ export default function ExpensesPage() {
     const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
     const [isOwner, setIsOwner] = React.useState(false);
+    const [isReady, setIsReady] = React.useState(false);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [expenseToDelete, setExpenseToDelete] = React.useState<Expense | null>(null);
@@ -43,35 +44,33 @@ export default function ExpensesPage() {
     const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth() + 1);
     const [currentYear, setCurrentYear] = React.useState(new Date().getFullYear());
 
-
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
     
-    React.useEffect(() => {
-        if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
-        }
-    }, [userData]);
-    
-    const membershipDocRef = useMemoFirebase(() => {
-        if (!tenantId || !user) return null;
-        // The membership document ID is composite: {tenantId}_{userId}
-        return doc(firestore, 'memberships', `${tenantId}_${user.uid}`);
-    }, [tenantId, user]);
-    const { data: membershipData, isLoading: isLoadingMembership } = useDoc<Membership>(membershipDocRef);
-
+    // Fetch the user's membership to determine tenantId and role
+    const membershipQuery = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+    }, [firestore, user]);
+    const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQuery);
 
     React.useEffect(() => {
-        if (membershipData) {
-            setIsOwner(membershipData.role === 'owner');
+        if (memberships && memberships.length > 0) {
+            const currentMembership = memberships[0];
+            setTenantId(currentMembership.tenantId);
+            setIsOwner(currentMembership.role === 'owner');
         }
-    }, [membershipData]);
+        // Set ready state when auth and membership queries are done
+        if (!isAuthLoading && !isLoadingMemberships) {
+            setIsReady(true);
+        }
+    }, [memberships, isAuthLoading, isLoadingMemberships]);
 
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !user || isLoadingMembership) return null;
+        if (!isReady || !firestore || !tenantId || !user) return null;
         
         const baseQuery = query(
             collection(firestore, 'expenses'), 
@@ -79,32 +78,34 @@ export default function ExpensesPage() {
             where('deleted', '==', false)
         );
 
+        // If the user is owner, they can see all expenses for the tenant.
         if (isOwner) {
             return baseQuery;
         }
         
+        // Otherwise, they only see their own expenses.
         return query(baseQuery, where('userId', '==', user.uid));
 
-    }, [firestore, tenantId, user, isOwner, isLoadingMembership]);
+    }, [firestore, tenantId, user, isOwner, isReady]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) return null;
+        if (!isReady || !tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
-    }, [firestore, tenantId]);
+    }, [firestore, tenantId, isReady]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
     const subcategoriesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) return null;
+        if (!isReady || !tenantId) return null;
         return query(collection(firestore, 'subcategories'), where('tenantId', '==', tenantId));
-    }, [firestore, tenantId]);
+    }, [firestore, tenantId, isReady]);
     const { data: subcategories, isLoading: isLoadingSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
     
-    // Fetch all members of the tenant to map user IDs to names
+    // Fetch all members of the tenant to map user IDs to names, only if the user is an owner.
     const membersQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !isOwner) return null; // Only fetch all members if owner
+        if (!isReady || !firestore || !tenantId || !isOwner) return null;
         return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-    }, [firestore, tenantId, isOwner]);
+    }, [firestore, tenantId, isOwner, isReady]);
     const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
 
 
@@ -172,9 +173,13 @@ export default function ExpensesPage() {
             });
         }
         
-        // Ensure the current user (owner) is in the map, as they might not be in the `members` list if it's a single-user tenant.
-        if (user && userData && userData.displayName && !memberMap.has(user.uid)) {
-            memberMap.set(user.uid, userData.displayName);
+        // Ensure the current user (who might not be owner) is in the map.
+        if (user && memberships) {
+            memberships.forEach(m => {
+                 if (m.uid && m.displayName && !memberMap.has(m.uid)) {
+                    memberMap.set(m.uid, m.displayName);
+                }
+            })
         }
 
         return expenses
@@ -188,7 +193,7 @@ export default function ExpensesPage() {
                 subcategory: expense.subcategoryId ? subcategoryMap.get(expense.subcategoryId) : undefined,
                 userName: memberMap.get(expense.userId) || 'Usuario desconocido',
             }));
-    }, [expenses, categories, subcategories, members, user, userData, currentMonth, currentYear]);
+    }, [expenses, categories, subcategories, members, user, memberships, currentMonth, currentYear]);
 
     const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
     const uniqueYears = React.useMemo(() => {
@@ -197,7 +202,7 @@ export default function ExpensesPage() {
         return Array.from(yearsSet).sort((a,b) => b - a);
     }, [expenses]);
 
-    const isLoading = isAuthLoading || isUserDocLoading || isLoadingMembership || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
+    const isLoading = !isReady || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
 
     return (
         <>
@@ -302,3 +307,5 @@ export default function ExpensesPage() {
         </>
     );
 }
+
+    
