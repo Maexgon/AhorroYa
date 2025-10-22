@@ -1584,49 +1584,6 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                     </ResponsiveContainer>
                 </CardContent>
             </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Resumen Mensual de Flujo de Caja</CardTitle>
-                    <CardDescription>Ingresos vs. Gastos del período.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={processedData.periodData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
-                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                            <Tooltip content={({ active, payload, label }) => active && payload?.length ? <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p><p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p></div> : null} />
-                            <Legend />
-                            <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Balance Acumulado</CardTitle>
-                    <CardDescription>Evolución de ingresos y gastos acumulados en el período.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ResponsiveContainer width="100%" height={350}>
-                        <ComposedChart data={processedData.cumulativeChartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
-                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                            <Tooltip content={({ active, payload, label }) => { if (active && payload?.length) { const income = payload.find(p => p.dataKey === 'ingresosAcumulados')?.value || 0; const expense = payload.find(p => p.dataKey === 'gastosAcumulados')?.value || 0; return <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p style={{ color: 'hsl(var(--chart-3))' }}>Ing. Acum: {processedData.formatCurrency(income as number)}</p><p style={{ color: 'hsl(var(--destructive))' }}>Gas. Acum: {processedData.formatCurrency(expense as number)}</p><p className="font-semibold mt-1">Balance: {processedData.formatCurrency(income as number - (expense as number))}</p></div>; } return null; }} />
-                            <Legend />
-                            <Area type="monotone" dataKey="gastosAcumulados" fill="hsl(var(--destructive) / 0.1)" stroke="transparent" name="Gastos Acumulados" />
-                            <Area type="monotone" dataKey="ingresosAcumulados" fill="hsl(var(--chart-3) / 0.1)" stroke="transparent" name="Ingresos Acumulados" />
-                            <Line type="monotone" dataKey="ingresosAcumulados" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} name="Ingresos Acum." />
-                            <Line type="monotone" dataKey="gastosAcumulados" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} name="Gastos Acum." />
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </CardContent>
-            </Card>
-
             <Card>
                 <CardHeader>
                     <CardTitle>Análisis de Gastos</CardTitle>
