@@ -1158,7 +1158,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole }: { tenantId
         </div>
         
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="lg:col-span-4">
+            <Card className={cn("lg:col-span-4", userRole !== 'owner' && 'lg:col-span-7')}>
             <CardHeader className="flex flex-row items-center justify-between pb-4">
               <div>
                 <CardTitle>Gastos Recientes</CardTitle>
@@ -1665,10 +1665,9 @@ export default function DashboardPageContainer() {
 
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRole>(null);
+  const [isReady, setIsReady] = useState(false);
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Get user's membership to find tenantId and role
   const membershipsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
@@ -1678,7 +1677,6 @@ export default function DashboardPageContainer() {
   const derivedTenantId = memberships?.[0]?.tenantId;
   const derivedUserRole = memberships?.[0]?.role as UserRole;
   
-  // Get license once we have a tenantId
   const licenseQuery = useMemoFirebase(() => {
     if (!derivedTenantId || !firestore) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
@@ -1687,22 +1685,18 @@ export default function DashboardPageContainer() {
 
 
   useEffect(() => {
-    const isDataLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses;
-    
-    if (isDataLoading) {
-      setIsLoading(true);
-      return;
-    }
-    
+    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses;
+    if (isLoading) return;
+
     if (!user) {
-      router.push('/login');
+      router.replace('/login');
       return;
     }
-    
+
     if (memberships && memberships.length > 0) {
       setTenantId(derivedTenantId);
       setUserRole(derivedUserRole);
-
+      
       if (licenses && licenses.length > 0) {
         const license = licenses[0];
         const endDate = new Date(license.endDate);
@@ -1716,29 +1710,20 @@ export default function DashboardPageContainer() {
             toast({
                 variant: 'destructive',
                 title: 'Tu licencia ha expirado',
-                description: `Tienes ${15 + daysDiff} días para renovarla antes de que tus datos sean eliminados.`,
+                description: `Tienes ${15 + daysDiff} días para renovarla.`,
                 duration: Infinity,
             });
         } else {
             setLicenseStatus('expired');
-            toast({
-                variant: 'destructive',
-                title: 'Licencia Expirada Definitivamente',
-                description: 'El acceso a tu cuenta está restringido. Renueva para continuar.',
-                duration: Infinity,
-            });
         }
       } else {
-          // No license found, treat as expired
           setLicenseStatus('expired');
       }
-
-      setIsLoading(false);
-
-    } else if (!isLoadingMemberships) {
-      // User is authenticated but has no memberships
-      router.push('/subscribe');
+      setIsReady(true);
+    } else {
+        router.push('/subscribe');
     }
+
   }, [user, isUserLoading, memberships, isLoadingMemberships, licenses, isLoadingLicenses, router, derivedTenantId, derivedUserRole, toast]);
 
 
@@ -1772,7 +1757,7 @@ export default function DashboardPageContainer() {
   const { data: userData } = useDoc<UserType>(userDocRef);
 
 
-  if (isLoading) {
+  if (!isReady) {
     return (
       <div className="flex h-screen items-center justify-center">
         <AhorroYaLogo className="h-12 w-12 animate-spin text-primary" />
@@ -1849,3 +1834,5 @@ export default function DashboardPageContainer() {
     </TooltipProvider>
   );
 }
+
+    
