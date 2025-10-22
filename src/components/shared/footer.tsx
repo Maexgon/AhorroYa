@@ -1,7 +1,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { FileBarChart, LayoutDashboard, Landmark, Settings, HandCoins } from 'lucide-react';
+import { FileBarChart, LayoutDashboard, Landmark, Settings, HandCoins, Sparkles } from 'lucide-react';
 
 export default function Footer() {
   return (

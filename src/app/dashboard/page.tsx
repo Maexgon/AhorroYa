@@ -926,11 +926,18 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                 </Link>
             </Button>
              {processedData.isOwner && (
+                <>
                 <Button asChild>
-                    <Link href="/dashboard/insights">
-                        <FileBarChart className="mr-2 h-4 w-4" /> Crear Reporte con IA
+                    <Link href="/dashboard/reports">
+                        <FileBarChart className="mr-2 h-4 w-4" /> Reportes Manuales
                     </Link>
                 </Button>
+                <Button asChild>
+                    <Link href="/dashboard/insights">
+                        <Sparkles className="mr-2 h-4 w-4" /> Análisis con IA
+                    </Link>
+                </Button>
+                </>
             )}
         </div>
 
@@ -1649,4 +1656,3 @@ export default function DashboardPageContainer() {
     </div>
   );
 }
-
