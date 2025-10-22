@@ -1305,6 +1305,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     });
 
     const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
+    const totalExpensesUSD = periodFilteredExpenses.reduce((acc, expense) => acc + (expense.amountUSD || 0), 0);
 
     const barData = Object.entries(periodFilteredExpenses.reduce((acc, expense) => {
         const categoryName = categories.find(c => c.id === expense.categoryId)?.name || 'Sin Categoría';
@@ -1395,8 +1396,33 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
       return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
     
-    return { barData, totalExpenses, formatCurrency: finalFormatCurrency, periodData, cumulativeChartData: cumulativeChartData, installmentsChartData, budgetChartData };
+    return { barData, totalExpenses, totalExpensesUSD, formatCurrency: finalFormatCurrency, periodData, cumulativeChartData: cumulativeChartData, installmentsChartData, budgetChartData };
   }, [isLoading, allExpenses, allIncomes, allBudgets, categories, date, user]);
+
+  const setDateRange = (preset: string) => {
+    const now = new Date();
+    switch (preset) {
+        case 'currentMonth':
+            setDate({ from: startOfMonth(now), to: endOfMonth(now) });
+            break;
+        case 'nextMonth':
+            const nextMonth = addMonths(now, 1);
+            setDate({ from: startOfMonth(nextMonth), to: endOfMonth(nextMonth) });
+            break;
+        case 'currentYear':
+            setDate({ from: startOfYear(now), to: endOfYear(now) });
+            break;
+        case 'ytd':
+            setDate({ from: startOfYear(now), to: now });
+            break;
+        case 'lastQuarter':
+            setDate({ from: startOfMonth(subMonths(now, 3)), to: endOfMonth(subMonths(now, 1)) });
+            break;
+        case 'lastSemester':
+            setDate({ from: startOfMonth(subMonths(now, 5)), to: endOfMonth(now) });
+            break;
+    }
+  };
 
   if (licenseStatus !== 'active') {
     return (
@@ -1433,6 +1459,11 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                   <Plus className="mr-2 h-4 w-4" /> Crear Gasto
               </Link>
           </Button>
+           <Button asChild>
+              <Link href="/dashboard/income/new">
+                  <Plus className="mr-2 h-4 w-4" /> Crear Ingreso
+              </Link>
+          </Button>
       </div>
 
        <div className="bg-card shadow rounded-lg p-4">
@@ -1440,13 +1471,43 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                        <Button
+                            variant={"outline"}
+                            className="w-full justify-start text-left font-normal"
+                        >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {date?.from ? (date.to ? (<> {format(date.from, "LLL dd, y", { locale: es })} - {format(date.to, "LLL dd, y", { locale: es })} </>) : (format(date.from, "LLL dd, y", { locale: es }))) : (<span>Selecciona un rango</span>)}
+                            {date?.from ? (
+                                date.to ? (
+                                    <>
+                                        {format(date.from, "LLL dd, y", { locale: es })} -{" "}
+                                        {format(date.to, "LLL dd, y", { locale: es })}
+                                    </>
+                                ) : (
+                                    format(date.from, "LLL dd, y", { locale: es })
+                                )
+                            ) : (
+                                <span>Selecciona un rango</span>
+                            )}
                         </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={2} locale={es} />
+                     <PopoverContent className="w-auto p-0 flex" align="start">
+                        <div className="flex flex-col space-y-2 border-r p-4">
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('currentMonth')}>Mes Actual</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('nextMonth')}>Mes Siguiente</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('currentYear')}>Año Actual</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('ytd')}>Year-to-Date</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('lastQuarter')}>Último Cuatrimestre</Button>
+                            <Button variant="ghost" className="justify-start" onClick={() => setDateRange('lastSemester')}>Último Semestre</Button>
+                        </div>
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={date?.from}
+                            selected={date}
+                            onSelect={setDate}
+                            numberOfMonths={1}
+                            locale={es}
+                        />
                     </PopoverContent>
                 </Popover>
             </div>
@@ -1574,7 +1635,17 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
             <Card>
                 <CardHeader>
                     <CardTitle>Análisis de Gastos</CardTitle>
-                    <CardDescription>Resumen por categoría del período seleccionado.</CardDescription>
+                    <CardDescription>
+                      <p>Resumen por categoría del período seleccionado.</p>
+                       <p className="font-medium text-foreground">
+                          Total Gastado (ARS): <span className="font-bold text-destructive">{processedData.formatCurrency(processedData.totalExpenses)}</span>
+                      </p>
+                      {processedData.totalExpensesUSD > 0 && (
+                          <p className="font-medium text-foreground">
+                              Total Gastado (USD): <span className="font-bold text-destructive">{processedData.formatCurrencyUSD(processedData.totalExpensesUSD)}</span>
+                          </p>
+                      )}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={250}>
