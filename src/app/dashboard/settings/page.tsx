@@ -1,11 +1,10 @@
-
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, doc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch, updateDoc, deleteDoc } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -37,7 +36,6 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { updateMemberRoleAction, deleteMemberAction } from './actions';
 
 
 function ManageCategories({ tenantId }: { tenantId: string }) {
@@ -474,35 +472,37 @@ export default function SettingsPage() {
   };
 
   const handleMemberAction = async () => {
-    if (!memberToAction || !actionType || !derivedTenantId || !user || !members || !setMembers) return;
+    if (!memberToAction || !actionType || !derivedTenantId || !firestore || !members || !setMembers) return;
 
     setIsProcessingAction(true);
     const actionInProgress = actionType === 'delete' ? 'Eliminando' : (actionType === 'promote' ? 'Promoviendo' : 'Revocando');
     toast({ title: `${actionInProgress} miembro...` });
     
-    let result;
-    const newRole = actionType === 'promote' ? 'admin' : 'member';
+    const membershipId = `${derivedTenantId}_${memberToAction.uid}`;
+    const memberRef = doc(firestore, 'memberships', membershipId);
 
-    if (actionType === 'delete') {
-        result = await deleteMemberAction({ tenantId: derivedTenantId, targetUserId: memberToAction.uid, actingUserId: user.uid });
-    } else {
-        result = await updateMemberRoleAction({ tenantId: derivedTenantId, targetUserId: memberToAction.uid, actingUserId: user.uid, newRole });
-    }
-
-    if (result.success) {
-        toast({ title: "¡Éxito!", description: "La operación se completó correctamente." });
+    try {
         if (actionType === 'delete') {
+            await deleteDoc(memberRef);
             setMembers(members.filter(m => m.uid !== memberToAction.uid));
         } else {
+            const newRole = actionType === 'promote' ? 'admin' : 'member';
+            await updateDoc(memberRef, { role: newRole });
             setMembers(members.map(m => m.uid === memberToAction.uid ? { ...m, role: newRole } : m));
         }
-    } else {
-        toast({ variant: 'destructive', title: "Error", description: result.error || "No se pudo completar la acción." });
-    }
+        toast({ title: "¡Éxito!", description: "La operación se completó correctamente." });
 
-    setIsProcessingAction(false);
-    setMemberToAction(null);
-    setActionType(null);
+    } catch (error) {
+        console.error(`Error performing action ${actionType}:`, error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: memberRef.path, 
+            operation: 'update', // or 'delete'
+        }));
+    } finally {
+        setIsProcessingAction(false);
+        setMemberToAction(null);
+        setActionType(null);
+    }
   };
 
 
