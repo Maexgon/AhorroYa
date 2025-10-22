@@ -6,18 +6,19 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ChevronsRight, Wallet, PiggyBank, FileDown, Settings } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ChevronsRight, Wallet, PiggyBank, FileDown, Settings, ShieldAlert } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import type { Budget, Category, Expense, User as UserType, Income } from '@/lib/types';
+import type { Budget, Category, Expense, User as UserType, Income, Membership } from '@/lib/types';
 import { generateInsightsAction } from './actions';
 import { type GenerateFinancialInsightsOutput } from '@/ai/flows/generate-financial-insights';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useRouter } from 'next/navigation';
 
 function InsightIcon({ emoji }: { emoji?: string }) {
     switch (emoji) {
@@ -33,8 +34,10 @@ function InsightIcon({ emoji }: { emoji?: string }) {
 export default function InsightsPage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
+    const router = useRouter();
     const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
+    const [userRole, setUserRole] = React.useState<'owner' | 'admin' | 'member' | null>(null);
     const [insightsData, setInsightsData] = React.useState<GenerateFinancialInsightsOutput | null>(null);
     const [isGenerating, setIsGenerating] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -43,18 +46,50 @@ export default function InsightsPage() {
     const reportRef = React.useRef<HTMLDivElement>(null);
 
     // --- Data Fetching ---
+    const membershipDocRef = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        // This assumes user has one membership, which is our current model.
+        // A more complex app might query the 'memberships' collection.
+        // For this to work, we need tenantId first.
+        return null; // We'll get tenantId from the user doc first
+    }, [firestore, user]);
+
+
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
+     const membershipQueryRef = useMemoFirebase(() => {
+        if (!firestore || !user || !userData?.tenantIds?.[0]) return null;
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid), where('tenantId', '==', userData.tenantIds[0]));
+    }, [firestore, user, userData]);
+    const { data: userMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQueryRef);
+
+
     React.useEffect(() => {
         if (userData?.tenantIds && userData.tenantIds.length > 0) {
             setTenantId(userData.tenantIds[0]);
         }
-    }, [userData]);
+        if (userMemberships && userMemberships.length > 0) {
+            setUserRole(userMemberships[0].role as any);
+        }
+    }, [userData, userMemberships]);
     
+    // Authorization check
+    React.useEffect(() => {
+        const isDataReady = !isAuthLoading && !isUserDocLoading && !isLoadingMemberships;
+        if(isDataReady && userRole && userRole !== 'owner') {
+             toast({
+                variant: "destructive",
+                title: "Acceso Denegado",
+                description: "Solo el propietario de la cuenta puede acceder a esta página.",
+            });
+            router.replace('/dashboard');
+        }
+    }, [isAuthLoading, isUserDocLoading, isLoadingMemberships, userRole, router, toast]);
+
     const { fromDate, toDate } = React.useMemo(() => {
         const from = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const to = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
@@ -116,10 +151,10 @@ export default function InsightsPage() {
     }, [tenantId, firestore]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
-    const areDataQueriesLoading = isAuthLoading || isUserDocLoading || isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
+    const areDataQueriesLoading = isLoadingExpenses || isLoadingBudgets || isLoadingCategories || isLoadingIncomes;
 
     React.useEffect(() => {
-        const canGenerate = !areDataQueriesLoading && !!tenantId && allExpenses && budgets && categories && allIncomes && user;
+        const canGenerate = !areDataQueriesLoading && userRole === 'owner' && !!tenantId && allExpenses && budgets && categories && allIncomes && user;
         
         if (canGenerate && !insightsData && !error) {
             const generateInsights = async () => {
@@ -162,7 +197,7 @@ export default function InsightsPage() {
             setIsGenerating(false);
         }
 
-    }, [areDataQueriesLoading, allExpenses, budgets, categories, allIncomes, fromDate, insightsData, error, tenantId, user, monthlyExpenses, monthlyIncomes, pendingInstallments, toast]);
+    }, [areDataQueriesLoading, allExpenses, budgets, categories, allIncomes, fromDate, insightsData, error, tenantId, user, monthlyExpenses, monthlyIncomes, pendingInstallments, toast, userRole]);
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
 
@@ -206,6 +241,31 @@ export default function InsightsPage() {
     
     const currentMonthName = fromDate ? formatDate(fromDate, 'LLLL', { locale: es }) : '';
     const currentYear = fromDate ? fromDate.getFullYear().toString() : '';
+
+    if (isAuthLoading || isUserDocLoading || isLoadingMemberships) {
+        return (
+             <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        )
+    }
+
+    if (userRole !== 'owner') {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50 p-4">
+                 <Card className="p-8 text-center bg-destructive/10 border-destructive">
+                    <div className="mx-auto bg-destructive/20 p-3 rounded-full w-fit">
+                        <ShieldAlert className="h-10 w-10 text-destructive" />
+                    </div>
+                     <h2 className="text-xl font-bold text-destructive mt-4">Acceso Denegado</h2>
+                    <p className="text-destructive/80 mt-2">Solo los propietarios de la cuenta pueden generar análisis con IA.</p>
+                    <Button variant="outline" asChild className="mt-6">
+                        <Link href="/dashboard">Volver al Dashboard</Link>
+                    </Button>
+                </Card>
+            </div>
+        )
+    }
 
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">

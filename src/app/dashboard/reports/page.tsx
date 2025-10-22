@@ -6,12 +6,12 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Loader2, Calendar as CalendarIcon, Filter, Columns, Play, Save, GripVertical, MoreVertical, ShieldAlert } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import type { Category, Entity, User as UserType, Tenant, Expense, Income, Budget } from '@/lib/types';
+import type { Category, Entity, User as UserType, Tenant, Expense, Income, Budget, Membership } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { DateRange } from 'react-day-picker';
@@ -27,6 +27,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import * as XLSX from 'xlsx';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 
 const paymentMethodOptions: MultiSelectOption[] = [
@@ -48,8 +50,11 @@ const staticIncomeCategories: MultiSelectOption[] = [
 export default function ReportsPage() {
     const { user, isUserLoading } = useUser();
     const firestore = useFirestore();
+    const router = useRouter();
+    const { toast } = useToast();
 
     const [tenantId, setTenantId] = React.useState<string | null>(null);
+    const [userRole, setUserRole] = React.useState<'owner' | 'admin' | 'member' | null>(null);
     const [date, setDate] = React.useState<DateRange | undefined>(undefined);
     const [brushRange, setBrushRange] = React.useState<{ startIndex?: number; endIndex?: number }>({});
     
@@ -79,11 +84,34 @@ export default function ReportsPage() {
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
+    const membershipQueryRef = useMemoFirebase(() => {
+        if (!firestore || !user || !userData?.tenantIds?.[0]) return null;
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid), where('tenantId', '==', userData.tenantIds[0]));
+    }, [firestore, user, userData]);
+    const { data: userMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQueryRef);
+
+
     React.useEffect(() => {
         if (userData?.tenantIds && userData.tenantIds.length > 0) {
             setTenantId(userData.tenantIds[0]);
         }
-    }, [userData]);
+        if (userMemberships && userMemberships.length > 0) {
+            setUserRole(userMemberships[0].role as any);
+        }
+    }, [userData, userMemberships]);
+    
+    // Authorization check
+    React.useEffect(() => {
+        const isDataReady = !isUserLoading && !isUserDocLoading && !isLoadingMemberships;
+        if(isDataReady && userRole && userRole !== 'owner') {
+             toast({
+                variant: "destructive",
+                title: "Acceso Denegado",
+                description: "Solo el propietario de la cuenta puede acceder a esta página.",
+            });
+            router.replace('/dashboard');
+        }
+    }, [isUserLoading, isUserDocLoading, isLoadingMemberships, userRole, router, toast]);
     
     const tenantDocRef = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
@@ -273,7 +301,7 @@ export default function ReportsPage() {
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
 
-    const isLoading = isUserLoading || isUserDocLoading || isLoadingCategories || isLoadingEntities || (tenantData?.type !== 'PERSONAL' && isLoadingMembers);
+    const isLoadingData = isUserLoading || isUserDocLoading || isLoadingCategories || isLoadingEntities || isLoadingExpenses || isLoadingIncomes || isLoadingBudgets || (tenantData?.type !== 'PERSONAL' && isLoadingMembers);
 
     const handleToggleColumn = (option: MultiSelectOption) => {
         setSelectedColumns(prev => 
@@ -322,6 +350,31 @@ export default function ReportsPage() {
     const showExpenseTotal = lineKeys.some(k => k.type === 'expense');
     const showBudgetTotal = lineKeys.some(k => k.type === 'budget');
 
+     if (isUserLoading || isUserDocLoading || isLoadingMemberships) {
+        return (
+             <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        )
+    }
+
+    if (userRole !== 'owner') {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50 p-4">
+                 <Card className="p-8 text-center bg-destructive/10 border-destructive">
+                    <div className="mx-auto bg-destructive/20 p-3 rounded-full w-fit">
+                        <ShieldAlert className="h-10 w-10 text-destructive" />
+                    </div>
+                     <h2 className="text-xl font-bold text-destructive mt-4">Acceso Denegado</h2>
+                    <p className="text-destructive/80 mt-2">Solo los propietarios de la cuenta pueden generar reportes manuales.</p>
+                    <Button variant="outline" asChild className="mt-6">
+                        <Link href="/dashboard">Volver al Dashboard</Link>
+                    </Button>
+                </Card>
+            </div>
+        )
+    }
+
 
     return (
         <div className="flex min-h-screen flex-col bg-secondary/50">
@@ -337,7 +390,7 @@ export default function ReportsPage() {
             </header>
 
             <main className="flex-1 p-4 md:p-8 space-y-8">
-                {isLoading ? (
+                {isLoadingData ? (
                     <div className="flex justify-center items-center h-64">
                         <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     </div>

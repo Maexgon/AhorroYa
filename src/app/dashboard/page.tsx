@@ -187,7 +187,7 @@ const CurrencyRates = () => {
 };
 
 
-function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, licenseStatus: 'active' | 'grace_period' | 'expired' | 'loading' }) {
+function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole }: { tenantId: string, licenseStatus: 'active' | 'grace_period' | 'expired' | 'loading', userRole: 'owner' | 'admin' }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -236,11 +236,6 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
   };
   
   // --- Data Fetching ---
-  const userDocRef = useMemoFirebase(() => (user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
-  const { data: userData } = useDoc<UserType>(userDocRef);
-  const isOwner = userData?.tenantIds?.includes(tenantId);
-
-
   const tenantRef = useMemoFirebase(() => (tenantId ? doc(firestore, 'tenants', tenantId) : null), [firestore, tenantId]);
   const { data: activeTenant, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantRef);
   
@@ -451,10 +446,10 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         toCurrencyCode: 'ARS', 
         periodData,
         cumulativeChartData,
-        isOwner: !!isOwner,
+        isOwner: userRole === 'owner',
         installmentsChartData
     };
-  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories, isOwner]);
+  }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories, userRole]);
   
   const handleSeedCategories = async () => {
     if (!firestore || !activeTenant) {
@@ -1025,7 +1020,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                     <p>Registra cualquier ingreso de dinero.</p>
                 </TooltipContent>
             </TooltipPrimitive>
-             {processedData.isOwner && (
+             {userRole === 'owner' && (
                 <>
                 <TooltipPrimitive>
                     <TooltipTrigger asChild>
@@ -1656,6 +1651,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
 }
 
 type LicenseStatus = 'active' | 'grace_period' | 'expired' | 'loading';
+type UserRole = 'owner' | 'admin' | 'member' | null;
 
 export default function DashboardPageContainer() {
   const { user, isUserLoading } = useUser();
@@ -1666,7 +1662,7 @@ export default function DashboardPageContainer() {
 
 
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<'owner' | 'member' | null>(null);
+  const [userRole, setUserRole] = useState<UserRole>(null);
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -1678,7 +1674,7 @@ export default function DashboardPageContainer() {
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
   const derivedTenantId = memberships?.[0]?.tenantId;
-  const derivedUserRole = memberships?.[0]?.role as 'owner' | 'member';
+  const derivedUserRole = memberships?.[0]?.role as UserRole;
   
   // Get license once we have a tenantId
   const licenseQuery = useMemoFirebase(() => {
@@ -1844,12 +1840,10 @@ export default function DashboardPageContainer() {
           </div>
         </header>
         <main className="flex-1">
-          {userRole === 'owner' && tenantId && <OwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
+          {(userRole === 'owner' || userRole === 'admin') && tenantId && <AdminOrOwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} userRole={userRole} />}
           {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
         </main>
       </div>
     </TooltipProvider>
   );
 }
-
-    

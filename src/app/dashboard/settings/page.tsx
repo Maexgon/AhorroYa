@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Loader2, ShieldAlert, Plus, Trash2, Pencil, GripVertical, UserPlus, Repeat, Copy, RefreshCw, Settings } from 'lucide-react';
 import { MembersDataTable } from './data-table-members';
-import { getColumns } from './columns';
+import { getColumns, type TableMeta } from './columns';
 import type { Tenant, User as UserType, License, Membership, Category, Subcategory } from '@/lib/types';
 import {
   AlertDialog,
@@ -357,12 +357,14 @@ export default function SettingsPage() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   
   const [isDeletingMember, setIsDeletingMember] = useState(false);
-  const [memberToDelete, setMemberToDelete] = useState<Membership | null>(null);
+  const [memberToAction, setMemberToAction] = useState<Membership | null>(null);
+  const [actionType, setActionType] = useState<'delete' | 'promote' | 'demote' | null>(null);
+
   
   const firestore = useFirestore();
 
@@ -380,24 +382,23 @@ export default function SettingsPage() {
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
   const derivedTenantId = memberships?.[0]?.tenantId;
-  const derivedUserRole = memberships?.[0]?.role as 'owner' | 'member';
   
   useEffect(() => {
     if (!isLoadingMemberships) {
       if (memberships && memberships.length > 0) {
         setTenantId(derivedTenantId);
-        setIsOwner(derivedUserRole === 'owner');
+        setUserRole(memberships[0].role as 'owner' | 'admin' | 'member');
       }
       setIsLoading(false);
     }
-  }, [memberships, isLoadingMemberships, derivedTenantId, derivedUserRole]);
+  }, [memberships, isLoadingMemberships, derivedTenantId]);
 
 
-  const membersQuery = useMemoFirebase(() => {
+  const allMembersQuery = useMemoFirebase(() => {
     if (!derivedTenantId) return null;
     return query(collection(firestore, 'memberships'), where('tenantId', '==', derivedTenantId));
   }, [derivedTenantId]);
-  const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(membersQuery);
+  const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(allMembersQuery);
 
   const tenantDocRef = useMemoFirebase(() => {
     if (!derivedTenantId) return null;
@@ -412,27 +413,11 @@ export default function SettingsPage() {
   const { data: licenses } = useCollection<License>(licenseQuery);
 
   const activeLicense = licenses?.[0];
+  
+  const adminCount = useMemo(() => members?.filter(m => m.role === 'admin' || m.role === 'owner').length || 0, [members]);
+  const maxAdmins = 2;
 
-  const tableData = useMemo(() => {
-      if (!members) return [];
-      
-      const ownerInList = members.some(m => m.uid === user?.uid);
-
-      if (isOwner && !ownerInList && user && userData) {
-           const ownerMembership: Membership = {
-                tenantId: derivedTenantId!,
-                uid: user.uid,
-                displayName: userData.displayName || user.displayName || 'Owner',
-                email: userData.email || user.email || '',
-                role: 'owner',
-                status: 'active',
-                joinedAt: memberships?.[0]?.joinedAt || new Date().toISOString(),
-           };
-           return [...members, ownerMembership];
-      }
-
-      return members;
-  }, [members, user, userData, isOwner, derivedTenantId, memberships]);
+  const tableData = useMemo(() => members || [], [members]);
   
   const handleInviteUser = async (data: any) => {
     if (!user || !firestore || !derivedTenantId || !activeLicense) {
@@ -488,38 +473,48 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteMember = async () => {
-    if (!memberToDelete || !derivedTenantId || !user || !firestore) {
-        toast({ variant: "destructive", title: "Error", description: "No se ha seleccionado ningún miembro para eliminar." });
-        return;
-    }
+  const handleMemberAction = async () => {
+    if (!memberToAction || !actionType || !derivedTenantId || !user || !firestore) return;
     
     setIsDeletingMember(true);
-    toast({ title: "Eliminando miembro..." });
+    const actionInProgress = actionType === 'delete' ? 'Eliminando' : (actionType === 'promote' ? 'Promoviendo' : 'Revocando');
+    toast({ title: `${actionInProgress} miembro...` });
+    
+    const membershipRef = doc(firestore, 'memberships', `${derivedTenantId}_${memberToAction.uid}`);
 
     try {
-        const membershipRef = doc(firestore, 'memberships', `${derivedTenantId}_${memberToDelete.uid}`);
-        await deleteDoc(membershipRef);
-
-        toast({ title: "Advertencia", description: "La membresía fue eliminada. La eliminación de la cuenta de Auth debe hacerse desde la consola de Firebase por seguridad." });
-        
-        if (members && setMembers) {
-            setMembers(members.filter(m => m.uid !== memberToDelete.uid));
+        if(actionType === 'delete') {
+            await deleteDoc(membershipRef);
+            toast({ title: "Advertencia", description: "La membresía fue eliminada. La eliminación de la cuenta de Auth debe hacerse desde la consola de Firebase por seguridad." });
+        } else {
+            const newRole = actionType === 'promote' ? 'admin' : 'member';
+            await updateDoc(membershipRef, { role: newRole });
+            toast({ title: "¡Éxito!", description: "El rol del miembro ha sido actualizado." });
         }
     } catch (error: any) {
-        console.error("Error deleting member:", error);
+        console.error(`Error performing action ${actionType}:`, error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `memberships/${derivedTenantId}_${memberToDelete.uid}`, 
-            operation: 'delete',
+            path: `memberships/${derivedTenantId}_${memberToAction.uid}`, 
+            operation: actionType === 'delete' ? 'delete' : 'update',
         }));
     } finally {
         setIsDeletingMember(false);
-        setMemberToDelete(null);
+        setMemberToAction(null);
+        setActionType(null);
     }
   };
 
 
-  const columns = useMemo(() => getColumns((member) => setMemberToDelete(member)), []);
+  const tableMeta: TableMeta = {
+    onPromote: (member) => { setMemberToAction(member); setActionType('promote'); },
+    onDemote: (member) => { setMemberToAction(member); setActionType('demote'); },
+    onDelete: (member) => { setMemberToAction(member); setActionType('delete'); },
+    currentUserId: user?.uid || '',
+    adminCount,
+    maxAdmins,
+  }
+
+  const columns = useMemo(() => getColumns(), []);
   
   if (isUserLoading || isLoading || isUserDocLoading) {
     return (
@@ -529,7 +524,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (!isOwner) {
+  if (userRole !== 'owner') {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
         <ShieldAlert className="h-16 w-16 text-destructive" />
@@ -585,7 +580,7 @@ export default function SettingsPage() {
                                 </Button>
                             </CardHeader>
                             <CardContent>
-                            {isLoadingMembers ? <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : <MembersDataTable columns={columns} data={tableData || []} />}
+                            {isLoadingMembers ? <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : <MembersDataTable columns={columns} data={tableData || []} meta={tableMeta}/>}
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -629,19 +624,20 @@ export default function SettingsPage() {
         onOpenChange={setIsInviteDialogOpen}
         onInvite={handleInviteUser}
     />
-     <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
+     <AlertDialog open={!!memberToAction} onOpenChange={(open) => !open && setMemberToAction(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    Esta acción eliminará la membresía de <span className="font-bold">{memberToDelete?.displayName}</span> del tenant.
-                    La cuenta del usuario no se borrará de Firebase Authentication.
+                    {actionType === 'delete' && `Esta acción eliminará la membresía de ${memberToAction?.displayName} del tenant.`}
+                    {actionType === 'promote' && `Esto le dará a ${memberToAction?.displayName} permisos de administrador.`}
+                    {actionType === 'demote' && `Esto revocará los permisos de administrador de ${memberToAction?.displayName}.`}
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setMemberToDelete(null)}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteMember} disabled={isDeletingMember} className="bg-destructive hover:bg-destructive/90">
-                    {isDeletingMember ? 'Eliminando...' : 'Sí, eliminar miembro'}
+                <AlertDialogCancel onClick={() => setMemberToAction(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleMemberAction} disabled={isDeletingMember} className={actionType === 'delete' ? 'bg-destructive hover:bg-destructive/90' : ''}>
+                    {isDeletingMember ? 'Procesando...' : `Sí, ${actionType === 'delete' ? 'eliminar' : (actionType === 'promote' ? 'promover' : 'revocar')}`}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
