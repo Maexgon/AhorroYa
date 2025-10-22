@@ -46,6 +46,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { useSessionTimeout } from '@/hooks/use-session-timeout';
 import { TooltipProvider, Tooltip as TooltipPrimitive, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Progress } from '@/components/ui/progress';
 
 
 const SAFE_DEFAULTS = {
@@ -362,7 +363,7 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
             })
             .map(group => ({
                 ...group,
-                percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
+                percentage: group.Presupuestado > 0 ? (group.Gastado / group.Presupuestado) * 100 : 0,
             }));
     })();
     
@@ -581,8 +582,8 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
                                     dataKey="Presupuestado"
                                     nameKey="name"
                                 >
-                                    {processedData.budgetChartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    {processedData.budgetChartData.map((entry) => (
+                                        <Cell key={`cell-${entry.name}`} fill={entry.color} />
                                     ))}
                                 </Pie>
                                 <TooltipPrimitive
@@ -874,74 +875,49 @@ function OwnerDashboard({ tenantId, licenseStatus }: { tenantId: string, license
         case 'budgets':
             return (
                 <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Presupuestos</CardTitle>
-                        <CardDescription>Tu progreso de gastos del mes en {processedData.toCurrencyCode}.</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <TooltipPrimitive>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
-                            <Info className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Compara tus gastos reales (línea) con el presupuesto asignado (barra) para cada categoría.</p>
-                        </TooltipContent>
-                      </TooltipPrimitive>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuestos")}>Exportar a Excel</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleChartVisibility('budgets')}>Cerrar</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                   <ResponsiveContainer width="100%" height={300}>
-                        <ComposedChart data={processedData.budgetChartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis 
-                                dataKey="name" 
-                                stroke="hsl(var(--foreground))" 
-                                fontSize={10}
-                                interval={0}
-                                angle={-45}
-                                textAnchor="end"
-                                height={60}
-                            />
-                            <YAxis 
-                                stroke="hsl(var(--foreground))" 
-                                fontSize={12} 
-                                tickFormatter={(value) => `$${Number(value) / 1000}k`}
-                            />
-                            <Tooltip
-                                content={({ active, payload, label }) => {
-                                    if (active && payload && payload.length) {
-                                    const data = payload[0].payload;
-                                    return (
-                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                            <p className="font-bold">{label}</p>
-                                            <p>Gastado: {processedData.formatCurrency(data.Gastado)} ({data.percentage}%)</p>
-                                            <p>Presupuestado: {processedData.formatCurrency(data.Presupuestado)}</p>
-                                        </div>
-                                    );
-                                    }
-                                    return null;
-                                }}
-                            />
-                            <Legend />
-                            <Bar dataKey="Presupuestado" name="Presupuesto" fill="hsl(var(--chart-3) / 0.4)" radius={[4, 4, 0, 0]} />
-                            <Line type="monotone" dataKey="Gastado" name="Gastado" stroke="hsl(var(--destructive))" strokeWidth={2} />
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </CardContent>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Presupuestos</CardTitle>
+                            <CardDescription>Tu progreso de gastos del mes.</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <TooltipPrimitive>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                                        <Info className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Compara tus gastos reales con el presupuesto asignado para cada categoría.</p>
+                                </TooltipContent>
+                            </TooltipPrimitive>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData.map(d => ({ Categoría: d.name, Presupuestado: d.Presupuestado, Gastado: d.Gastado })), "presupuestos")}>Exportar a Excel</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => toggleChartVisibility('budgets')}>Cerrar</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {processedData.budgetChartData.map((budget) => {
+                            const percentage = budget.percentage > 100 ? 100 : budget.percentage;
+                            return (
+                                <div key={budget.name}>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="font-medium">{budget.name}</span>
+                                        <span className="text-muted-foreground font-mono">
+                                            {processedData.formatCurrency(budget.Gastado)} / {processedData.formatCurrency(budget.Presupuestado)}
+                                        </span>
+                                    </div>
+                                    <Progress value={percentage} className="h-2" indicatorClassName={budget.percentage > 100 ? "bg-destructive" : ""} />
+                                </div>
+                            )
+                        })}
+                    </CardContent>
                 </Card>
             );
         default:
@@ -1368,7 +1344,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
             })
             .map(group => ({
                 ...group,
-                percentage: group.Presupuestado > 0 ? Math.round((group.Gastado / group.Presupuestado) * 100) : 0,
+                percentage: group.Presupuestado > 0 ? (group.Gastado / group.Presupuestado) * 100 : 0,
             }));
     })();
 
@@ -1560,7 +1536,7 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                                 dataKey="Presupuestado"
                                 nameKey="name"
                             >
-                                {processedData.budgetChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                {processedData.budgetChartData.map((entry) => <Cell key={`cell-${entry.name}`} fill={entry.color} />)}
                             </Pie>
                             <Tooltip content={({ active, payload }) => active && payload && payload.length ? <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{payload[0].name}</p><p>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p></div> : null} />
                             <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px', lineHeight: '20px' }}/>
@@ -1573,18 +1549,21 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
                     <CardTitle>Presupuestos</CardTitle>
                     <CardDescription>Tu progreso de gastos del mes.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <ComposedChart data={processedData.budgetChartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={10} interval={0} angle={-45} textAnchor="end" height={60} />
-                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                            <Tooltip content={({ active, payload, label }) => { if (active && payload && payload.length) { const data = payload[0].payload; return <div className="rounded-lg border bg-card p-2 shadow-sm text-sm"><p className="font-bold">{label}</p><p>Gastado: {processedData.formatCurrency(data.Gastado)} ({data.percentage}%)</p><p>Presupuestado: {processedData.formatCurrency(data.Presupuestado)}</p></div>; } return null; }} />
-                            <Legend />
-                            <Bar dataKey="Presupuestado" name="Presupuesto" fill="hsl(var(--chart-3) / 0.4)" radius={[4, 4, 0, 0]} />
-                            <Line type="monotone" dataKey="Gastado" name="Gastado" stroke="hsl(var(--destructive))" strokeWidth={2} />
-                        </ComposedChart>
-                    </ResponsiveContainer>
+                <CardContent className="space-y-4">
+                    {processedData.budgetChartData.map((budget) => {
+                        const percentage = budget.percentage > 100 ? 100 : budget.percentage;
+                        return (
+                            <div key={budget.name}>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="font-medium">{budget.name}</span>
+                                    <span className="text-muted-foreground font-mono">
+                                        {processedData.formatCurrency(budget.Gastado)} / {processedData.formatCurrency(budget.Presupuestado)}
+                                    </span>
+                                </div>
+                                <Progress value={percentage} className="h-2" indicatorClassName={budget.percentage > 100 ? "bg-destructive" : ""} />
+                            </div>
+                        )
+                    })}
                 </CardContent>
             </Card>
 
