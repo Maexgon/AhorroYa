@@ -57,9 +57,9 @@ export default function BudgetPage() {
 
 
     const userDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
+        if (!firestore || !user?.uid) return null;
         return doc(firestore, 'users', user.uid);
-    }, [firestore, user]);
+    }, [firestore, user?.uid]);
 
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
@@ -74,13 +74,13 @@ export default function BudgetPage() {
     const budgetsQuery = useMemoFirebase(() => {
         if (!ready) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
-    }, [firestore, ready]);
+    }, [firestore, ready, tenantId]);
     const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!ready) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
-    }, [firestore, ready]);
+    }, [firestore, ready, tenantId]);
     const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
@@ -90,7 +90,7 @@ export default function BudgetPage() {
             where('tenantId', '==', tenantId),
             where('deleted', '==', false)
         );
-    }, [firestore, ready]);
+    }, [firestore, ready, tenantId]);
     const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
     const budgetData = React.useMemo(() => {
@@ -456,7 +456,5 @@ export default function BudgetPage() {
         </>
     );
 }
-
-    
 
     
