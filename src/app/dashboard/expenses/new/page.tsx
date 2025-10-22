@@ -17,7 +17,7 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Plus, Camera } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Plus, Camera, CalculatorIcon } from 'lucide-react';
 import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -26,6 +26,7 @@ import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
 import type { Category, Subcategory, User as UserType, Currency, Entity } from '@/lib/types';
 import { logAuditEvent } from '../../audit/actions';
+import { Calculator } from '@/components/ui/calculator';
 
 
 const expenseFormSchema = z.object({
@@ -61,9 +62,10 @@ export default function NewExpensePage() {
   const [tenantId, setTenantId] = React.useState<string | null>(null);
   const [isEntityPopupOpen, setIsEntityPopupOpen] = React.useState(false);
   const [foundEntities, setFoundEntities] = React.useState<Entity[]>([]);
+  const [isCalcOpen, setIsCalcOpen] = React.useState(false);
 
 
-  const { control, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, formState: { errors }, setValue, reset, getValues } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       entityName: '',
@@ -580,7 +582,34 @@ export default function NewExpensePage() {
                         <div className='grid grid-cols-3 gap-4'>
                             <div className="space-y-2 col-span-2">
                                 <Label htmlFor="amount">Monto</Label>
-                                <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
+                                <Controller 
+                                    name="amount" 
+                                    control={control} 
+                                    render={({ field }) => (
+                                        <Popover open={isCalcOpen} onOpenChange={setIsCalcOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Input 
+                                                    id="amount" 
+                                                    type="number" 
+                                                    step="0.01" 
+                                                    {...field}
+                                                    icon={
+                                                        <button type="button" onClick={() => setIsCalcOpen(true)}>
+                                                          <CalculatorIcon className="h-5 w-5 text-muted-foreground" />
+                                                        </button>
+                                                    }
+                                                />
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calculator 
+                                                    onResult={(res) => field.onChange(res)}
+                                                    onClose={() => setIsCalcOpen(false)}
+                                                    initialValue={getValues('amount')}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    )} 
+                                />
                                 {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                             </div>
                              <div className="space-y-2">

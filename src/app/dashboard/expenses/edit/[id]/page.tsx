@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -18,12 +17,13 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, Loader2 } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, Loader2, CalculatorIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import type { Category, Subcategory, Expense, Currency, Entity } from '@/lib/types';
 import { logAuditEvent } from '../../../audit/actions';
+import { Calculator } from '@/components/ui/calculator';
 
 const expenseFormSchema = z.object({
   entityName: z.string().min(1, "El nombre de la entidad es requerido."),
@@ -48,9 +48,10 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
   const firestore = useFirestore();
   const { user } = useUser();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isCalcOpen, setIsCalcOpen] = React.useState(false);
   const expenseId = expenseData.id;
 
-  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<ExpenseFormValues>({
+  const { control, handleSubmit, watch, setValue, formState: { errors }, getValues } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       entityName: expenseData.entityName || '',
@@ -246,7 +247,34 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
                     <div className='grid grid-cols-3 gap-4'>
                         <div className="space-y-2 col-span-2">
                             <Label htmlFor="amount">Monto</Label>
-                            <Controller name="amount" control={control} render={({ field }) => <Input id="amount" type="number" step="0.01" {...field} />} />
+                            <Controller 
+                                name="amount" 
+                                control={control} 
+                                render={({ field }) => (
+                                    <Popover open={isCalcOpen} onOpenChange={setIsCalcOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Input 
+                                                id="amount" 
+                                                type="number" 
+                                                step="0.01" 
+                                                {...field}
+                                                icon={
+                                                    <button type="button" onClick={() => setIsCalcOpen(true)}>
+                                                        <CalculatorIcon className="h-5 w-5 text-muted-foreground" />
+                                                    </button>
+                                                }
+                                            />
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                            <Calculator 
+                                                onResult={(res) => field.onChange(res)}
+                                                onClose={() => setIsCalcOpen(false)}
+                                                initialValue={getValues('amount')}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                )} 
+                            />
                             {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                         </div>
                         <div className="space-y-2">
