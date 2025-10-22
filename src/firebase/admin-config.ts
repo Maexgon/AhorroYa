@@ -5,7 +5,7 @@ import admin from 'firebase-admin';
 
 // Re-implement the initializeAdminApp function to be self-contained.
 // This avoids build issues with top-level awaits or module resolution in Next.js Server Actions.
-export function initializeAdminApp() {
+export async function initializeAdminApp() {
   if (admin.apps.length > 0) {
     return admin.app();
   }

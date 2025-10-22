@@ -1,3 +1,4 @@
+
 'use server';
 
 import { initializeAdminApp } from '@/firebase/admin-config';
@@ -30,7 +31,7 @@ export async function updateMemberRoleAction(params: MemberActionParams & { newR
     const { tenantId, targetUserId, actingUserId, newRole } = params;
 
     try {
-        const adminApp = initializeAdminApp();
+        const adminApp = await initializeAdminApp();
         const firestore = getFirestore(adminApp);
         
         await verifyOwner(firestore, tenantId, actingUserId);
@@ -65,7 +66,7 @@ export async function deleteMemberAction(params: MemberActionParams): Promise<{ 
     const { tenantId, targetUserId, actingUserId } = params;
     
      try {
-        const adminApp = initializeAdminApp();
+        const adminApp = await initializeAdminApp();
         const firestore = getFirestore(adminApp);
         const auth = getAuth(adminApp);
 
