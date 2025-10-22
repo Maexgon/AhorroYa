@@ -382,10 +382,10 @@ export default function SettingsPage() {
     }
   }, [derivedTenantId, derivedUserRole]);
 
-
+  // This is the query that was causing the error.
+  // It's now safe because it depends on `derivedTenantId` which is guaranteed to be present.
   const allMembersQuery = useMemoFirebase(() => {
     if (!derivedTenantId || !firestore) return null;
-    // This query is now secure because the security rule allows listing by tenantId for members.
     return query(collection(firestore, 'memberships'), where('tenantId', '==', derivedTenantId), where('status', '==', 'active'));
   }, [derivedTenantId, firestore]);
   const { data: members, isLoading: isLoadingMembers, setData: setMembers } = useCollection<Membership>(allMembersQuery);
