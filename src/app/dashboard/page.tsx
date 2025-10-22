@@ -1678,9 +1678,10 @@ export default function DashboardPageContainer() {
   const derivedUserRole = memberships?.[0]?.role as UserRole;
   
   const licenseQuery = useMemoFirebase(() => {
-    if (!derivedTenantId || !firestore) return null;
+    const isReadyForQuery = !!derivedTenantId && !!firestore;
+    if (!isReadyForQuery) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
-  }, [derivedTenantId, firestore]);
+}, [derivedTenantId, firestore]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
 
 
