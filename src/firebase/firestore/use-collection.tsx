@@ -59,21 +59,6 @@ export function useCollection<T = any>(
       return;
     }
     
-    // 🔍 DEBUG TEMPORAL - ESTO MOSTRARÁ LA CONSULTA EXACTA
-    const queryPath = (q as any)._query?.path?.segments?.join('/');
-    const queryFilters = (q as any)._query?.filters?.map((f: any) => ({
-      field: f.field?.segments?.join('.'),
-      op: f.op,
-      value: f.value?.stringValue || f.value?.integerValue || 'complex_value' // Adjust based on expected value types
-    }));
-
-    console.log('🔍 useCollection ejecutando:', {
-      path: queryPath,
-      filters: queryFilters,
-      hasFilters: queryFilters?.length > 0,
-      stackTrace: new Error().stack // Captura el stack trace para saber quién llamó
-    });
-    
     setIsLoading(true);
     setError(null);
 
@@ -86,12 +71,6 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       (err: FirestoreError) => {
-        console.error('❌ Error en useCollection:', {
-          path: queryPath,
-          filters: queryFilters,
-          error: err.message
-        });
-
         const contextualError = new FirestorePermissionError({
             operation: 'list',
             path: (q as any)._query.path.segments.join('/'), // HACK: internal property
