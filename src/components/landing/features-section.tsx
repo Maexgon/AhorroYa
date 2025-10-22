@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, Wallet, ScanLine, Target, BarChart, WifiOff, Sparkles } from "lucide-react";
+import { Users, Wallet, ScanLine, Target, BarChart, Sparkles, LandPlot, CreditCard } from "lucide-react";
 
 const features = [
   {
@@ -10,16 +10,16 @@ const features = [
   {
     icon: <Wallet className="h-8 w-8 text-primary" />,
     title: "Seguimiento de Gastos",
-    description: "Registra tus gastos con detalles como categoría, moneda y método de pago, con conversión automática a tu moneda base."
+    description: "Registra tus gastos de forma manual o automática, con detalles como categoría, moneda y método de pago."
   },
   {
     icon: <ScanLine className="h-8 w-8 text-primary" />,
-    title: "OCR para Recibos",
+    title: "Digitalización de Recibos con IA",
     description: "Sube una foto de tus recibos y deja que nuestra IA extraiga los datos para crear borradores de gastos automáticamente."
   },
   {
     icon: <Target className="h-8 w-8 text-primary" />,
-    title: "Presupuestos Inteligentes",
+    title: "Presupuestos Flexibles",
     description: "Crea presupuestos mensuales por categoría, aprovecha el saldo no gastado (rollover) y recibe alertas para no excederte."
   },
   {
@@ -29,8 +29,18 @@ const features = [
   },
   {
     icon: <Sparkles className="h-8 w-8 text-primary" />,
-    title: "Análisis con IA",
-    description: "Recibe sugerencias personalizadas para reasignar tu presupuesto y optimizar tus ahorros basadas en tu historial."
+    title: "Análisis Financiero con IA",
+    description: "Recibe un resumen de tu salud financiera y recomendaciones personalizadas para reasignar tu presupuesto y optimizar ahorros."
+  },
+  {
+    icon: <LandPlot className="h-8 w-8 text-primary" />,
+    title: "Registro de Ingresos",
+    description: "Lleva un control detallado de todas tus fuentes de ingreso, desde salarios hasta inversiones, para tener una visión completa."
+  },
+  {
+    icon: <CreditCard className="h-8 w-8 text-primary" />,
+    title: "Vista de Cuotas Futuras",
+    description: "Anticipa tus próximos pagos con una visualización clara de las cuotas pendientes de tus tarjetas de crédito."
   }
 ];
 
@@ -46,7 +56,7 @@ export default function FeaturesSection() {
             Desde el registro automático de gastos hasta la planificación de presupuestos, Ahorro Ya te da el poder de mejorar tu salud financiera.
           </p>
         </div>
-        <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
           {features.map((feature) => (
             <Card key={feature.title} className="flex flex-col items-start text-left bg-card hover:shadow-lg transition-shadow">
               <CardHeader>
