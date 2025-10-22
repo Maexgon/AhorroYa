@@ -27,6 +27,7 @@ const ProcessReceiptOutputSchema = z.object({
   razonSocial: z.string().optional().describe('The business name of the entity.'),
   fecha: z.string().optional().describe('The date on the receipt (YYYY-MM-DD).'),
   total: z.number().optional().describe('The total amount on the receipt.'),
+  currency: z.enum(['ARS', 'USD']).optional().describe("The currency of the total amount (ARS or USD). Default to ARS if not specified."),
   iva: z.number().optional().describe('The IVA amount on the receipt.'),
   nFactura: z.string().optional().describe('The invoice number.'),
   medioPago: z.string().optional().describe('The payment method used.'),
@@ -52,6 +53,7 @@ Your tasks are:
     - Razón Social (Business Name)
     - Fecha (Date of the transaction in YYYY-MM-DD format)
     - Total (The final total amount as a number)
+    - Currency (The currency of the amount, either 'ARS' or 'USD'. Look for symbols like '$', 'U$S', 'USD'. If no currency is explicitly found, assume 'ARS'.)
     - IVA (The VAT amount, if specified)
     - N° Factura (The invoice or ticket number)
     - Medio de Pago (Payment method, e.g., 'Efectivo', 'Tarjeta de Debito')
@@ -107,4 +109,3 @@ const processReceiptFlow = ai.defineFlow(
     }
   }
 );
-

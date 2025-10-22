@@ -87,6 +87,7 @@ export type Expense = {
   amount: number; // Amount of the expense.
   currency: string; // Currency of the expense.
   amountARS: number; // Amount of the expense in ARS.
+  amountUSD?: number; // Amount of the expense in USD (only if currency is USD).
   categoryId: string; // Reference to Category. (Relationship: Category 1:N Expense)
   subcategoryId?: string; // Reference to Subcategory. (Relationship: Subcategory 1:N Expense)
   entityId?: string; // Reference to Entity. (Relationship: Entity 1:N Expense)

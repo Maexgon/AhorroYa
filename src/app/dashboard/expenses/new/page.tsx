@@ -243,6 +243,7 @@ export default function NewExpensePage() {
     if (processedData.razonSocial) setValue('entityName', processedData.razonSocial);
     if (processedData.cuit) setValue('entityCuit', processedData.cuit.replace(/[^0-9]/g, ''));
     if (processedData.total) setValue('amount', processedData.total);
+    if (processedData.currency) setValue('currency', processedData.currency);
     if (processedData.fecha) {
         try {
             const parsedDate = parseISO(processedData.fecha);
@@ -323,7 +324,10 @@ export default function NewExpensePage() {
 
     try {
         let finalAmountARS = data.amount;
+        let finalAmountUSD: number | undefined = undefined;
+
         if (data.currency === 'USD') {
+            finalAmountUSD = data.amount;
             try {
                 const response = await fetch('https://dolarapi.com/v1/dolares/oficial');
                 if (!response.ok) throw new Error('No se pudo obtener el tipo de cambio.');
@@ -343,6 +347,7 @@ export default function NewExpensePage() {
         const installments = data.paymentMethod === 'credit' ? data.installments || 1 : 1;
         const installmentAmount = data.amount / installments;
         const installmentAmountARS = finalAmountARS / installments;
+        const installmentAmountUSD = finalAmountUSD ? finalAmountUSD / installments : undefined;
         const originalNotes = data.notes || '';
         const createdExpenseIds: string[] = [];
 
@@ -356,7 +361,7 @@ export default function NewExpensePage() {
                 ? `${originalNotes} (Cuota ${i + 1}/${installments})`.trim()
                 : originalNotes;
 
-            const expenseData = {
+            const expenseData: any = {
                 id: newExpenseRef.id,
                 tenantId: tenantId,
                 userId: user.uid,
@@ -383,6 +388,11 @@ export default function NewExpensePage() {
                     cardType: data.cardType || null,
                 })
             };
+
+            if (data.currency === 'USD' && installmentAmountUSD !== undefined) {
+                expenseData.amountUSD = parseFloat(installmentAmountUSD.toFixed(2));
+            }
+
 
             batch.set(newExpenseRef, expenseData);
             writes.push({ path: newExpenseRef.path, data: expenseData });

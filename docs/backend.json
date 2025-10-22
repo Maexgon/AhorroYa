@@ -419,6 +419,10 @@
           "type": "number",
           "description": "Amount of the expense in ARS."
         },
+        "amountUSD": {
+            "type": "number",
+            "description": "Amount of the expense in USD (only if currency is USD)."
+        },
         "categoryId": {
           "type": "string",
           "description": "Reference to Category. (Relationship: Category 1:N Expense)"

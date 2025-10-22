@@ -140,7 +140,10 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
     const expenseToUpdateRef = doc(firestore, 'expenses', expenseId);
     
     let amountARS = data.amount;
+    let amountUSD: number | undefined = undefined;
+
     if (data.currency === 'USD') {
+        amountUSD = data.amount;
         try {
             const response = await fetch('https://dolarapi.com/v1/dolares/oficial');
             if (!response.ok) throw new Error('No se pudo obtener el tipo de cambio.');
@@ -155,7 +158,7 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
     
     const entityId = await findOrCreateEntity(firestore, tenantId, data);
     
-    const updatedData = {
+    const updatedData: any = {
         ...data,
         date: data.date.toISOString(),
         amountARS: amountARS,
@@ -165,6 +168,13 @@ function ExpenseEditForm({ expenseData }: { expenseData: Expense }) {
         entityName: data.entityName?.trim(),
         updatedAt: new Date().toISOString(),
     };
+    
+    if (data.currency === 'USD') {
+      updatedData.amountUSD = amountUSD;
+    } else {
+      // If currency is not USD, ensure amountUSD is not present
+      updatedData.amountUSD = null;
+    }
 
     updateDoc(expenseToUpdateRef, updatedData)
         .then(() => {
