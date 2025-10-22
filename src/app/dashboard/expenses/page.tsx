@@ -71,7 +71,7 @@ export default function ExpensesPage() {
     }, [membershipData]);
 
     const expensesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId || !user || isLoadingMembership) return null; // Wait for role check
+        if (!firestore || !tenantId || !user || isLoadingMembership) return null;
         
         const baseQuery = query(
             collection(firestore, 'expenses'), 
@@ -79,12 +79,11 @@ export default function ExpensesPage() {
             where('deleted', '==', false)
         );
 
-        // If user is not the owner, filter by their own user ID
-        if (!isOwner) { 
-            return query(baseQuery, where('userId', '==', user.uid));
+        if (isOwner) {
+            return baseQuery;
         }
-
-        return baseQuery;
+        
+        return query(baseQuery, where('userId', '==', user.uid));
 
     }, [firestore, tenantId, user, isOwner, isLoadingMembership]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
