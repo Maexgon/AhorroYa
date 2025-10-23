@@ -233,6 +233,9 @@ export default function NewExpensePage() {
           setReceiptFiles([]);
       } finally {
           setIsProcessingReceipt(false);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''; // Reset file input
+          }
       }
   };
 
@@ -773,4 +776,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
