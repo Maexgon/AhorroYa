@@ -1,14 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Building, FileKey, Loader2, LogOut } from 'lucide-react';
-import { useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Tenant, User as UserType, License } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { getAuth, signOut, User } from 'firebase/auth';
+import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import {
@@ -20,10 +20,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 
-// The user object is now passed as a prop
-export default function SuperAdminPage({ user }: { user: User | null }) {
+export default function SuperAdminPage() {
+    const { user } = useUser(); // Hook to get user data directly
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
@@ -79,7 +80,8 @@ export default function SuperAdminPage({ user }: { user: User | null }) {
     <div className="flex min-h-screen flex-col bg-secondary/50">
        <header className="sticky top-0 z-30 w-full border-b bg-background">
           <div className="container flex h-14 items-center">
-            <h1 className="font-headline text-xl font-bold">Dashboard</h1>
+            <SidebarTrigger />
+            <h1 className="font-headline text-xl font-bold ml-2">Dashboard</h1>
             <div className="ml-auto flex items-center space-x-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

@@ -2,29 +2,25 @@
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
-import { getAuth, signOut, type User } from 'firebase/auth';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey, LogOut, User as UserIcon } from 'lucide-react';
+import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset, SidebarHeader } from '@/components/ui/sidebar';
 
 
-function SuperAdminUI({ children, user }: { children: React.ReactNode, user: User | null }) {
+function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   
   return (
     <SidebarProvider>
       <Sidebar>
         <SidebarContent className="flex flex-col gap-2 p-2">
-           <div className="p-2">
+           <SidebarHeader className="p-2">
             <h2 className="text-lg font-semibold">Super Admin</h2>
-          </div>
+          </SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
               <Link href="/superadmin" passHref>
@@ -70,13 +66,7 @@ function SuperAdminUI({ children, user }: { children: React.ReactNode, user: Use
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        {/* Pass user object to children */}
-        {React.Children.map(children, child => {
-            if (React.isValidElement(child)) {
-                return React.cloneElement(child, { user: user } as any);
-            }
-            return child;
-        })}
+        {children}
       </SidebarInset>
     </SidebarProvider>
   );
@@ -113,13 +103,15 @@ export default function SuperAdminLayout({
       if (userData.isSuperAdmin === true) {
         setAuthStatus('authorized');
       } else {
-        setAuthStatus('unauthorized');
+        router.replace('/dashboard');
       }
+    } else if (!user) {
+      router.replace('/login');
     } else {
       setAuthStatus('unauthorized');
     }
     
-  }, [isUserLoading, isUserDocLoading, user, userData]);
+  }, [isUserLoading, isUserDocLoading, user, userData, router]);
 
 
   if (authStatus === 'loading') {
@@ -145,7 +137,7 @@ export default function SuperAdminLayout({
 
   if (authStatus === 'authorized') {
      return (
-        <SuperAdminUI user={user}>
+        <SuperAdminUI>
             {children}
         </SuperAdminUI>
     );
