@@ -35,11 +35,6 @@ export default function SuperAdminPage() {
   
   return (
     <div className="flex min-h-screen flex-col bg-secondary/50">
-      <header className="sticky top-0 z-40 w-full border-b bg-background">
-        <div className="container flex h-16 items-center">
-          <h1 className="font-headline text-xl font-bold">Panel de Superadministrador</h1>
-        </div>
-      </header>
       <main className="flex-1 p-4 md:p-8">
          {isLoading ? (
             <div className="flex justify-center items-center h-64">
