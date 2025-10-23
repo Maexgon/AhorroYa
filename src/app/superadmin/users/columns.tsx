@@ -2,7 +2,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, CheckCircle, XCircle } from "lucide-react"
+import { MoreHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -12,12 +12,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { User } from "@/lib/types"
+import type { Membership, User, Tenant } from "@/lib/types"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
-export type UserRow = {
-    user: User;
-    tenantCount: number;
+export type MembershipRow = {
+    membership: Membership;
+    user?: User;
+    tenant?: Tenant;
 }
 
 const getInitials = (name: string = "") => {
@@ -29,13 +32,13 @@ const getInitials = (name: string = "") => {
 }
 
 
-export const columns: ColumnDef<UserRow>[] = [
+export const columns: ColumnDef<MembershipRow>[] = [
   {
-    id: "user.displayName", // Explicit ID for the filter to find
     accessorKey: "user.displayName",
     header: "Usuario",
      cell: ({ row }) => {
       const { user } = row.original;
+      if (!user) return "Usuario no encontrado";
       return (
          <div className="flex items-center gap-3">
             <Avatar className="h-9 w-9">
@@ -51,29 +54,33 @@ export const columns: ColumnDef<UserRow>[] = [
     },
   },
   {
-    accessorKey: "tenantCount",
-    header: "Tenants",
-    cell: ({ row }) => {
-        const count = row.original.tenantCount;
-        return <div className="text-center">{count}</div>
-    }
+    accessorKey: "tenant.name",
+    header: "Tenant",
+     cell: ({ row }) => {
+        const { tenant } = row.original;
+        return <div className="font-medium">{tenant?.name || 'N/A'}</div>;
+    },
   },
   {
-    accessorKey: "user.isSuperadmin",
-    header: "Superadmin",
+    accessorKey: "membership.role",
+    header: "Rol",
     cell: ({ row }) => {
-        const isSuperadmin = row.original.user.isSuperadmin;
-        return (
-            <div className="flex justify-center">
-                {isSuperadmin ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-muted-foreground" />}
-            </div>
-        )
+        const role = row.original.membership.role;
+        return <Badge variant={role === 'owner' ? 'default' : 'secondary'} className={cn(role === 'owner' && 'bg-primary')}>{role}</Badge>;
+    }
+  },
+   {
+    accessorKey: "membership.joinedAt",
+    header: "Fecha de Ingreso",
+    cell: ({ row }) => {
+        const date = new Date(row.original.membership.joinedAt);
+        return <div>{date.toLocaleDateString('es-AR')}</div>;
     }
   },
   {
     id: "actions",
     cell: ({ row }) => {
-      const { user } = row.original
+      const { membership } = row.original
  
       return (
         <div className="text-right">
@@ -86,11 +93,11 @@ export const columns: ColumnDef<UserRow>[] = [
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                <DropdownMenuItem>Ver Detalles</DropdownMenuItem>
-                <DropdownMenuItem>Convertir en Superadmin</DropdownMenuItem>
+                <DropdownMenuItem>Ver Usuario</DropdownMenuItem>
+                <DropdownMenuItem>Ver Tenant</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive">
-                    Borrar Usuario
+                    Revocar Acceso
                 </DropdownMenuItem>
             </DropdownMenuContent>
             </DropdownMenu>

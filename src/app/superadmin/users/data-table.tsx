@@ -62,6 +62,14 @@ export function UsersDataTable<TData, TValue>({
           }
           className="max-w-sm"
         />
+         <Input
+          placeholder="Filtrar por tenant..."
+          value={(table.getColumn("tenant.name")?.getFilterValue() as string) ?? ""}
+          onChange={(event) =>
+            table.getColumn("tenant.name")?.setFilterValue(event.target.value)
+          }
+          className="max-w-sm"
+        />
       </div>
       <div className="rounded-md border">
         <Table>

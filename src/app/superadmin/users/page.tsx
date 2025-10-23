@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader2, LogOut } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import type { User as UserType, Membership } from '@/lib/types';
+import type { User as UserType, Membership, Tenant } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 import { UsersDataTable } from './data-table';
 import { columns } from './columns';
@@ -30,22 +30,30 @@ export default function SuperAdminUsersPage() {
 
     const membershipsQuery = useMemoFirebase(() => collection(firestore, 'memberships'), [firestore]);
     const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
+    
+    const tenantsQuery = useMemoFirebase(() => collection(firestore, 'tenants'), [firestore]);
+    const { data: tenants, isLoading: isLoadingTenants } = useCollection<Tenant>(tenantsQuery);
 
     const tableData = React.useMemo(() => {
-        if (!users || !memberships) return [];
+        if (!users || !memberships || !tenants) return [];
         
-        const membershipCountMap = new Map<string, number>();
-        memberships.forEach(m => {
-            membershipCountMap.set(m.uid, (membershipCountMap.get(m.uid) || 0) + 1);
+        const userMap = new Map(users.map(u => [u.uid, u]));
+        const tenantMap = new Map(tenants.map(t => [t.id, t]));
+
+        // Filter out memberships belonging to superadmins
+        const nonSuperAdminMemberships = memberships.filter(m => {
+            const user = userMap.get(m.uid);
+            return user ? !user.isSuperadmin : true;
         });
 
-        return users.map(user => ({
-            user,
-            tenantCount: membershipCountMap.get(user.uid) || 0,
+        return nonSuperAdminMemberships.map(membership => ({
+            membership,
+            user: userMap.get(membership.uid),
+            tenant: tenantMap.get(membership.tenantId)
         }));
-    }, [users, memberships]);
+    }, [users, memberships, tenants]);
 
-    const isLoading = isLoadingUsers || isLoadingMemberships;
+    const isLoading = isLoadingUsers || isLoadingMemberships || isLoadingTenants;
 
     const getInitials = (name: string = "") => {
       const names = name.split(' ');
@@ -108,7 +116,7 @@ export default function SuperAdminUsersPage() {
          <Card>
             <CardHeader>
                 <CardTitle>Gestión de Usuarios</CardTitle>
-                <CardDescription>Visualiza y administra todos los usuarios de la plataforma.</CardDescription>
+                <CardDescription>Visualiza y administra todos los usuarios y sus membresías en la plataforma.</CardDescription>
             </CardHeader>
             <CardContent>
                 {isLoading ? (
