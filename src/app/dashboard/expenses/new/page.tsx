@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -177,52 +178,62 @@ export default function NewExpensePage() {
   };
 
   const handleReceiptChange = async (files: FileList | null) => {
-    if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) return;
-
-    setIsProcessingReceipt(true);
-    toast({ title: 'Procesando recibo(s)...' });
-
-    try {
-        const filePreviews: FilePreview[] = [];
-        const base64Promises: Promise<string>[] = [];
-
-        const isPdfUpload = files[0].type === 'application/pdf';
-        
-        if (isPdfUpload) {
-            const file = files[0];
-            filePreviews.push({ file, previewUrl: '' }); // No preview for PDF
-            base64Promises.push(fileToBase64(file));
-        } else {
-             for (const f of Array.from(files)) {
-                if (f.type.startsWith('image/')) {
-                    base64Promises.push(fileToBase64(f));
-                    filePreviews.push({ file: f, previewUrl: URL.createObjectURL(f) });
-                }
-            }
-        }
-        
-        setReceiptFiles(prev => [...prev, ...filePreviews]);
-        const base64Contents = await Promise.all(base64Promises);
-        
-        const result = await processReceiptAction({
-            receiptId: crypto.randomUUID(),
-            base64Contents: base64Contents,
-            tenantId,
-            userId: user.uid,
-            fileType: isPdfUpload ? 'pdf' : 'image',
-            categories: categoriesForAI,
-        });
-        
-        handleAIResult(result);
-
-    } catch (error: any) {
-        console.error("Error processing receipt:", error);
-        toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
-        setReceiptFiles([]);
-    } finally {
-        setIsProcessingReceipt(false);
-    }
-};
+      if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) return;
+  
+      setIsProcessingReceipt(true);
+      toast({ title: 'Procesando recibo(s)...' });
+  
+      try {
+          const fileList = Array.from(files);
+          const isPdfUpload = fileList.some(f => f.type === 'application/pdf');
+          let filesToProcess: File[];
+  
+          if (isPdfUpload) {
+              const pdfFile = fileList.find(f => f.type === 'application/pdf');
+              if (pdfFile) {
+                  filesToProcess = [pdfFile];
+                  if (fileList.length > 1) {
+                      toast({ variant: 'default', title: 'Aviso', description: 'Se seleccionó un PDF. Solo se procesará el archivo PDF.' });
+                  }
+              } else {
+                   throw new Error("No se encontró el archivo PDF seleccionado.");
+              }
+          } else {
+              filesToProcess = fileList.filter(f => f.type.startsWith('image/'));
+          }
+  
+          if (filesToProcess.length === 0) {
+              throw new Error("No se seleccionaron archivos de imagen o PDF válidos.");
+          }
+  
+          const filePreviews = filesToProcess.map(file => ({
+              file,
+              previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+          }));
+          const base64Promises = filesToProcess.map(fileToBase64);
+  
+          setReceiptFiles(prev => [...prev, ...filePreviews]);
+          const base64Contents = await Promise.all(base64Promises);
+          
+          const result = await processReceiptAction({
+              receiptId: crypto.randomUUID(),
+              base64Contents: base64Contents,
+              tenantId,
+              userId: user.uid,
+              fileType: isPdfUpload ? 'pdf' : 'image',
+              categories: categoriesForAI,
+          });
+          
+          handleAIResult(result);
+  
+      } catch (error: any) {
+          console.error("Error processing receipt:", error);
+          toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
+          setReceiptFiles([]);
+      } finally {
+          setIsProcessingReceipt(false);
+      }
+  };
 
   const handleAIResult = (result: { success: boolean; data?: ProcessReceiptOutput; error?: string; }) => {
     if (!result.success || !result.data) {
@@ -424,7 +435,7 @@ export default function NewExpensePage() {
         console.error("Error in onSubmit:", error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: 'batch-write',
-            operation: 'write',
+            operation: 'create',
             requestResourceData: writes,
         }));
     } finally {
@@ -750,3 +761,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    
