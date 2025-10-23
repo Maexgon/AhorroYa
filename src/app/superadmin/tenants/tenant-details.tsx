@@ -51,7 +51,7 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
   const DetailItem = ({ label, value }: { label: string, value: React.ReactNode }) => (
     <div>
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="text-base font-semibold">{value || 'N/A'}</p>
+        <div className="text-base font-semibold">{value || 'N/A'}</div>
     </div>
   );
 
@@ -132,4 +132,3 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
     </Dialog>
   );
 }
-
