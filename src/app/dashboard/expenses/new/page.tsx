@@ -64,6 +64,7 @@ export default function NewExpensePage() {
   const [isEntityPopupOpen, setIsEntityPopupOpen] = React.useState(false);
   const [foundEntities, setFoundEntities] = React.useState<Entity[]>([]);
   const [isCalcOpen, setIsCalcOpen] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
 
   const { control, handleSubmit, watch, formState: { errors }, setValue, reset, getValues } = useForm<ExpenseFormValues>({
@@ -465,6 +466,15 @@ export default function NewExpensePage() {
                         <CardDescription>Sube imágenes o un PDF de tu recibo para autocompletar los datos con IA.</CardDescription>
                     </CardHeader>
                     <CardContent>
+                         <input 
+                            ref={fileInputRef}
+                            id="receipt-file-input" 
+                            type="file" 
+                            className="hidden" 
+                            multiple 
+                            onChange={(e) => handleReceiptChange(e.target.files)} 
+                            accept="image/png, image/jpeg, application/pdf" 
+                        />
                         {isProcessingReceipt ? (
                              <div className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-primary/50 rounded-md bg-primary/10">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -493,37 +503,39 @@ export default function NewExpensePage() {
                                     </div>
                                 ))}
                                 {receiptFiles.length > 0 && !receiptFiles.some(f => f.file.type === 'application/pdf') && (
-                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center">
                                         <Plus className="w-8 h-8 text-muted-foreground" />
                                     </div>
-                                    <input id="receipt-file-input" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg"/>
-                                </label>
+                                </button>
                                 )}
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full gap-4">
-                                <input id="receipt-file-input" type="file" className="hidden" multiple onChange={(e) => handleReceiptChange(e.target.files)} accept="image/png, image/jpeg, application/pdf" />
-                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" onClick={() => document.getElementById('receipt-file-input')?.removeAttribute('capture')}>
+                                <button type="button" onClick={() => {
+                                    if(fileInputRef.current) {
+                                        fileInputRef.current.removeAttribute('capture');
+                                        fileInputRef.current.click();
+                                    }
+                                }} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Subir archivo</span></p>
                                         <p className="text-xs text-muted-foreground">Imágenes o PDF (MAX 5MB)</p>
                                     </div>
-                                </label>
-                                <label htmlFor="receipt-file-input" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" onClick={() => {
-                                  const input = document.getElementById('receipt-file-input');
-                                  if (input) {
-                                      input.setAttribute('capture', 'environment')
-                                      input.click();
+                                </button>
+                                <button type="button" onClick={() => {
+                                  if (fileInputRef.current) {
+                                      fileInputRef.current.setAttribute('capture', 'environment');
+                                      fileInputRef.current.click();
                                   }
-                                }}>
+                                }} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Tomar Foto</span></p>
                                         <p className="text-xs text-muted-foreground">Usa la cámara de tu dispositivo</p>
                                     </div>
-                                </label>
+                                </button>
                             </div>
                         )}
                     </CardContent>
@@ -762,4 +774,3 @@ export default function NewExpensePage() {
   );
 }
 
-    
