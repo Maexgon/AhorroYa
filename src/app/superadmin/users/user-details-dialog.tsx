@@ -84,13 +84,13 @@ export function UserDetailsDialog({ membershipRow, open, onOpenChange }: UserDet
                     
                     <div className="mt-4 space-y-6 max-h-[70vh] overflow-y-auto pr-4">
                         <section className="flex items-center gap-4">
-                             <Avatar className="h-16 w-16">
+                             <Avatar className="h-14 w-14 sm:h-16 sm:w-16">
                                 <AvatarImage src={user?.photoURL || ''} alt={user?.displayName} />
                                 <AvatarFallback className="text-xl">{getInitials(user?.displayName)}</AvatarFallback>
                             </Avatar>
                             <div>
-                                <h3 className="text-xl font-bold">{user?.displayName}</h3>
-                                <p className="text-muted-foreground">{user?.email}</p>
+                                <h3 className="text-lg sm:text-xl font-bold">{user?.displayName}</h3>
+                                <p className="text-sm text-muted-foreground">{user?.email}</p>
                             </div>
                         </section>
                         
@@ -98,7 +98,7 @@ export function UserDetailsDialog({ membershipRow, open, onOpenChange }: UserDet
                         
                         <section>
                             <h3 className="text-lg font-semibold mb-2">Membresía</h3>
-                            <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
                                 <DetailItem label="Tenant" value={tenant?.name} />
                                 <DetailItem label="Rol" value={<Badge className="capitalize">{membership.role}</Badge>} />
                                 <DetailItem label="Estado" value={<Badge variant={membership.status === 'active' ? 'default' : 'destructive'} className={membership.status === 'active' ? 'bg-green-600' : ''}>{membership.status}</Badge>} />
@@ -110,7 +110,7 @@ export function UserDetailsDialog({ membershipRow, open, onOpenChange }: UserDet
 
                         <section>
                             <h3 className="text-lg font-semibold mb-2">Acciones de Gestión</h3>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {canBePromoted && (
                                 <Button variant="outline" onClick={() => handleActionClick('promote')}>
                                     <Shield className="mr-2 h-4 w-4" /> Promover a Admin
