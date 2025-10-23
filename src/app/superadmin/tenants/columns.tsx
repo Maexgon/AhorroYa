@@ -22,6 +22,10 @@ export type TenantRow = {
     owner?: User;
 }
 
+export type TableMeta = {
+    onViewDetails: (tenantId: string) => void;
+}
+
 export const columns: ColumnDef<TenantRow>[] = [
   {
     id: "tenant.name", // Explicitly set the column ID here
@@ -89,8 +93,9 @@ export const columns: ColumnDef<TenantRow>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
-      const tenant = row.original.tenant
+    cell: ({ row, table }) => {
+      const { tenant } = row.original
+      const meta = table.options.meta as TableMeta | undefined;
  
       return (
         <div className="text-right">
@@ -103,7 +108,7 @@ export const columns: ColumnDef<TenantRow>[] = [
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                <DropdownMenuItem>Ver Detalles</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => meta?.onViewDetails(tenant.id)}>Ver Detalles</DropdownMenuItem>
                 <DropdownMenuItem>Administrar Licencia</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive">

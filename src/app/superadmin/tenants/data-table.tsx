@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -24,11 +25,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { TenantRow } from "./columns"
+import { TenantRow, TableMeta } from "./columns"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  meta: TableMeta
 }
 
 const planOptions = ["demo", "personal", "familiar", "empresa"];
@@ -37,6 +39,7 @@ const statusOptions = ["active", "expired", "pending", "grace_period"];
 export function TenantsDataTable<TData extends TenantRow, TValue>({
   columns,
   data,
+  meta,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -44,6 +47,7 @@ export function TenantsDataTable<TData extends TenantRow, TValue>({
   const table = useReactTable({
     data,
     columns,
+    meta,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
