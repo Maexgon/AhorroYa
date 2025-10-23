@@ -90,7 +90,6 @@ export type Expense = {
   amountUSD?: number; // Amount of the expense in USD (only if currency is USD).
   categoryId: string; // Reference to Category. (Relationship: Category 1:N Expense)
   subcategoryId?: string; // Reference to Subcategory. (Relationship: Subcategory 1:N Expense)
-  entityId?: string; // Reference to Entity. (Relationship: Entity 1:N Expense)
   entityCuit?: string; // CUIT of the entity associated with the expense.
   entityName?: string; // Name of the entity associated with the expense.
   ivaPercent?: number; // IVA percentage applied to the expense.

@@ -14,7 +14,6 @@ import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButto
 
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  console.log("SuperAdminUI rendering. Pathname:", pathname);
 
   return (
     <SidebarProvider>
@@ -22,14 +21,14 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
         <SidebarContent className="flex flex-col gap-2 p-2">
           <SidebarMenu>
             <SidebarMenuItem>
-                <Link href="/superadmin" passHref>
-                  <SidebarMenuButton asChild isActive={pathname === '/superadmin'}>
-                    <div>
-                      <LayoutDashboard />
-                      Dashboard
-                    </div>
-                  </SidebarMenuButton>
-                </Link>
+              <Link href="/superadmin" passHref>
+                <SidebarMenuButton asChild isActive={pathname === '/superadmin'}>
+                  <div>
+                    <LayoutDashboard />
+                    Dashboard
+                  </div>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <Link href="/superadmin/tenants" passHref>
@@ -44,20 +43,20 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <Link href="/superadmin/users" passHref>
                 <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/users')}>
-                    <div>
-                      <Users />
-                      Usuarios
-                    </div>
+                  <div>
+                    <Users />
+                    Usuarios
+                  </div>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <Link href="/superadmin/licenses" passHref>
                 <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/licenses')}>
-                    <div>
-                      <FileKey />
-                      Licencias
-                    </div>
+                  <div>
+                    <FileKey />
+                    Licencias
+                  </div>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -87,8 +86,6 @@ export default function SuperAdminLayout({
   const firestore = useFirestore();
   const router = useRouter();
 
-  console.log("SuperAdminLayout: Initial render. isUserLoading:", isUserLoading, "User:", user ? user.uid : 'null');
-
   const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
@@ -99,30 +96,30 @@ export default function SuperAdminLayout({
   const isLoading = isUserLoading || isUserDocLoading;
 
   useEffect(() => {
-    console.log("SuperAdminLayout useEffect triggered. isLoading:", isLoading);
+    // Wait until loading is fully finished before doing any checks
     if (isLoading) {
-      console.log("Still loading, returning from useEffect.");
       return;
     }
 
-    console.log("Data loaded. User:", user ? user.uid : 'null', "userData:", userData);
-    
+    // If loading is done and there's no user, redirect to login
     if (!user) {
-      console.log("No user found, redirecting to /login");
       router.replace('/login');
-    } else if (userData && userData.isSuperadmin !== true) {
-      console.log("User is not a superadmin, redirecting to /dashboard. isSuperadmin:", userData.isSuperadmin);
-      router.replace('/dashboard');
-    } else if (!userData) {
-      console.log("User is authenticated but userData is not available. Redirecting to /dashboard");
-      router.replace('/dashboard');
+      return;
+    }
+
+    // If loading is done, and we have user data, check for superadmin status
+    if (userData) {
+      if (userData.isSuperadmin !== true) {
+        router.replace('/dashboard');
+      }
     } else {
-       console.log("User is a superadmin. Access granted.");
+        // If userData is null after loading, means the doc doesn't exist or there was an error
+        // that useDoc handles. In any case, not a superadmin.
+        router.replace('/dashboard');
     }
   }, [user, userData, isLoading, router]);
   
   if (isLoading) {
-    console.log("Render: Showing main loading indicator.");
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -130,8 +127,7 @@ export default function SuperAdminLayout({
     );
   }
 
-  if (!userData?.isSuperadmin) {
-    console.log("Render: Showing 'Access Denied' screen. userData.isSuperadmin:", userData?.isSuperadmin);
+  if (userData?.isSuperadmin !== true) {
      return (
         <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
             <ShieldAlert className="h-16 w-16 text-destructive" />
@@ -141,6 +137,5 @@ export default function SuperAdminLayout({
     );
   }
   
-  console.log("Render: Rendering SuperAdminUI.");
   return <SuperAdminUI>{children}</SuperAdminUI>;
 }
