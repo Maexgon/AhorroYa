@@ -9,7 +9,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { User as UserType, Membership, Tenant } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 import { UsersDataTable } from './data-table';
-import { columns } from './columns';
+import { columns, TableMeta, MembershipRow } from './columns';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getAuth, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { UserDetailsDialog } from './user-details-dialog';
+
 
 export default function SuperAdminUsersPage() {
     const { user } = useUser();
@@ -24,7 +26,10 @@ export default function SuperAdminUsersPage() {
     const router = useRouter();
     const { toast } = useToast();
 
-    // The parent layout now ensures that the user is authenticated.
+    const [selectedMembership, setSelectedMembership] = React.useState<MembershipRow | null>(null);
+    const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
+
+
     const usersQuery = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
     const { data: users, isLoading: isLoadingUsers } = useCollection<UserType>(usersQuery);
 
@@ -40,7 +45,6 @@ export default function SuperAdminUsersPage() {
         const userMap = new Map(users.map(u => [u.uid, u]));
         const tenantMap = new Map(tenants.map(t => [t.id, t]));
 
-        // Filter out memberships belonging to superadmins
         const nonSuperAdminMemberships = memberships.filter(m => {
             const user = userMap.get(m.uid);
             return user ? !user.isSuperadmin : true;
@@ -54,6 +58,16 @@ export default function SuperAdminUsersPage() {
     }, [users, memberships, tenants]);
 
     const isLoading = isLoadingUsers || isLoadingMemberships || isLoadingTenants;
+    
+    const handleViewDetails = (membershipRow: MembershipRow) => {
+        setSelectedMembership(membershipRow);
+        setIsDetailsOpen(true);
+    };
+
+    const tableMeta: TableMeta = {
+      onViewDetails: handleViewDetails,
+    }
+
 
     const getInitials = (name: string = "") => {
       const names = name.split(' ');
@@ -82,6 +96,7 @@ export default function SuperAdminUsersPage() {
     };
   
   return (
+    <>
     <div className="flex min-h-screen flex-col bg-secondary/50">
         <header className="sticky top-0 z-30 w-full border-b bg-background">
           <div className="container flex h-14 items-center">
@@ -124,11 +139,19 @@ export default function SuperAdminUsersPage() {
                         <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     </div>
                 ) : (
-                    <UsersDataTable columns={columns} data={tableData} />
+                    <UsersDataTable columns={columns} data={tableData} meta={tableMeta} />
                 )}
             </CardContent>
          </Card>
       </main>
     </div>
+    {selectedMembership && (
+        <UserDetailsDialog
+            membershipRow={selectedMembership}
+            open={isDetailsOpen}
+            onOpenChange={setIsDetailsOpen}
+        />
+    )}
+    </>
   );
 }

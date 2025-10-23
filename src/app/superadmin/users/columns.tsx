@@ -23,6 +23,10 @@ export type MembershipRow = {
     tenant?: Tenant;
 }
 
+export type TableMeta = {
+    onViewDetails: (membershipRow: MembershipRow) => void;
+}
+
 const getInitials = (name: string = "") => {
     const names = name.split(' ');
     if (names.length > 1) {
@@ -34,7 +38,7 @@ const getInitials = (name: string = "") => {
 
 export const columns: ColumnDef<MembershipRow>[] = [
   {
-    id: "user.displayName", // Explicitly set ID for filtering
+    id: "user.displayName",
     accessorKey: "user.displayName",
     header: "Usuario",
      cell: ({ row }) => {
@@ -81,8 +85,9 @@ export const columns: ColumnDef<MembershipRow>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
-      const { membership } = row.original
+    cell: ({ row, table }) => {
+      const membershipRow = row.original;
+      const meta = table.options.meta as TableMeta | undefined;
  
       return (
         <div className="text-right">
@@ -95,11 +100,8 @@ export const columns: ColumnDef<MembershipRow>[] = [
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                <DropdownMenuItem>Ver Usuario</DropdownMenuItem>
-                <DropdownMenuItem>Ver Tenant</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
-                    Revocar Acceso
+                <DropdownMenuItem onClick={() => meta?.onViewDetails(membershipRow)}>
+                    Ver Detalles
                 </DropdownMenuItem>
             </DropdownMenuContent>
             </DropdownMenu>
