@@ -179,12 +179,17 @@ export default function NewExpensePage() {
   };
 
   const handleReceiptChange = async (files: FileList | null) => {
-      if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) return;
+      console.log('[DEBUG] handleReceiptChange triggered.');
+      if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) {
+          console.log('[DEBUG] Pre-condition for processing not met:', { hasFiles: !!files && files.length > 0, hasUser: !!user, hasTenantId: !!tenantId, hasCategories: !!categoriesForAI });
+          return;
+      }
   
       setIsProcessingReceipt(true);
       toast({ title: 'Procesando recibo(s)...' });
   
       try {
+          console.log('[DEBUG] Starting receipt processing...');
           const fileList = Array.from(files);
           const isPdfUpload = fileList.some(f => f.type === 'application/pdf');
           let filesToProcess: File[];
@@ -216,6 +221,7 @@ export default function NewExpensePage() {
           setReceiptFiles(prev => [...prev, ...filePreviews]);
           const base64Contents = await Promise.all(base64Promises);
           
+          console.log('[DEBUG] Calling processReceiptAction...');
           const result = await processReceiptAction({
               receiptId: crypto.randomUUID(),
               base64Contents: base64Contents,
@@ -228,7 +234,7 @@ export default function NewExpensePage() {
           handleAIResult(result);
   
       } catch (error: any) {
-          console.error("Error processing receipt:", error);
+          console.error("[DEBUG] Error processing receipt:", error);
           toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
           setReceiptFiles([]);
       } finally {

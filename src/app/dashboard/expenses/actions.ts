@@ -13,7 +13,7 @@ export async function processReceiptAction(
     input: ProcessReceiptInput
 ): Promise<{ success: boolean; data?: ProcessReceiptOutput; error?: string; }> {
     try {
-        console.log('[ACTION] Calling processReceipt with input:', { ...input, base64Contents: `${input.base64Contents.length} files` });
+        console.log('[ACTION] Calling processReceipt with input files:', input.base64Contents.length);
         const result = await processReceipt(input);
         console.log('[ACTION] Received result from processReceipt:', result);
         
