@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import type { Expense, Category, Subcategory } from "@/lib/types"
 import Link from "next/link"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // This type is used to define the shape of our data.
 export type ExpenseRow = Expense & {
@@ -153,14 +154,16 @@ export const columns = (isOwnerOrAdmin: boolean, currentUserId: string): ColumnD
         const { onDelete } = table.options.meta as { onDelete: (id: string) => void };
         const canEdit = expense.userId === currentUserId;
 
-        return (
-          <div className="flex items-center justify-center gap-2">
-            <Button variant="ghost" size="icon" asChild disabled={!canEdit}>
-              <Link href={canEdit ? `/dashboard/expenses/edit/${expense.id}` : '#'}>
-                <Pencil className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button
+        const editButton = (
+          <Button variant="ghost" size="icon" asChild disabled={!canEdit}>
+            <Link href={canEdit ? `/dashboard/expenses/edit/${expense.id}` : '#'}>
+              <Pencil className="h-4 w-4" />
+            </Link>
+          </Button>
+        );
+
+        const deleteButton = (
+           <Button
               variant="ghost"
               size="icon"
               className="text-destructive hover:text-destructive"
@@ -169,6 +172,33 @@ export const columns = (isOwnerOrAdmin: boolean, currentUserId: string): ColumnD
             >
               <Trash2 className="h-4 w-4" />
             </Button>
+        );
+
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <TooltipProvider>
+              {!canEdit ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>{editButton}</TooltipTrigger>
+                  <TooltipContent>
+                    <p>No puedes editar gastos de otros usuarios.</p>
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                editButton
+              )}
+
+              {!canEdit ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>{deleteButton}</TooltipTrigger>
+                  <TooltipContent>
+                    <p>No puedes eliminar gastos de otros usuarios.</p>
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                deleteButton
+              )}
+            </TooltipProvider>
           </div>
         )
       },
