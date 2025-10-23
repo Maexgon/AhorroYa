@@ -99,15 +99,19 @@ export default function SuperAdminLayout({
       return;
     }
 
-    if (user && userData) {
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    
+    if (userData) {
       if (userData.isSuperAdmin === true) {
         setAuthStatus('authorized');
       } else {
-        router.replace('/dashboard');
+        setAuthStatus('unauthorized');
       }
-    } else if (!user) {
-      router.replace('/login');
     } else {
+      // User is authenticated but user document is not found or doesn't have the flag.
       setAuthStatus('unauthorized');
     }
     

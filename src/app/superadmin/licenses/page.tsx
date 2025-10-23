@@ -1,10 +1,9 @@
-
 'use client';
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import { useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership } from '@/lib/types';
 import { collection } from 'firebase/firestore';
@@ -12,24 +11,18 @@ import { LicensesDataTable } from './data-table';
 import { columns } from './columns';
 
 export default function SuperAdminLicensesPage() {
+    const { user } = useUser();
     const firestore = useFirestore();
 
-    const licensesQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'licenses');
-    }, [firestore]);
+    // The parent layout now ensures that 'user' is available here.
+    // We can safely assume firestore and user exist.
+    const licensesQuery = useMemoFirebase(() => collection(firestore, 'licenses'), [firestore]);
     const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licensesQuery);
 
-    const tenantsQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'tenants');
-    }, [firestore]);
+    const tenantsQuery = useMemoFirebase(() => collection(firestore, 'tenants'), [firestore]);
     const { data: tenants, isLoading: isLoadingTenants } = useCollection<Tenant>(tenantsQuery);
 
-    const membershipsQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'memberships');
-    }, [firestore]);
+    const membershipsQuery = useMemoFirebase(() => collection(firestore, 'memberships'), [firestore]);
     const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
     const tableData = React.useMemo(() => {

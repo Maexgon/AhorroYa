@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -14,16 +13,11 @@ import { columns } from './columns';
 export default function SuperAdminUsersPage() {
     const firestore = useFirestore();
 
-    const usersQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'users');
-    }, [firestore]);
+    // The parent layout now ensures that the user is authenticated.
+    const usersQuery = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
     const { data: users, isLoading: isLoadingUsers } = useCollection<UserType>(usersQuery);
 
-    const membershipsQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'memberships');
-    }, [firestore]);
+    const membershipsQuery = useMemoFirebase(() => collection(firestore, 'memberships'), [firestore]);
     const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
 
     const tableData = React.useMemo(() => {
