@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import type { Tenant, License } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 export type LicenseRow = {
     license: License;
@@ -112,10 +113,8 @@ export const columns: ColumnDef<LicenseRow>[] = [
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => meta?.onEdit(license)}>Editar Licencia</DropdownMenuItem>
-                <DropdownMenuItem>Ver Tenant</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
-                    Borrar Licencia
+                <DropdownMenuItem asChild>
+                    <Link href="/superadmin/tenants">Ver Tenant</Link>
                 </DropdownMenuItem>
             </DropdownMenuContent>
             </DropdownMenu>
