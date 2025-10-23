@@ -23,11 +23,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { getColumns } from './columns';
 import { DataTable } from './data-table';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const incomeCategories = [
   { value: "salarios", label: "Salarios" },
@@ -43,10 +39,8 @@ export default function IncomePage() {
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [incomeToDelete, setIncomeToDelete] = React.useState<string | null>(null);
-    const [date, setDate] = React.useState<DateRange | undefined>({
-      from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-      to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
-    });
+    const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth() + 1);
+    const [currentYear, setCurrentYear] = React.useState(new Date().getFullYear());
 
     const membershipQuery = useMemoFirebase(() => {
         if (!firestore || !user?.uid) return null;
@@ -68,16 +62,11 @@ export default function IncomePage() {
 
     const filteredIncomes = React.useMemo(() => {
         if (!incomes) return [];
-        if (!date || !date.from) return incomes;
-
-        const fromDate = new Date(date.from.setHours(0, 0, 0, 0));
-        const toDate = date.to ? new Date(date.to.setHours(23, 59, 59, 999)) : fromDate;
-
         return incomes.filter(income => {
             const incomeDate = new Date(income.date);
-            return incomeDate >= fromDate && incomeDate <= toDate;
+            return incomeDate.getMonth() + 1 === currentMonth && incomeDate.getFullYear() === currentYear;
         });
-    }, [incomes, date]);
+    }, [incomes, currentMonth, currentYear]);
 
     const totalIncome = React.useMemo(() => {
         return filteredIncomes.reduce((acc, income) => acc + income.amountARS, 0);
@@ -120,6 +109,13 @@ export default function IncomePage() {
     
     const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), []);
     
+    const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
+    const uniqueYears = React.useMemo(() => {
+        if (!incomes) return [new Date().getFullYear()];
+        const yearsSet = new Set(incomes.map(e => new Date(e.date).getFullYear()));
+        return Array.from(yearsSet).sort((a,b) => b - a);
+    }, [incomes]);
+
     const isLoading = isAuthLoading || isLoadingMemberships || isLoadingIncomes;
 
     if (isLoading) {
@@ -163,40 +159,26 @@ export default function IncomePage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center gap-4 py-4">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        id="date"
-                                        variant={"outline"}
-                                        className="w-[300px] justify-start text-left font-normal"
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {date?.from ? (
-                                            date.to ? (
-                                                <>
-                                                    {format(date.from, "LLL dd, y", { locale: es })} -{" "}
-                                                    {format(date.to, "LLL dd, y", { locale: es })}
-                                                </>
-                                            ) : (
-                                                format(date.from, "LLL dd, y", { locale: es })
-                                            )
-                                        ) : (
-                                            <span>Selecciona un rango de fechas</span>
-                                        )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                        initialFocus
-                                        mode="range"
-                                        defaultMonth={date?.from}
-                                        selected={date}
-                                        onSelect={setDate}
-                                        numberOfMonths={2}
-                                        locale={es}
-                                    />
-                                </PopoverContent>
-                            </Popover>
+                            <Select value={String(currentMonth)} onValueChange={(val) => setCurrentMonth(Number(val))}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {months.map(m => (
+                                        <SelectItem key={m.value} value={String(m.value)}>{m.name.charAt(0).toUpperCase() + m.name.slice(1)}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Select value={String(currentYear)} onValueChange={(val) => setCurrentYear(Number(val))}>
+                                <SelectTrigger className="w-[120px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {uniqueYears.map(y => (
+                                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             <div className="ml-auto flex items-baseline gap-2">
                                 <span className="text-sm text-muted-foreground">Total del Período:</span>
                                 <span className="text-xl font-bold text-primary">{formatCurrency(totalIncome)}</span>
@@ -235,5 +217,3 @@ export default function IncomePage() {
         </>
     );
 }
-
-    
