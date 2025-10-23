@@ -158,26 +158,26 @@ const CurrencyRates = () => {
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
-                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
-                            <span className="text-sm font-medium text-muted-foreground">Dólar Oficial</span>
-                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.oficial.venta)}</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-4 text-center">
+                        <div className="flex flex-col p-2 md:p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-xs sm:text-sm font-medium text-muted-foreground">Dólar Oficial</span>
+                            <span className="text-base sm:text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.oficial.venta)}</span>
                         </div>
-                         <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
-                            <span className="text-sm font-medium text-muted-foreground">Dólar Tarjeta</span>
-                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.tarjeta.venta)}</span>
+                         <div className="flex flex-col p-2 md:p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-xs sm:text-sm font-medium text-muted-foreground">Dólar Tarjeta</span>
+                            <span className="text-base sm:text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.tarjeta.venta)}</span>
                         </div>
-                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
-                            <span className="text-sm font-medium text-muted-foreground">Real Brasileño</span>
-                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.real.venta)}</span>
+                        <div className="flex flex-col p-2 md:p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-xs sm:text-sm font-medium text-muted-foreground">Real Brasileño</span>
+                            <span className="text-base sm:text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.real.venta)}</span>
                         </div>
-                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
-                            <span className="text-sm font-medium text-muted-foreground">Peso Chileno</span>
-                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.chileno.venta)}</span>
+                        <div className="flex flex-col p-2 md:p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-xs sm:text-sm font-medium text-muted-foreground">Peso Chileno</span>
+                            <span className="text-base sm:text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.chileno.venta)}</span>
                         </div>
-                        <div className="flex flex-col p-3 bg-secondary/50 rounded-lg">
-                            <span className="text-sm font-medium text-muted-foreground">Peso Uruguayo</span>
-                            <span className="text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.uruguayo.venta)}</span>
+                        <div className="flex flex-col p-2 md:p-3 bg-secondary/50 rounded-lg">
+                            <span className="text-xs sm:text-sm font-medium text-muted-foreground">Peso Uruguayo</span>
+                            <span className="text-base sm:text-xl font-bold font-mono text-primary">{formatCurrencyValue(rates.uruguayo.venta)}</span>
                         </div>
                     </div>
                 )}
@@ -524,8 +524,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         case 'budgetDistribution':
             return (
                 <Card className="h-full">
-                    <CardHeader>
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
+                    <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                         <div className="mb-4 sm:mb-0">
                             <TooltipPrimitive>
                                 <TooltipTrigger asChild>
@@ -548,8 +547,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </div>
-                    </CardHeader>
+                      </CardHeader>
                     <CardContent className="flex-1 flex items-center justify-center">
                        <ResponsiveContainer width="100%" height={250}>
                            <PieChart>
@@ -974,10 +972,10 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             </Card>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <TooltipPrimitive>
               <TooltipTrigger asChild>
-                <Button asChild>
+                <Button asChild className="hidden md:inline-flex">
                     <Link href="/dashboard/budget">
                         <Plus className="mr-2 h-4 w-4" /> Crear Presupuesto
                     </Link>
@@ -989,7 +987,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             </TooltipPrimitive>
              <TooltipPrimitive>
               <TooltipTrigger asChild>
-                <Button asChild>
+                <Button asChild className="hidden md:inline-flex">
                     <Link href="/dashboard/expenses">
                         <Plus className="mr-2 h-4 w-4" /> Crear Gasto
                     </Link>
@@ -1001,7 +999,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             </TooltipPrimitive>
             <TooltipPrimitive>
                 <TooltipTrigger asChild>
-                    <Button asChild>
+                    <Button asChild className="hidden md:inline-flex">
                         <Link href="/dashboard/income">
                             <Plus className="mr-2 h-4 w-4" /> Crear Ingreso
                         </Link>
@@ -1015,7 +1013,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                 <>
                 <TooltipPrimitive>
                     <TooltipTrigger asChild>
-                        <Button asChild>
+                        <Button asChild className="hidden md:inline-flex">
                             <Link href="/dashboard/reports">
                                 <FileBarChart className="mr-2 h-4 w-4" /> Reportes Manuales
                             </Link>
@@ -1425,12 +1423,12 @@ function MemberDashboard({ tenantId, licenseStatus }: { tenantId: string, licens
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
       <CurrencyRates />
       <div className="flex flex-wrap gap-2">
-          <Button asChild>
+          <Button asChild className="hidden md:inline-flex">
               <Link href="/dashboard/expenses/new">
                   <Plus className="mr-2 h-4 w-4" /> Crear Gasto
               </Link>
           </Button>
-           <Button asChild>
+           <Button asChild className="hidden md:inline-flex">
               <Link href="/dashboard/income/new">
                   <Plus className="mr-2 h-4 w-4" /> Crear Ingreso
               </Link>
