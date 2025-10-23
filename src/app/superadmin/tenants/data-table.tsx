@@ -62,14 +62,14 @@ export function TenantsDataTable<TData extends TenantRow, TValue>({
 
   return (
     <div>
-      <div className="flex items-center py-4 gap-2">
+      <div className="flex flex-col md:flex-row items-center py-4 gap-2">
         <Input
           placeholder="Filtrar por nombre..."
           value={(table.getColumn("tenant.name")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn("tenant.name")?.setFilterValue(event.target.value)
           }
-          className="max-w-sm"
+          className="w-full"
         />
         <Select
             onValueChange={(value) => {
@@ -80,7 +80,7 @@ export function TenantsDataTable<TData extends TenantRow, TValue>({
                 }
             }}
         >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full md:w-[180px]">
                 <SelectValue placeholder="Filtrar por plan..." />
             </SelectTrigger>
             <SelectContent>
@@ -99,7 +99,7 @@ export function TenantsDataTable<TData extends TenantRow, TValue>({
                 }
             }}
         >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full md:w-[180px]">
                 <SelectValue placeholder="Filtrar por estado..." />
             </SelectTrigger>
             <SelectContent>
