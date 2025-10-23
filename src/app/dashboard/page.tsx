@@ -610,22 +610,19 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
-                            <CardTitle>Cuotas Pendientes de Tarjeta</CardTitle>
+                            <TooltipPrimitive>
+                                <TooltipTrigger asChild>
+                                    <CardTitle className="cursor-help">Cuotas Pendientes de Tarjeta</CardTitle>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Muestra el total de cuotas futuras de tus compras con tarjeta de crédito, agrupadas por mes.</p>
+                                </TooltipContent>
+                            </TooltipPrimitive>
                             <CardDescription>
-                                Total pendiente de pago: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
+                                Total pendiente: <span className="font-bold text-primary">{processedData.formatCurrency(processedData.installmentsChartData.totalPending)}</span>
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                           <TooltipPrimitive>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
-                                <Info className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Muestra el total de cuotas futuras de tus compras con tarjeta de crédito, agrupadas por mes.</p>
-                            </TooltipContent>
-                          </TooltipPrimitive>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
@@ -1857,3 +1854,5 @@ export default function DashboardPageContainer() {
     </TooltipProvider>
   );
 }
+
+    
