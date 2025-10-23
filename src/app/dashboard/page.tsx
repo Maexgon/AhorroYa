@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income, Subcategory } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert, View, FileBarChart, Info } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert, View, FileBarChart, Info, BarChart2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -20,7 +20,7 @@ import { DateRange } from 'react-day-picker';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth, addMonths, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area, PieChart, Pie } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area, PieChart, Pie, Sector } from 'recharts';
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -446,7 +446,8 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         periodData,
         cumulativeChartData,
         isOwner: userRole === 'owner',
-        installmentsChartData
+        installmentsChartData,
+        totalBudgetForPeriod,
     };
   }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories, userRole]);
   
@@ -523,25 +524,14 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         case 'budgetDistribution':
             return (
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                        <div className="mb-4 sm:mb-0">
                             <CardTitle>Distribución de Presupuestos</CardTitle>
-                            <CardDescription>
-                                Cómo se divide tu presupuesto total.
-                            </CardDescription>
+                            <CardDescription>Total: {processedData.formatCurrency(processedData.totalBudgetForPeriod)}</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          <TooltipPrimitive>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
-                                <Info className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Este gráfico muestra la proporción de cada categoría en tu presupuesto total para el período seleccionado.</p>
-                            </TooltipContent>
-                          </TooltipPrimitive>
-                          <DropdownMenu>
+                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
@@ -551,34 +541,34 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
-                       <ResponsiveContainer width="100%" height={200}>
+                       <ResponsiveContainer width="100%" height={250}>
                            <PieChart>
                                 <Pie
                                     data={processedData.budgetChartData}
-                                    cx="40%"
+                                    cx="50%"
                                     cy="50%"
                                     labelLine={false}
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
                                         const RADIAN = Math.PI / 180;
                                         if (typeof innerRadius !== 'number' || typeof outerRadius !== 'number' || typeof cx !== 'number' || typeof cy !== 'number' || typeof midAngle !== 'number' || typeof percent !== 'number') {
                                             return null;
                                         }
-                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                        const radius = outerRadius + 15;
                                         const x = cx + radius * Math.cos(-midAngle * RADIAN);
                                         const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
                                         return (
-                                            <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={10} fontWeight="bold">
+                                            <text x={x} y={y} fill="hsl(var(--foreground))" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
                                                 {`${(percent * 100).toFixed(0)}%`}
                                             </text>
                                         );
                                     }}
                                     outerRadius={80}
-                                    innerRadius={40}
-                                    paddingAngle={2}
-                                    fill="#8884d8"
+                                    innerRadius={60}
+                                    paddingAngle={5}
                                     dataKey="Presupuestado"
                                     nameKey="name"
                                 >
@@ -586,24 +576,22 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                         <Cell key={`cell-${entry.name}`} fill={entry.color} />
                                     ))}
                                 </Pie>
-                                <TooltipPrimitive
+                                <Tooltip
                                     content={({ active, payload }) => {
                                         if (active && payload && payload.length) {
+                                            const data = payload[0].payload;
+                                            const percent = (payload[0].value / processedData.totalBudgetForPeriod * 100).toFixed(0);
                                             return (
-                                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                                    <p className="font-bold">{payload[0].name}</p>
-                                                    <p>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                                <div className="rounded-lg border bg-card p-2 shadow-sm text-center">
+                                                    <p className="font-bold text-lg">{data.name}</p>
+                                                    <p className="text-sm">{processedData.formatCurrency(data.Presupuestado)} ({percent}%)</p>
                                                 </div>
                                             );
                                         }
                                         return null;
                                     }}
-                                />
-                                <Legend 
-                                    layout="vertical" 
-                                    verticalAlign="middle" 
-                                    align="right" 
-                                    wrapperStyle={{ fontSize: '10px', lineHeight: '16px' }}
+                                    cursor={{fill: 'transparent'}}
+                                    position={{ y: 0 }}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
