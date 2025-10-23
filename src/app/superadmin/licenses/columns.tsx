@@ -38,7 +38,7 @@ export const columns: ColumnDef<LicenseRow>[] = [
       return (
         <div>
           <div className="font-medium">{tenant?.name || 'N/A'}</div>
-          <div className="text-xs text-muted-foreground">{tenant?.id || ''}</div>
+          <div className="text-xs text-muted-foreground hidden md:block">{tenant?.id || ''}</div>
         </div>
       );
     },
@@ -48,7 +48,7 @@ export const columns: ColumnDef<LicenseRow>[] = [
     header: "Plan",
     cell: ({ row }) => {
         const plan = row.original.license?.plan || "N/A";
-        return <div><Badge variant="outline" className="capitalize">{plan}</Badge></div>;
+        return <div className="md:table-cell"><Badge variant="outline" className="capitalize">{plan}</Badge></div>;
     },
     filterFn: (row, id, value) => {
         const plan = row.original.license?.plan || "";
@@ -64,9 +64,11 @@ export const columns: ColumnDef<LicenseRow>[] = [
 
         const isActive = status === 'active';
         return (
-            <Badge variant={isActive ? 'default' : 'secondary'} className={cn(isActive && 'bg-green-600')}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-            </Badge>
+            <div>
+                <Badge variant={isActive ? 'default' : 'secondary'} className={cn(isActive && 'bg-green-600')}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                </Badge>
+            </div>
         )
     },
      filterFn: (row, id, value) => {
