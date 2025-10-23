@@ -10,8 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import type { Income, User as UserType } from '@/lib/types';
-import { useDoc } from '@/firebase/firestore/use-doc';
+import type { Income, Membership, User as UserType } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +40,6 @@ export default function IncomePage() {
     const { user, isUserLoading: isAuthLoading } = useUser();
     const firestore = useFirestore();
     const { toast } = useToast();
-    const [tenantId, setTenantId] = React.useState<string | null>(null);
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [incomeToDelete, setIncomeToDelete] = React.useState<string | null>(null);
@@ -50,28 +48,22 @@ export default function IncomePage() {
       to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
     });
 
-    const userDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return doc(firestore, 'users', user.uid);
-    }, [firestore, user]);
-    const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+    const membershipQuery = useMemoFirebase(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+    }, [firestore, user?.uid]);
 
-    React.useEffect(() => {
-        if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
-        }
-    }, [userData]);
-
-    const ready = !!firestore && !!user && !isAuthLoading && !!tenantId;
+    const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQuery);
+    const tenantId = memberships?.[0]?.tenantId;
 
     const incomesQuery = useMemoFirebase(() => {
-        if (!ready) return null;
+        if (!firestore || !tenantId) return null;
         return query(
             collection(firestore, 'incomes'), 
             where('tenantId', '==', tenantId),
             where('deleted', '==', false)
         );
-    }, [firestore, tenantId, ready]);
+    }, [firestore, tenantId]);
     const { data: incomes, isLoading: isLoadingIncomes, setData: setIncomes } = useCollection<Income>(incomesQuery);
 
     const filteredIncomes = React.useMemo(() => {
@@ -128,7 +120,7 @@ export default function IncomePage() {
     
     const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), []);
     
-    const isLoading = isAuthLoading || isUserDocLoading || isLoadingIncomes;
+    const isLoading = isAuthLoading || isLoadingMemberships || isLoadingIncomes;
 
     if (isLoading) {
         return (
