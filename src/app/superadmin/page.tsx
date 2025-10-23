@@ -23,7 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 
 // The user object is now passed as a prop
-export default function SuperAdminPage({ user }: { user: User }) {
+export default function SuperAdminPage({ user }: { user: User | null }) {
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();

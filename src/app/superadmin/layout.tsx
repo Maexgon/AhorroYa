@@ -1,8 +1,8 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useEffect, useState, useRef } from 'react';
-import { getAuth, signOut } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
+import { getAuth, signOut, type User } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey, LogOut, User as UserIcon } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 
-function SuperAdminUI({ children }: { children: React.ReactNode }) {
+function SuperAdminUI({ children, user }: { children: React.ReactNode, user: User | null }) {
   const pathname = usePathname();
   
   return (
@@ -70,7 +70,13 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        {children}
+        {/* Pass user object to children */}
+        {React.Children.map(children, child => {
+            if (React.isValidElement(child)) {
+                return React.cloneElement(child, { user: user } as any);
+            }
+            return child;
+        })}
       </SidebarInset>
     </SidebarProvider>
   );
@@ -108,9 +114,11 @@ export default function SuperAdminLayout({
         setAuthStatus('authorized');
       } else {
         setAuthStatus('unauthorized');
+        router.replace('/dashboard');
       }
     } else {
       setAuthStatus('unauthorized');
+      router.replace('/login');
     }
     
   }, [isUserLoading, isUserDocLoading, user, userData, router]);
@@ -129,7 +137,7 @@ export default function SuperAdminLayout({
         <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
             <ShieldAlert className="h-16 w-16 text-destructive" />
             <h1 className="mt-4 font-headline text-2xl font-bold">Acceso Denegado</h1>
-            <p className="mt-2 text-muted-foreground">No tienes permisos para acceder a esta página. Serás redirigido.</p>
+            <p className="mt-2 text-muted-foreground">No tienes permisos para acceder a esta página.</p>
             <Button asChild className="mt-6" onClick={() => router.replace('/dashboard')}>
               Ir al Dashboard
             </Button>
@@ -139,19 +147,13 @@ export default function SuperAdminLayout({
 
   if (authStatus === 'authorized') {
      return (
-        <SuperAdminUI>
-            {/* Pass user object to children */}
-            {React.Children.map(children, child => {
-                if (React.isValidElement(child)) {
-                    return React.cloneElement(child, { user: user } as any);
-                }
-                return child;
-            })}
+        <SuperAdminUI user={user}>
+            {children}
         </SuperAdminUI>
     );
   }
 
-  // Fallback, should not be reached
+  // Fallback, should not be reached, but good for stability
   return (
     <div className="flex h-screen items-center justify-center">
       <Loader2 className="h-12 w-12 animate-spin text-primary" />
