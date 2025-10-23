@@ -19,7 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, query, where, collection } from 'firebase/firestore';
-import type { Tenant, License, Membership, User } from '@/lib/types';
+import type { Tenant, License, Membership, User, Expense, Income, Budget, Entity } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -45,8 +45,22 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
 
   const membersQuery = useMemoFirebase(() => query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId)), [firestore, tenantId]);
   const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
+
+  // --- Data Usage Queries ---
+  const expensesQuery = useMemoFirebase(() => query(collection(firestore, 'expenses'), where('tenantId', '==', tenantId)), [firestore, tenantId]);
+  const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
+
+  const incomesQuery = useMemoFirebase(() => query(collection(firestore, 'incomes'), where('tenantId', '==', tenantId)), [firestore, tenantId]);
+  const { data: incomes, isLoading: isLoadingIncomes } = useCollection<Income>(incomesQuery);
   
-  const isLoading = isLoadingTenant || isLoadingLicense || isLoadingOwner || isLoadingMembers;
+  const budgetsQuery = useMemoFirebase(() => query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId)), [firestore, tenantId]);
+  const { data: budgets, isLoading: isLoadingBudgets } = useCollection<Budget>(budgetsQuery);
+
+  const entitiesQuery = useMemoFirebase(() => query(collection(firestore, 'entities'), where('tenantId', '==', tenantId)), [firestore, tenantId]);
+  const { data: entities, isLoading: isLoadingEntities } = useCollection<Entity>(entitiesQuery);
+
+
+  const isLoading = isLoadingTenant || isLoadingLicense || isLoadingOwner || isLoadingMembers || isLoadingExpenses || isLoadingIncomes || isLoadingBudgets || isLoadingEntities;
   
   const DetailItem = ({ label, value }: { label: string, value: React.ReactNode }) => (
     <div>
@@ -54,6 +68,14 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
         <div className="text-base font-semibold">{value || 'N/A'}</div>
     </div>
   );
+
+  const dataUsageStats = [
+      { name: 'Gastos', count: expenses?.length || 0 },
+      { name: 'Ingresos', count: incomes?.length || 0 },
+      { name: 'Presupuestos', count: budgets?.length || 0 },
+      { name: 'Entidades', count: entities?.length || 0 },
+      { name: 'Miembros', count: members?.length || 0 },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,6 +116,31 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
                     <DetailItem label="Fecha de Vencimiento" value={license ? new Date(license.endDate).toLocaleDateString('es-AR') : 'N/A'} />
                     <DetailItem label="Límite de Usuarios" value={`${members?.length || 0} / ${license?.maxUsers || 0}`} />
                  </div>
+            </section>
+
+            <Separator />
+
+             {/* Data Usage Details */}
+            <section>
+                <h3 className="text-lg font-semibold mb-2">Uso de Datos (Estimado)</h3>
+                 <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Colección</TableHead>
+                                <TableHead className="text-right">Cantidad de Registros</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {dataUsageStats.map(stat => (
+                                <TableRow key={stat.name}>
+                                    <TableCell className="font-medium">{stat.name}</TableCell>
+                                    <TableCell className="text-right font-mono">{stat.count}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
             </section>
 
             <Separator />
