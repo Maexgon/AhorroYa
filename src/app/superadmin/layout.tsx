@@ -1,4 +1,3 @@
-
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,13 +10,18 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 
+
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
+  console.log("SuperAdminUI: Rendering UI component.");
   const pathname = usePathname();
 
   return (
     <SidebarProvider>
       <Sidebar>
         <SidebarContent className="flex flex-col gap-2 p-2">
+           <div className="p-2">
+            <h2 className="text-lg font-semibold">Super Admin</h2>
+          </div>
           <SidebarMenu>
             <SidebarMenuItem>
               <Link href="/superadmin" passHref>
@@ -52,7 +56,7 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <Link href="/superadmin/licenses" passHref>
                 <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/licenses')}>
-                  <div>
+                   <div>
                     <FileKey />
                     Licencias
                   </div>
@@ -75,15 +79,19 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
   );
 }
 
+let renderCount = 0;
 
 export default function SuperAdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  renderCount++;
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+
+  console.log(`SuperAdminLayout Render #${renderCount}: isUserLoading: ${isUserLoading}, user: ${user?.uid || 'null'}`);
 
   const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -95,25 +103,37 @@ export default function SuperAdminLayout({
   const isLoading = isUserLoading || isUserDocLoading;
 
   useEffect(() => {
+    console.log(`SuperAdminLayout useEffect triggered. isLoading: ${isLoading}`);
+
     if (isLoading) {
+      console.log("--> Still loading, returning from useEffect.");
       return;
     }
 
     if (!user) {
+      console.log("--> No user found, redirecting to /login.");
       router.replace('/login');
       return;
     }
+    
+    console.log(`--> Data loaded. user: ${user?.uid}, userData: ${JSON.stringify(userData)}`);
 
     if (userData) {
-      if (userData.isSuperAdmin !== true) {
+      if (userData.isSuperAdmin === true) {
+        console.log("--> User is SuperAdmin. Access granted.");
+      } else {
+        console.log(`--> User is NOT a superadmin (isSuperAdmin: ${userData.isSuperAdmin}), redirecting to /dashboard.`);
         router.replace('/dashboard');
       }
     } else {
+        // This case is critical. If userData is null after loading, it means the user doc doesn't exist or there was an error.
+        console.log("--> User is authenticated but userData is not available. Redirecting to /dashboard");
         router.replace('/dashboard');
     }
-  }, [user, userData, isLoading, router]);
+  }, [user, userData, isLoading, router, isUserLoading, isUserDocLoading]);
   
   if (isLoading) {
+    console.log("Render: Showing main loading indicator.");
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -122,6 +142,7 @@ export default function SuperAdminLayout({
   }
 
   if (userData?.isSuperAdmin !== true) {
+    console.log(`Render: Showing 'Access Denied' screen. userData.isSuperAdmin: ${userData?.isSuperAdmin}`);
      return (
         <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
             <ShieldAlert className="h-16 w-16 text-destructive" />
@@ -131,5 +152,6 @@ export default function SuperAdminLayout({
     );
   }
   
+  console.log("Render: Showing SuperAdminUI.");
   return <SuperAdminUI>{children}</SuperAdminUI>;
 }
