@@ -16,6 +16,8 @@ import type { Membership, User, Tenant } from "@/lib/types"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
 
 export type MembershipRow = {
     membership: Membership;
@@ -46,11 +48,21 @@ export const columns: ColumnDef<MembershipRow>[] = [
       if (!user) return "Usuario no encontrado";
       return (
          <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9">
-              <AvatarImage src={user.photoURL || ''} alt={user.displayName} />
-              <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
-            </Avatar>
-            <div>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger>
+                        <Avatar className="h-9 w-9">
+                        <AvatarImage src={user.photoURL || ''} alt={user.displayName} />
+                        <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                        </Avatar>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p className="font-medium">{user.displayName}</p>
+                        <p className="text-muted-foreground">{user.email}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+            <div className="hidden md:block">
               <div className="font-medium">{user.displayName}</div>
               <div className="text-xs text-muted-foreground">{user.email}</div>
             </div>
@@ -64,7 +76,7 @@ export const columns: ColumnDef<MembershipRow>[] = [
     header: "Tenant",
      cell: ({ row }) => {
         const { tenant } = row.original;
-        return <div className="font-medium">{tenant?.name || 'N/A'}</div>;
+        return <div className="font-medium text-sm">{tenant?.name || 'N/A'}</div>;
     },
   },
   {
@@ -72,15 +84,15 @@ export const columns: ColumnDef<MembershipRow>[] = [
     header: "Rol",
     cell: ({ row }) => {
         const role = row.original.membership.role;
-        return <Badge variant={role === 'owner' ? 'default' : 'secondary'} className={cn(role === 'owner' && 'bg-primary')}>{role}</Badge>;
+        return <Badge variant={role === 'owner' ? 'default' : 'secondary'} className={cn('capitalize', role === 'owner' && 'bg-primary')}>{role}</Badge>;
     }
   },
    {
     accessorKey: "membership.joinedAt",
-    header: "Fecha de Ingreso",
+    header: () => <div className="hidden md:table-cell">Fecha de Ingreso</div>,
     cell: ({ row }) => {
         const date = new Date(row.original.membership.joinedAt);
-        return <div>{date.toLocaleDateString('es-AR')}</div>;
+        return <div className="hidden md:table-cell">{date.toLocaleDateString('es-AR')}</div>;
     }
   },
   {
