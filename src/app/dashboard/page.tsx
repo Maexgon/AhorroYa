@@ -1668,7 +1668,9 @@ export default function DashboardPageContainer() {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
   const [tenantData, setTenantData] = useState<Tenant | null>(null);
 
-  // This is the main query to get the user's memberships
+  const userDocRef = useMemoFirebase(() => (user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
+  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+
   const membershipsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
@@ -1697,12 +1699,17 @@ export default function DashboardPageContainer() {
   }, [ownerTenantData]);
 
   useEffect(() => {
-    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses || isLoadingTenant;
+    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses || isLoadingTenant || isUserDocLoading;
     if (isLoading) return;
 
     if (!user) {
       router.replace('/login');
       return;
+    }
+
+    if (userData?.isSuperAdmin) {
+        router.replace('/superadmin');
+        return;
     }
 
     if (memberships && memberships.length > 0) {
@@ -1736,7 +1743,7 @@ export default function DashboardPageContainer() {
         router.push('/subscribe');
     }
 
-  }, [user, isUserLoading, memberships, isLoadingMemberships, licenses, isLoadingLicenses, router, derivedTenantId, derivedUserRole, toast, isLoadingTenant]);
+  }, [user, isUserLoading, memberships, isLoadingMemberships, licenses, isLoadingLicenses, router, derivedTenantId, derivedUserRole, toast, isLoadingTenant, userData, isUserDocLoading]);
 
 
   const getInitials = (name: string = "") => {
@@ -1765,10 +1772,6 @@ export default function DashboardPageContainer() {
     }
   };
   
-  const userDocRef = useMemoFirebase(() => (user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
-  const { data: userData } = useDoc<UserType>(userDocRef);
-
-
   if (!isReady) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -1840,11 +1843,9 @@ export default function DashboardPageContainer() {
         </header>
         <main className="flex-1">
           {(userRole === 'owner' || userRole === 'admin') && tenantId && <AdminOrOwnerDashboard tenantId={tenantId} licenseStatus={licenseStatus} userRole={userRole} tenantData={tenantData} />}
-          {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseBicenseStatus} />}
+          {userRole === 'member' && tenantId && <MemberDashboard tenantId={tenantId} licenseStatus={licenseStatus} />}
         </main>
       </div>
     </TooltipProvider>
   );
 }
-
-    
