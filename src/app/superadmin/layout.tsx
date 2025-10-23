@@ -87,6 +87,8 @@ export default function SuperAdminLayout({
   const firestore = useFirestore();
   const router = useRouter();
 
+  const [authStatus, setAuthStatus] = useState<'loading' | 'authorized' | 'unauthorized'>('loading');
+
   const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
@@ -94,24 +96,33 @@ export default function SuperAdminLayout({
   
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-  const isLoading = isUserLoading || isUserDocLoading;
-
   useEffect(() => {
-    // Don't do anything while loading
+    const isLoading = isUserLoading || isUserDocLoading;
+
     if (isLoading) {
+      setAuthStatus('loading');
       return;
     }
 
-    // If loading is finished, check credentials
-    if (!user) {
+    if (user && userData) {
+      if (userData.isSuperAdmin === true) {
+        setAuthStatus('authorized');
+      } else {
+        setAuthStatus('unauthorized');
+        router.replace('/dashboard');
+      }
+    } else if (!user) {
+      setAuthStatus('unauthorized');
       router.replace('/login');
-    } else if (!userData?.isSuperAdmin) {
-      router.replace('/dashboard');
     }
-  }, [isLoading, user, userData, router]);
+    // If user exists but userData doesn't, it could be a race condition that resolves,
+    // or a genuine issue. For now, we let it stay loading until both are resolved.
+    // This prevents premature redirection.
+    
+  }, [isUserLoading, isUserDocLoading, user, userData, router]);
 
 
-  if (isLoading) {
+  if (authStatus === 'loading') {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -119,11 +130,12 @@ export default function SuperAdminLayout({
     );
   }
 
-  if (userData?.isSuperAdmin === true) {
+  if (authStatus === 'authorized') {
     return <SuperAdminUI>{children}</SuperAdminUI>;
   }
 
-  // Fallback for non-superadmin users, will be quickly redirected by useEffect
+  // For 'unauthorized' or any other case, show access denied.
+  // The useEffect will handle the redirection.
   return (
     <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
         <ShieldAlert className="h-16 w-16 text-destructive" />
