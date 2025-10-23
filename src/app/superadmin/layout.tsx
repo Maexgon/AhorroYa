@@ -1,4 +1,3 @@
-
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -68,28 +67,36 @@ export default function SuperAdminLayout({
               <SidebarContent className="flex flex-col gap-2 p-2">
                   <SidebarMenu>
                       <SidebarMenuItem>
-                          <SidebarMenuButton href="/superadmin" isActive={pathname === '/superadmin'} tooltip="Dashboard">
-                              <LayoutDashboard />
-                              Dashboard
-                          </SidebarMenuButton>
+                          <Link href="/superadmin">
+                            <SidebarMenuButton isActive={pathname === '/superadmin'} tooltip="Dashboard">
+                                <LayoutDashboard />
+                                Dashboard
+                            </SidebarMenuButton>
+                          </Link>
                       </SidebarMenuItem>
                       <SidebarMenuItem>
-                          <SidebarMenuButton href="/superadmin/tenants" isActive={pathname.startsWith('/superadmin/tenants')} tooltip="Tenants">
-                              <Building />
-                              Tenants
-                          </SidebarMenuButton>
+                          <Link href="/superadmin/tenants">
+                            <SidebarMenuButton isActive={pathname.startsWith('/superadmin/tenants')} tooltip="Tenants">
+                                <Building />
+                                Tenants
+                            </SidebarMenuButton>
+                          </Link>
                       </SidebarMenuItem>
                       <SidebarMenuItem>
-                          <SidebarMenuButton href="#" tooltip="Users">
-                              <Users />
-                              Usuarios
-                          </SidebarMenuButton>
+                          <Link href="#">
+                            <SidebarMenuButton tooltip="Users">
+                                <Users />
+                                Usuarios
+                            </SidebarMenuButton>
+                          </Link>
                       </SidebarMenuItem>
                       <SidebarMenuItem>
-                          <SidebarMenuButton href="#" tooltip="Licenses">
-                              <FileKey />
-                              Licencias
-                          </SidebarMenuButton>
+                          <Link href="#">
+                            <SidebarMenuButton tooltip="Licenses">
+                                <FileKey />
+                                Licencias
+                            </SidebarMenuButton>
+                          </Link>
                       </SidebarMenuItem>
                   </SidebarMenu>
               </SidebarContent>
