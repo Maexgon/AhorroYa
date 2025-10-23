@@ -1,3 +1,4 @@
+
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
@@ -23,6 +24,7 @@ export type TenantRow = {
 
 export const columns: ColumnDef<TenantRow>[] = [
   {
+    id: "tenant.name", // Explicitly set the column ID here
     accessorKey: "tenant.name",
     header: "Tenant",
      cell: ({ row }) => {
