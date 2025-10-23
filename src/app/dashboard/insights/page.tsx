@@ -46,40 +46,30 @@ export default function InsightsPage() {
     const reportRef = React.useRef<HTMLDivElement>(null);
 
     // --- Data Fetching ---
-    const membershipDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        // This assumes user has one membership, which is our current model.
-        // A more complex app might query the 'memberships' collection.
-        // For this to work, we need tenantId first.
-        return null; // We'll get tenantId from the user doc first
-    }, [firestore, user]);
+    const membershipQuery = useMemoFirebase(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+    }, [firestore, user?.uid]);
 
-
+    const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQuery);
+    
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-     const membershipQueryRef = useMemoFirebase(() => {
-        if (!firestore || !user || !userData?.tenantIds?.[0]) return null;
-        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid), where('tenantId', '==', userData.tenantIds[0]));
-    }, [firestore, user, userData]);
-    const { data: userMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQueryRef);
-
 
     React.useEffect(() => {
-        if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
+        if (memberships && memberships.length > 0) {
+            setTenantId(memberships[0].tenantId);
+            setUserRole(memberships[0].role as any);
         }
-        if (userMemberships && userMemberships.length > 0) {
-            setUserRole(userMemberships[0].role as any);
-        }
-    }, [userData, userMemberships]);
+    }, [memberships]);
     
     // Authorization check
     React.useEffect(() => {
-        const isDataReady = !isAuthLoading && !isUserDocLoading && !isLoadingMemberships;
+        const isDataReady = !isAuthLoading && !isLoadingMemberships;
         if(isDataReady && userRole && userRole !== 'owner') {
              toast({
                 variant: "destructive",
@@ -88,7 +78,7 @@ export default function InsightsPage() {
             });
             router.replace('/dashboard');
         }
-    }, [isAuthLoading, isUserDocLoading, isLoadingMemberships, userRole, router, toast]);
+    }, [isAuthLoading, isLoadingMemberships, userRole, router, toast]);
 
     const { fromDate, toDate } = React.useMemo(() => {
         const from = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
