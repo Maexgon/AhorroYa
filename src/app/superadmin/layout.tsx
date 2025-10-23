@@ -96,7 +96,7 @@ export default function SuperAdminLayout({
   const isLoading = isUserLoading || isUserDocLoading;
 
   useEffect(() => {
-    if (isLoading) return; // Don't do anything while loading
+    if (isLoading) return;
 
     if (!user) {
       router.replace('/login');
@@ -118,10 +118,7 @@ export default function SuperAdminLayout({
         <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
             <ShieldAlert className="h-16 w-16 text-destructive" />
             <h1 className="mt-4 font-headline text-2xl font-bold">Acceso Denegado</h1>
-            <p className="mt-2 text-muted-foreground">No tienes permisos para acceder a esta sección.</p>
-            <Button asChild className="mt-6">
-            <Link href="/dashboard">Volver al Dashboard</Link>
-            </Button>
+            <p className="mt-2 text-muted-foreground">Verificando permisos...</p>
         </div>
     );
   }
