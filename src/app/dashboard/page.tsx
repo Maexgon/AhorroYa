@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -254,6 +255,16 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
   const { data: allBudgets, isLoading: isLoadingBudgets } = useCollection<WithId<Budget>>(budgetsQuery);
   
   const isLoading = isLoadingCategories || isLoadingExpenses || isLoadingBudgets || isLoadingIncomes || isLoadingSubcategories;
+
+ const formatCompactNumber = (number: number) => {
+    if (Math.abs(number) >= 1_000_000) {
+        return `$${(number / 1_000_000).toFixed(1)}M`;
+    }
+    if (Math.abs(number) >= 1_000) {
+        return `$${(number / 1_000).toFixed(0)}k`;
+    }
+    return `$${number.toFixed(0)}`;
+  };
   
  const processedData = useMemo(() => {
     if (isLoading || !categories || !allExpenses || !allBudgets || !allIncomes || !activeTenant || !user || !allSubcategories || !date?.from) {
@@ -531,7 +542,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         case 'budgetDistribution':
             return (
                 <Card className="h-full">
-                    <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
+                     <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                         <div className="mb-4 sm:mb-0">
                             <TooltipPrimitive>
                                 <TooltipTrigger asChild>
@@ -693,14 +704,14 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                     <TrendingUp className="h-4 w-4 text-green-500" />
                                     Ingresos
                                 </div>
-                                <p className="text-2xl font-bold font-mono">{processedData.formatCurrency(processedData.totalIncomes)}</p>
+                                <p className="text-2xl font-bold font-mono">{formatCompactNumber(processedData.totalIncomes)}</p>
                             </Card>
                              <Card className="p-4">
                                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                                     <TrendingDown className="h-4 w-4 text-red-500" />
                                     Gastos
                                 </div>
-                                <p className="text-2xl font-bold font-mono">{processedData.formatCurrency(processedData.totalExpenses)}</p>
+                                <p className="text-2xl font-bold font-mono">{formatCompactNumber(processedData.totalExpenses)}</p>
                             </Card>
                              <Card className={cn("p-4", processedData.netBalance >= 0 ? "border-green-500/50" : "border-red-500/50")}>
                                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -708,7 +719,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                     Balance
                                 </div>
                                 <p className={cn("text-2xl font-bold font-mono", processedData.netBalance >= 0 ? "text-green-600" : "text-red-600")}>
-                                    {processedData.formatCurrency(processedData.netBalance)}
+                                    {formatCompactNumber(processedData.netBalance)}
                                 </p>
                             </Card>
                         </div>
@@ -733,8 +744,8 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                 }}
                             />
                             <Legend />
-                            <Bar dataKey="ingresos" name="Ingresos" fill="#ef4444" radius={[4, 4, 0, 0]}/>
-                            <Bar dataKey="gastos" name="Gastos" fill="#22c55e" radius={[4, 4, 0, 0]}/>
+                            <Bar dataKey="ingresos" name="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]}/>
+                            <Bar dataKey="gastos" name="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]}/>
                             <Line type="monotone" dataKey="saldoAcumulado" name="Saldo Acumulado" stroke="#facc15" strokeWidth={3} dot={false} />
                         </ComposedChart>
                         </ResponsiveContainer>
