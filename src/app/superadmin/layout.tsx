@@ -1,7 +1,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
@@ -12,7 +12,7 @@ import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButto
 
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
+  
   return (
     <SidebarProvider>
       <Sidebar>
@@ -96,6 +96,21 @@ export default function SuperAdminLayout({
 
   const isLoading = isUserLoading || isUserDocLoading;
 
+  useEffect(() => {
+    // Don't do anything while loading
+    if (isLoading) {
+      return;
+    }
+
+    // If loading is finished, check credentials
+    if (!user) {
+      router.replace('/login');
+    } else if (!userData?.isSuperAdmin) {
+      router.replace('/dashboard');
+    }
+  }, [isLoading, user, userData, router]);
+
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -108,12 +123,7 @@ export default function SuperAdminLayout({
     return <SuperAdminUI>{children}</SuperAdminUI>;
   }
 
-  // Fallback for any other case (not loading, but not a superadmin)
-  // This also handles the case where the user is not logged in after loading.
-  if (!isLoading) {
-      router.replace('/dashboard');
-  }
-
+  // Fallback for non-superadmin users, will be quickly redirected by useEffect
   return (
     <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
         <ShieldAlert className="h-16 w-16 text-destructive" />
