@@ -1,15 +1,16 @@
 
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { useDoc } from '@/firebase/firestore/use-doc';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect } from 'react';
 import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
+import { useDoc } from '@/firebase/firestore/use-doc';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
+
 
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -30,34 +31,28 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/superadmin/tenants" passHref>
                 <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/tenants')}>
-                  <a>
+                  <Link href="/superadmin/tenants">
                     <Building />
                     Tenants
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
-              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="#" passHref>
                 <SidebarMenuButton asChild>
-                  <a>
+                  <Link href="#">
                     <Users />
                     Usuarios
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
-              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="#" passHref>
                 <SidebarMenuButton asChild>
-                  <a>
+                  <Link href="#">
                     <FileKey />
                     Licencias
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
-              </Link>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
