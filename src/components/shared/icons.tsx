@@ -10,7 +10,7 @@ export function AhorroYaLogo(props: Omit<SVGProps<SVGSVGElement>, "width" | "hei
         src="/img/logoAY.png"
         alt="Ahorro Ya Logo"
         fill
-        sizes="32px" // Provide a reasonable size hint
+        sizes="160px" // Provide a reasonable size hint
         style={{ objectFit: 'contain' }}
         {...rest}
       />
