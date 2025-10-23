@@ -523,7 +523,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
     switch (chartId) {
         case 'budgetDistribution':
             return (
-                <Card>
+                <Card className="h-full">
                     <CardHeader>
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                         <div className="mb-4 sm:mb-0">
@@ -607,7 +607,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             );
         case 'pendingInstallments':
             return (
-                <Card>
+                <Card className="h-full">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <TooltipPrimitive>
@@ -670,7 +670,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             );
         case 'monthlyFlow':
              return (
-                <Card>
+                <Card className="h-full">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                         <CardTitle>Resumen de Flujo de Caja</CardTitle>
@@ -726,7 +726,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             );
         case 'cumulativeBalance':
             return (
-                <Card>
+                <Card className="h-full">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <CardTitle>Balance Acumulado</CardTitle>
@@ -787,7 +787,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             );
         case 'expenseAnalysis':
              return (
-                <Card>
+                <Card className="h-full">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <CardTitle>Análisis de Gastos</CardTitle>
@@ -866,7 +866,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             );
         case 'budgets':
             return (
-                <Card>
+                <Card className="h-full">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <CardTitle>Presupuestos</CardTitle>
