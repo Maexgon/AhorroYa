@@ -1,3 +1,4 @@
+
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -8,7 +9,7 @@ import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider } from '@/components/ui/sidebar';
 
 export default function SuperAdminLayout({
   children,
@@ -61,40 +62,42 @@ export default function SuperAdminLayout({
   }
 
   return (
-    <div className="flex">
-        <Sidebar>
-            <SidebarContent className="flex flex-col gap-2 p-2">
-                 <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton href="/superadmin" isActive={pathname === '/superadmin'} tooltip="Dashboard">
-                            <LayoutDashboard />
-                            Dashboard
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                         <SidebarMenuButton href="/superadmin/tenants" isActive={pathname.startsWith('/superadmin/tenants')} tooltip="Tenants">
-                            <Building />
-                            Tenants
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                         <SidebarMenuButton href="#" tooltip="Users">
-                            <Users />
-                            Usuarios
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                         <SidebarMenuButton href="#" tooltip="Licenses">
-                            <FileKey />
-                            Licencias
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarContent>
-        </Sidebar>
-        <main className="flex-1">
-            {children}
-        </main>
-    </div>
+    <SidebarProvider>
+      <div className="flex">
+          <Sidebar>
+              <SidebarContent className="flex flex-col gap-2 p-2">
+                  <SidebarMenu>
+                      <SidebarMenuItem>
+                          <SidebarMenuButton href="/superadmin" isActive={pathname === '/superadmin'} tooltip="Dashboard">
+                              <LayoutDashboard />
+                              Dashboard
+                          </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                          <SidebarMenuButton href="/superadmin/tenants" isActive={pathname.startsWith('/superadmin/tenants')} tooltip="Tenants">
+                              <Building />
+                              Tenants
+                          </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                          <SidebarMenuButton href="#" tooltip="Users">
+                              <Users />
+                              Usuarios
+                          </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                          <SidebarMenuButton href="#" tooltip="Licenses">
+                              <FileKey />
+                              Licencias
+                          </SidebarMenuButton>
+                      </SidebarMenuItem>
+                  </SidebarMenu>
+              </SidebarContent>
+          </Sidebar>
+          <main className="flex-1">
+              {children}
+          </main>
+      </div>
+    </SidebarProvider>
     );
 }
