@@ -34,7 +34,7 @@ export default function ExpensesPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [tenantId, setTenantId] = React.useState<string | null>(null);
-    const [isOwner, setIsOwner] = React.useState(false);
+    const [isOwnerOrAdmin, setIsOwnerOrAdmin] = React.useState(false);
     const [isReady, setIsReady] = React.useState(false);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
@@ -43,12 +43,6 @@ export default function ExpensesPage() {
 
     const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth() + 1);
     const [currentYear, setCurrentYear] = React.useState(new Date().getFullYear());
-
-    const userDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return doc(firestore, 'users', user.uid);
-    }, [firestore, user]);
-    const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
     
     // Fetch the user's membership to determine tenantId and role
     const membershipQuery = useMemoFirebase(() => {
@@ -61,7 +55,7 @@ export default function ExpensesPage() {
         if (memberships && memberships.length > 0) {
             const currentMembership = memberships[0];
             setTenantId(currentMembership.tenantId);
-            setIsOwner(currentMembership.role === 'owner');
+            setIsOwnerOrAdmin(currentMembership.role === 'owner' || currentMembership.role === 'admin');
         }
         // Set ready state when auth and membership queries are done
         if (!isAuthLoading && !isLoadingMemberships) {
@@ -78,15 +72,15 @@ export default function ExpensesPage() {
             where('deleted', '==', false)
         );
 
-        // If the user is owner, they can see all expenses for the tenant.
-        if (isOwner) {
+        // If the user is owner or admin, they can see all expenses for the tenant.
+        if (isOwnerOrAdmin) {
             return baseQuery;
         }
         
         // Otherwise, they only see their own expenses.
         return query(baseQuery, where('userId', '==', user.uid));
 
-    }, [firestore, tenantId, user, isOwner, isReady]);
+    }, [firestore, tenantId, user, isOwnerOrAdmin, isReady]);
     const { data: expenses, isLoading: isLoadingExpenses, setData: setExpenses } = useCollection<Expense>(expensesQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
@@ -101,11 +95,11 @@ export default function ExpensesPage() {
     }, [firestore, tenantId, isReady]);
     const { data: subcategories, isLoading: isLoadingSubcategories } = useCollection<Subcategory>(subcategoriesQuery);
     
-    // Fetch all members of the tenant to map user IDs to names, only if the user is an owner.
+    // Fetch all members of the tenant to map user IDs to names, only if the user is an owner or admin.
     const membersQuery = useMemoFirebase(() => {
-        if (!isReady || !firestore || !tenantId || !isOwner) return null;
+        if (!isReady || !firestore || !tenantId || !isOwnerOrAdmin) return null;
         return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-    }, [firestore, tenantId, isOwner, isReady]);
+    }, [firestore, tenantId, isOwnerOrAdmin, isReady]);
     const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
 
 
@@ -202,7 +196,7 @@ export default function ExpensesPage() {
         return Array.from(yearsSet).sort((a,b) => b - a);
     }, [expenses]);
 
-    const isLoading = !isReady || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwner && isLoadingMembers);
+    const isLoading = !isReady || isLoadingExpenses || isLoadingCategories || isLoadingSubcategories || (isOwnerOrAdmin && isLoadingMembers);
 
     return (
         <>
@@ -264,7 +258,7 @@ export default function ExpensesPage() {
                                     </Select>
                                 </div>
                                 <DataTable 
-                                    columns={columns(isOwner)} 
+                                    columns={columns(isOwnerOrAdmin, user!.uid)} 
                                     data={tableData}
                                     categories={categories || []}
                                     onDelete={handleOpenDeleteDialog}

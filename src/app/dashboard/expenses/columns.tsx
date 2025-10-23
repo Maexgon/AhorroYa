@@ -26,7 +26,7 @@ const getInitials = (name: string = "") => {
 }
 
 
-export const columns = (isOwner: boolean): ColumnDef<ExpenseRow>[] => {
+export const columns = (isOwnerOrAdmin: boolean, currentUserId: string): ColumnDef<ExpenseRow>[] => {
   const baseColumns: ColumnDef<ExpenseRow>[] = [
     {
       id: "select",
@@ -151,11 +151,12 @@ export const columns = (isOwner: boolean): ColumnDef<ExpenseRow>[] => {
       cell: ({ row, table }) => {
         const expense = row.original
         const { onDelete } = table.options.meta as { onDelete: (id: string) => void };
+        const canEdit = expense.userId === currentUserId;
 
         return (
           <div className="flex items-center justify-center gap-2">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href={`/dashboard/expenses/edit/${expense.id}`}>
+            <Button variant="ghost" size="icon" asChild disabled={!canEdit}>
+              <Link href={canEdit ? `/dashboard/expenses/edit/${expense.id}` : '#'}>
                 <Pencil className="h-4 w-4" />
               </Link>
             </Button>
@@ -164,6 +165,7 @@ export const columns = (isOwner: boolean): ColumnDef<ExpenseRow>[] => {
               size="icon"
               className="text-destructive hover:text-destructive"
               onClick={() => onDelete(expense.id)}
+              disabled={!canEdit}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -173,7 +175,7 @@ export const columns = (isOwner: boolean): ColumnDef<ExpenseRow>[] => {
     },
   ];
 
-  if (isOwner) {
+  if (isOwnerOrAdmin) {
     baseColumns.splice(3, 0, {
       accessorKey: "userName",
       header: "Usuario",
