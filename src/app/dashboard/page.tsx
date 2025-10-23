@@ -1668,44 +1668,34 @@ export default function DashboardPageContainer() {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
   const [tenantData, setTenantData] = useState<Tenant | null>(null);
 
-  console.log("[DEBUG] Top of DashboardPageContainer. isUserLoading:", isUserLoading, "User:", user);
-
 
   const userDocRef = useMemoFirebase(() => {
-    console.log("[DEBUG] useMemoFirebase for userDocRef. User:", user, "Firestore:", !!firestore);
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-  console.log("[DEBUG] useDoc<UserType> hook. isUserDocLoading:", isUserDocLoading, "userData:", userData);
 
 
   const membershipsQuery = useMemoFirebase(() => {
-    console.log("[DEBUG] useMemoFirebase for membershipsQuery. User:", user, "Firestore:", !!firestore);
     if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
   }, [user, firestore]);
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
-  console.log("[DEBUG] useCollection<Membership> hook. isLoading:", isLoadingMemberships, "memberships:", memberships);
   
   const derivedTenantId = memberships?.[0]?.tenantId;
   const derivedUserRole = memberships?.[0]?.role as UserRole;
 
   const licenseQuery = useMemoFirebase(() => {
-    console.log("[DEBUG] useMemoFirebase for licenseQuery. derivedTenantId:", derivedTenantId, "Firestore:", !!firestore);
     if (!derivedTenantId || !firestore) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
   }, [derivedTenantId, firestore]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
-  console.log("[DEBUG] useCollection<License> hook. isLoading:", isLoadingLicenses, "licenses:", licenses);
 
   const tenantDocRef = useMemoFirebase(() => {
-    console.log("[DEBUG] useMemoFirebase for tenantDocRef. derivedTenantId:", derivedTenantId, "Firestore:", !!firestore);
     if (!derivedTenantId || !firestore) return null;
     return doc(firestore, 'tenants', derivedTenantId);
   }, [derivedTenantId, firestore]);
   const { data: ownerTenantData, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantDocRef);
-  console.log("[DEBUG] useDoc<Tenant> hook. isLoading:", isLoadingTenant, "ownerTenantData:", ownerTenantData);
 
   useEffect(() => {
     if (ownerTenantData) {
@@ -1714,30 +1704,28 @@ export default function DashboardPageContainer() {
   }, [ownerTenantData]);
 
   useEffect(() => {
-    const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses || isLoadingTenant || isUserDocLoading;
-    console.log("[DEBUG] Redirection useEffect. Overall isLoading:", isLoading);
-    console.log("[DEBUG] Values: user:", !!user, "userData:", !!userData, "isSuperAdmin:", userData?.isSuperAdmin);
-
-
-    if (isLoading) {
-      console.log("[DEBUG] Still loading data, skipping redirection logic.");
-      return;
-    }
+    const isAuthDataLoading = isUserLoading || isUserDocLoading;
+    if (isAuthDataLoading) return; // Wait for user auth and doc to be resolved first.
 
     if (!user) {
-      console.log("[DEBUG] No user found, redirecting to /login.");
-      router.replace('/login');
-      return;
-    }
-
-    if (userData && userData.isSuperAdmin === true) {
-        console.log("[DEBUG] Superadmin detected, redirecting to /superadmin.");
-        router.replace('/superadmin');
+        router.replace('/login');
         return;
     }
+    
+    // Once we have userData, we can check for superadmin.
+    if (userData) {
+        if (userData.isSuperAdmin === true) {
+            router.replace('/superadmin');
+            return;
+        }
+    }
+
+    // If not a superadmin, proceed with regular user logic.
+    const isTenantDataLoading = isLoadingMemberships || isLoadingLicenses || isLoadingTenant;
+
+    if (isTenantDataLoading) return; // Wait for the rest of the data.
 
     if (memberships && memberships.length > 0) {
-      console.log("[DEBUG] Memberships found. Setting tenant and role.");
       setTenantId(derivedTenantId);
       setUserRole(derivedUserRole);
       
@@ -1764,12 +1752,11 @@ export default function DashboardPageContainer() {
           setLicenseStatus('expired');
       }
       setIsReady(true);
-    } else if (!isLoadingMemberships) {
-        console.log("[DEBUG] No memberships found, redirecting to /subscribe.");
+    } else { // No memberships found after loading
         router.push('/subscribe');
     }
 
-  }, [user, isUserLoading, memberships, isLoadingMemberships, licenses, isLoadingLicenses, router, derivedTenantId, derivedUserRole, toast, isLoadingTenant, userData, isUserDocLoading]);
+  }, [user, isUserLoading, isUserDocLoading, userData, memberships, isLoadingMemberships, licenses, isLoadingLicenses, isLoadingTenant, router, derivedTenantId, derivedUserRole, toast]);
 
 
   const getInitials = (name: string = "") => {
