@@ -14,7 +14,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, writeBatch, doc, getDocs, Firestore, setDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -25,7 +24,7 @@ import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { processReceiptAction } from '../actions';
 import type { ProcessReceiptOutput } from '@/ai/flows/ocr-receipt-processing';
-import type { Category, Subcategory, User as UserType, Currency, Entity } from '@/lib/types';
+import type { Category, Subcategory, Membership, Currency, Entity } from '@/lib/types';
 import { logAuditEvent } from '../../audit/actions';
 import { Calculator } from '@/components/ui/calculator';
 
@@ -54,7 +53,7 @@ interface FilePreview {
 export default function NewExpensePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
@@ -92,19 +91,18 @@ export default function NewExpensePage() {
   const paymentMethod = watch('paymentMethod');
   const entityNameValue = watch('entityName');
 
-  // 1. Fetch user's data to get the first tenantId
-  const userDocRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-  const { data: userData } = useDoc<UserType>(userDocRef);
+  // --- Data Fetching ---
+  const membershipQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+  }, [firestore, user?.uid]);
+  const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQuery);
 
-  // Set tenantId only after we have the user document
   React.useEffect(() => {
-    if (userData?.tenantIds && userData.tenantIds.length > 0) {
-      setTenantId(userData.tenantIds[0]);
+    if (memberships && memberships.length > 0) {
+        setTenantId(memberships[0].tenantId);
     }
-  }, [userData]);
+  }, [memberships]);
 
 
   const categoriesQuery = useMemoFirebase(() => {
@@ -141,7 +139,7 @@ export default function NewExpensePage() {
     return JSON.stringify(data, null, 2);
   }, [categories, allSubcategories]);
   
-  const isReadyForUpload = !!user && !!tenantId && !isLoadingCategories && !!categoriesForAI;
+  const isReadyForUpload = !isUserLoading && !isLoadingMemberships && !!user && !!tenantId && !isLoadingCategories && !!categoriesForAI;
 
 
   React.useEffect(() => {
@@ -181,15 +179,15 @@ export default function NewExpensePage() {
   };
 
   const handleReceiptChange = async (files: FileList | null) => {
-      if (!files || files.length === 0 || !isReadyForUpload) {
-          if (!isReadyForUpload) {
-             toast({
-                variant: "destructive",
-                title: 'Datos no listos',
-                description: 'La información del tenant y las categorías aún se están cargando. Por favor, espera un momento y vuelve a intentarlo.',
-            });
-          }
-          return;
+      if (!files || files.length === 0) return;
+
+      if (!isReadyForUpload) {
+         toast({
+            variant: "destructive",
+            title: 'Datos no listos',
+            description: 'La información del tenant y las categorías aún se están cargando. Por favor, espera un momento y vuelve a intentarlo.',
+        });
+        return;
       }
 
       setIsProcessingReceipt(true);
@@ -227,6 +225,7 @@ export default function NewExpensePage() {
           setReceiptFiles(prev => [...prev, ...filePreviews]);
           const base64Contents = await Promise.all(base64Promises);
           
+          console.log('[ACTION] Calling processReceipt with input files:', base64Contents.length);
           const result = await processReceiptAction({
               receiptId: crypto.randomUUID(),
               base64Contents: base64Contents,
@@ -239,6 +238,7 @@ export default function NewExpensePage() {
           handleAIResult(result);
   
       } catch (error: any) {
+          console.error('[ACTION] Error in processReceiptAction:', error);
           toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
           setReceiptFiles([]);
       } finally {
@@ -526,7 +526,7 @@ export default function NewExpensePage() {
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full gap-4">
-                                <button type="button" onClick={() => {if (fileInputRef.current) {fileInputRef.current.removeAttribute('capture'); fileInputRef.current.click()}}} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50" disabled={!isReadyForUpload || isProcessingReceipt}>
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50" disabled={!isReadyForUpload || isProcessingReceipt}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         {!isReadyForUpload ? <Loader2 className="w-8 h-8 mb-2 text-muted-foreground animate-spin" /> : <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />}
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">{!isReadyForUpload ? "Cargando..." : "Subir archivo"}</span></p>
@@ -777,5 +777,3 @@ export default function NewExpensePage() {
     </div>
   );
 }
-
-    
