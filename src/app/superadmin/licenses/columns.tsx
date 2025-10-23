@@ -45,10 +45,10 @@ export const columns: ColumnDef<LicenseRow>[] = [
   },
   {
     accessorKey: "license.plan",
-    header: "Plan",
+    header: () => <div className="hidden md:table-cell">Plan</div>,
     cell: ({ row }) => {
         const plan = row.original.license?.plan || "N/A";
-        return <Badge variant="outline" className="capitalize">{plan}</Badge>;
+        return <div className="hidden md:table-cell"><Badge variant="outline" className="capitalize">{plan}</Badge></div>;
     },
     filterFn: (row, id, value) => {
         const plan = row.original.license?.plan || "";
@@ -76,23 +76,23 @@ export const columns: ColumnDef<LicenseRow>[] = [
   },
   {
     accessorKey: "userCount",
-    header: "Usuarios",
+    header: () => <div className="hidden md:table-cell text-center">Usuarios</div>,
     cell: ({ row }) => {
         const { license, userCount } = row.original;
         const usage = `${userCount} / ${license.maxUsers}`;
         const isFull = userCount >= license.maxUsers;
-        return <div className={cn("text-center", isFull && "font-bold text-destructive")}>{usage}</div>
+        return <div className={cn("hidden md:table-cell text-center", isFull && "font-bold text-destructive")}>{usage}</div>
     }
   },
   {
     accessorKey: "license.endDate",
-    header: "Vencimiento",
+    header: () => <div className="hidden md:table-cell">Vencimiento</div>,
      cell: ({ row }) => {
         const endDate = row.original.license?.endDate;
-        if(!endDate) return "N/A";
+        if(!endDate) return <div className="hidden md:table-cell">N/A</div>;
         const date = new Date(endDate);
         const isPast = date < new Date();
-        return <span className={cn(isPast && 'text-destructive')}>{date.toLocaleDateString('es-AR')}</span>;
+        return <div className={cn("hidden md:table-cell", isPast && 'text-destructive')}>{date.toLocaleDateString('es-AR')}</div>;
     }
   },
   {
@@ -113,6 +113,7 @@ export const columns: ColumnDef<LicenseRow>[] = [
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => meta?.onEdit(license)}>Editar Licencia</DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                     <Link href="/superadmin/tenants">Ver Tenant</Link>
                 </DropdownMenuItem>
