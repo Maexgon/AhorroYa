@@ -14,7 +14,7 @@ import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButto
 
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
+  
   return (
     <SidebarProvider>
       <Sidebar>
@@ -41,8 +41,8 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="#" passHref>
-                <SidebarMenuButton asChild>
+              <Link href="/superadmin/users" passHref>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/users')}>
                   <div>
                     <Users />
                     Usuarios
@@ -51,8 +51,8 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="#" passHref>
-                <SidebarMenuButton asChild>
+              <Link href="/superadmin/licenses" passHref>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/licenses')}>
                   <div>
                     <FileKey />
                     Licencias
@@ -99,7 +99,7 @@ export default function SuperAdminLayout({
 
     if (!user) {
       router.replace('/login');
-    } else if (userData && userData.isSuperAdmin !== true) {
+    } else if (userData && userData.isSuperadmin !== true) {
       router.replace('/dashboard');
     }
   }, [user, userData, isUserLoading, isUserDocLoading, router]);
@@ -113,7 +113,7 @@ export default function SuperAdminLayout({
     );
   }
 
-  if (!userData?.isSuperAdmin) {
+  if (!userData?.isSuperadmin) {
      return (
         <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
             <ShieldAlert className="h-16 w-16 text-destructive" />
