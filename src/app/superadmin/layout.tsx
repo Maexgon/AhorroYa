@@ -63,53 +63,53 @@ export default function SuperAdminLayout({
   return (
     <SidebarProvider>
       <div className="flex">
-          <Sidebar>
-              <SidebarContent className="flex flex-col gap-2 p-2">
-                  <SidebarMenu>
-                      <SidebarMenuItem>
-                          <Link href="/superadmin">
-                            <SidebarMenuButton isActive={pathname === '/superadmin'}>
-                                <LayoutDashboard />
-                                Dashboard
-                            </SidebarMenuButton>
-                          </Link>
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                          <Link href="/superadmin/tenants">
-                            <SidebarMenuButton isActive={pathname.startsWith('/superadmin/tenants')}>
-                                <Building />
-                                Tenants
-                            </SidebarMenuButton>
-                          </Link>
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                          <Link href="#">
-                            <SidebarMenuButton>
-                                <Users />
-                                Usuarios
-                            </SidebarMenuButton>
-                          </Link>
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                          <Link href="#">
-                            <SidebarMenuButton>
-                                <FileKey />
-                                Licencias
-                            </SidebarMenuButton>
-                          </Link>
-                      </SidebarMenuItem>
-                  </SidebarMenu>
-              </SidebarContent>
-          </Sidebar>
-          <SidebarInset>
-             <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <div className="container flex h-14 items-center">
-                    <SidebarTrigger />
-                    <h1 className="ml-4 font-headline text-xl font-bold">Panel de Superadministrador</h1>
-                </div>
-            </header>
-            {children}
-          </SidebarInset>
+        <Sidebar>
+          <SidebarContent className="flex flex-col gap-2 p-2">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Link href="/superadmin" passHref>
+                  <SidebarMenuButton asChild isActive={pathname === '/superadmin'}>
+                    <LayoutDashboard />
+                    Dashboard
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Link href="/superadmin/tenants" passHref>
+                  <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/tenants')}>
+                    <Building />
+                    Tenants
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Link href="#" passHref>
+                  <SidebarMenuButton asChild>
+                    <Users />
+                    Usuarios
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Link href="#" passHref>
+                  <SidebarMenuButton asChild>
+                    <FileKey />
+                    Licencias
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarContent>
+        </Sidebar>
+        <SidebarInset>
+           <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <div className="container flex h-14 items-center">
+                  <SidebarTrigger />
+                  <h1 className="ml-4 font-headline text-xl font-bold">Panel de Superadministrador</h1>
+              </div>
+          </header>
+          {children}
+        </SidebarInset>
       </div>
     </SidebarProvider>
     );
