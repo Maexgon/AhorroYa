@@ -96,7 +96,7 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
             {/* Tenant and Owner Details */}
             <section>
                 <h3 className="text-lg font-semibold mb-2">Información General</h3>
-                <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border p-4">
                     <DetailItem label="Nombre del Tenant" value={tenant?.name} />
                     <DetailItem label="ID del Tenant" value={<code className="text-xs">{tenant?.id}</code>} />
                     <DetailItem label="Propietario" value={owner?.displayName} />
@@ -109,7 +109,7 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
             {/* License Details */}
             <section>
                 <h3 className="text-lg font-semibold mb-2">Licencia</h3>
-                 <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border p-4">
                     <DetailItem label="Plan" value={license ? <Badge className="capitalize">{license.plan}</Badge> : 'N/A'} />
                     <DetailItem label="Estado" value={license ? <Badge variant={license.status === 'active' ? 'default' : 'destructive'} className={license.status === 'active' ? 'bg-green-600' : ''}>{license.status}</Badge> : 'N/A'} />
                     <DetailItem label="Fecha de Inicio" value={license ? new Date(license.startDate).toLocaleDateString('es-AR') : 'N/A'} />
