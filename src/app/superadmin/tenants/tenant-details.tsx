@@ -20,8 +20,9 @@ import { Badge } from '@/components/ui/badge';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, query, where, collection } from 'firebase/firestore';
 import type { Tenant, License, Membership, User, Expense, Income, Budget, Entity } from '@/lib/types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mail } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
 
 interface TenantDetailsDialogProps {
   tenantId: string;
@@ -153,20 +154,28 @@ export function TenantDetailsDialog({ tenantId, open, onOpenChange }: TenantDeta
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Nombre</TableHead>
-                                <TableHead>Email</TableHead>
+                                <TableHead className="hidden md:table-cell">Email</TableHead>
                                 <TableHead>Rol</TableHead>
+                                <TableHead className="text-right">Correo</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {members && members.length > 0 ? members.map(member => (
                                 <TableRow key={member.uid}>
                                     <TableCell className="font-medium">{member.displayName}</TableCell>
-                                    <TableCell>{member.email}</TableCell>
+                                    <TableCell className="hidden md:table-cell">{member.email}</TableCell>
                                     <TableCell><Badge variant={member.role === 'owner' ? 'secondary' : 'outline'} className="capitalize">{member.role}</Badge></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="icon" asChild>
+                                            <a href={`mailto:${member.email}`}>
+                                                <Mail className="h-4 w-4" />
+                                            </a>
+                                        </Button>
+                                    </TableCell>
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={3} className="h-24 text-center">No se encontraron miembros.</TableCell>
+                                    <TableCell colSpan={4} className="h-24 text-center">No se encontraron miembros.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
