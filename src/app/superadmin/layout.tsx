@@ -8,7 +8,8 @@ import { doc } from 'firebase/firestore';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset, SidebarHeader } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarInset, SidebarHeader } from '@/components/ui/sidebar';
+import SuperAdminFooter from './footer';
 
 
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
@@ -67,6 +68,7 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
       </Sidebar>
       <SidebarInset>
         {children}
+        <SuperAdminFooter />
       </SidebarInset>
     </SidebarProvider>
   );
