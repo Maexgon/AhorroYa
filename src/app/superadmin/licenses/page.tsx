@@ -9,7 +9,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 import { LicensesDataTable } from './data-table';
-import { columns } from './columns';
+import { columns, type TableMeta } from './columns';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,17 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getAuth, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { EditLicenseDialog } from './edit-license-dialog';
 
 export default function SuperAdminLicensesPage() {
     const { user } = useUser();
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
+    
+    const [selectedLicense, setSelectedLicense] = React.useState<License | null>(null);
+    const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+
 
     // The parent layout now ensures that 'user' is available here.
     // We can safely assume firestore and user exist.
@@ -53,6 +58,15 @@ export default function SuperAdminLicensesPage() {
 
     const isLoading = isLoadingLicenses || isLoadingTenants || isLoadingMemberships;
 
+    const handleEditLicense = (license: License) => {
+        setSelectedLicense(license);
+        setIsEditDialogOpen(true);
+    };
+
+    const tableMeta: TableMeta = {
+      onEdit: handleEditLicense,
+    };
+
     const getInitials = (name: string = "") => {
       const names = name.split(' ');
       if (names.length > 1) {
@@ -80,6 +94,7 @@ export default function SuperAdminLicensesPage() {
     };
   
   return (
+    <>
     <div className="flex min-h-screen flex-col bg-secondary/50">
         <header className="sticky top-0 z-30 w-full border-b bg-background">
           <div className="container flex h-14 items-center">
@@ -122,11 +137,22 @@ export default function SuperAdminLicensesPage() {
                         <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     </div>
                 ) : (
-                    <LicensesDataTable columns={columns} data={tableData} />
+                    <LicensesDataTable columns={columns} data={tableData} meta={tableMeta} />
                 )}
             </CardContent>
          </Card>
       </main>
     </div>
+     {selectedLicense && (
+        <EditLicenseDialog
+            license={selectedLicense}
+            open={isEditDialogOpen}
+            onOpenChange={setIsEditDialogOpen}
+            onSuccess={() => {
+                // Optionally re-fetch data or optimistically update UI
+            }}
+        />
+    )}
+    </>
   );
 }

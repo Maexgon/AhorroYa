@@ -22,6 +22,11 @@ export type LicenseRow = {
     userCount: number;
 }
 
+export type TableMeta = {
+    onEdit: (license: License) => void;
+}
+
+
 export const columns: ColumnDef<LicenseRow>[] = [
   {
     id: "tenant.name",
@@ -91,8 +96,9 @@ export const columns: ColumnDef<LicenseRow>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const { license } = row.original
+      const meta = table.options.meta as TableMeta | undefined;
  
       return (
         <div className="text-right">
@@ -105,7 +111,7 @@ export const columns: ColumnDef<LicenseRow>[] = [
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                <DropdownMenuItem>Editar Licencia</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => meta?.onEdit(license)}>Editar Licencia</DropdownMenuItem>
                 <DropdownMenuItem>Ver Tenant</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive">
