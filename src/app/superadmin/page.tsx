@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Building, FileKey, Loader2, LogOut } from 'lucide-react';
+import { Users, Building, FileKey, Loader2, LogOut, DollarSign } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import type { Tenant, User as UserType, License } from '@/lib/types';
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, LabelList } from 'recharts';
 
 
 export default function SuperAdminPage() {
@@ -49,6 +50,34 @@ export default function SuperAdminPage() {
     const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licensesQuery);
 
     const activeLicenses = licenses?.filter(l => l.status === 'active').length || 0;
+    
+    const monthlyIncomeData = React.useMemo(() => {
+        if (!licenses) return [];
+        const planCosts = {
+            personal: 25200 / 12,
+            familiar: 80640 / 12,
+            empresa: 176400 / 12,
+            demo: 0,
+        };
+
+        const incomeByPlan = licenses
+            .filter(l => l.status === 'active' && planCosts.hasOwnProperty(l.plan))
+            .reduce((acc, license) => {
+                const monthlyCost = planCosts[license.plan as keyof typeof planCosts];
+                acc[license.plan] = (acc[license.plan] || 0) + monthlyCost;
+                return acc;
+            }, {} as Record<string, number>);
+
+        return Object.entries(incomeByPlan).map(([name, total]) => ({
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            total,
+        })).sort((a,b) => b.total - a.total);
+
+    }, [licenses]);
+
+    const totalMonthlyIncome = monthlyIncomeData.reduce((acc, item) => acc + item.total, 0);
+    const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(value);
+
     const isLoading = isLoadingTenants || isLoadingUsers || isLoadingLicenses;
     
     const getInitials = (name: string = "") => {
@@ -114,37 +143,85 @@ export default function SuperAdminPage() {
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
             </div>
          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total de Tenants</CardTitle>
-                <Building className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                <div className="text-2xl font-bold">{tenants?.length || 0}</div>
-                <p className="text-xs text-muted-foreground">Total de clientes registrados.</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total de Usuarios</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                <div className="text-2xl font-bold">{users?.length || 0}</div>
-                <p className="text-xs text-muted-foreground">Usuarios en toda la plataforma.</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Licencias Activas</CardTitle>
-                <FileKey className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                <div className="text-2xl font-bold">{activeLicenses}</div>
-                <p className="text-xs text-muted-foreground">Del total de {licenses?.length || 0} licencias.</p>
-                </CardContent>
-            </Card>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total de Tenants</CardTitle>
+                    <Building className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{tenants?.length || 0}</div>
+                    <p className="text-xs text-muted-foreground">Total de clientes registrados.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total de Usuarios</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{users?.length || 0}</div>
+                    <p className="text-xs text-muted-foreground">Usuarios en toda la plataforma.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Licencias Activas</CardTitle>
+                    <FileKey className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{activeLicenses}</div>
+                    <p className="text-xs text-muted-foreground">Del total de {licenses?.length || 0} licencias.</p>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Ingresos Mensuales Estimados</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{formatCurrency(totalMonthlyIncome)}</div>
+                    <p className="text-xs text-muted-foreground">Basado en licencias activas.</p>
+                    </CardContent>
+                </Card>
+                <Card className="lg:col-span-4">
+                    <CardHeader>
+                        <CardTitle>Ingresos Estimados por Plan</CardTitle>
+                        <CardDescription>Desglose de ingresos mensuales por tipo de plan activo.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={350}>
+                            <BarChart data={monthlyIncomeData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
+                                <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                                <Tooltip
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                    <p className="font-bold">{label}</p>
+                                                    <p style={{ color: 'hsl(var(--chart-1))' }}>Ingreso: {formatCurrency(payload[0].value as number)}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Bar dataKey="total" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]}>
+                                    <LabelList
+                                        dataKey="total"
+                                        position="top"
+                                        offset={8}
+                                        className="fill-foreground"
+                                        fontSize={12}
+                                        formatter={(value: number) => formatCurrency(value)}
+                                    />
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
             </div>
          )}
       </main>
