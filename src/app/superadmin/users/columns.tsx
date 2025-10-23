@@ -31,6 +31,7 @@ const getInitials = (name: string = "") => {
 
 export const columns: ColumnDef<UserRow>[] = [
   {
+    id: "user.displayName", // Explicit ID for the filter to find
     accessorKey: "user.displayName",
     header: "Usuario",
      cell: ({ row }) => {
