@@ -550,7 +550,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="flex-1 flex items-center justify-center">
                        <ResponsiveContainer width="100%" height={250}>
                            <PieChart>
                                 <Pie
@@ -635,7 +635,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={200}>
+                        <ResponsiveContainer width="100%" height={250}>
                             <BarChart data={processedData.installmentsChartData.monthlyTotals}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} />
@@ -1854,5 +1854,3 @@ export default function DashboardPageContainer() {
     </TooltipProvider>
   );
 }
-
-    
