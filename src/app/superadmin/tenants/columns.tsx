@@ -36,17 +36,18 @@ export const columns: ColumnDef<TenantRow>[] = [
       return (
         <div>
           <div className="font-medium">{tenant.name}</div>
-          <div className="text-xs text-muted-foreground">{owner?.email || 'N/A'}</div>
+          <div className="text-xs text-muted-foreground md:hidden">{owner?.email || ''}</div>
+          <div className="text-xs text-muted-foreground hidden md:block">{owner?.email || 'N/A'}</div>
         </div>
       );
     },
   },
   {
     accessorKey: "license.plan",
-    header: "Plan",
+    header: ({ header }) => <div className="hidden md:table-cell">Plan</div>,
     cell: ({ row }) => {
         const plan = row.original.license?.plan || "N/A";
-        return <Badge variant="outline" className="capitalize">{plan}</Badge>;
+        return <div className="hidden md:table-cell"><Badge variant="outline" className="capitalize">{plan}</Badge></div>;
     },
     filterFn: (row, id, value) => {
         const plan = row.original.license?.plan || "";
@@ -55,16 +56,18 @@ export const columns: ColumnDef<TenantRow>[] = [
   },
   {
     accessorKey: "license.status",
-    header: "Estado Licencia",
+    header: () => <div className="hidden md:table-cell">Estado Licencia</div>,
      cell: ({ row }) => {
         const status = row.original.license?.status;
-        if (!status) return <Badge variant="destructive">Sin Licencia</Badge>;
+        if (!status) return <div className="hidden md:table-cell"><Badge variant="destructive">Sin Licencia</Badge></div>;
 
         const isActive = status === 'active';
         return (
-            <Badge variant={isActive ? 'default' : 'secondary'} className={cn(isActive && 'bg-green-600')}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-            </Badge>
+            <div className="hidden md:table-cell">
+                <Badge variant={isActive ? 'default' : 'secondary'} className={cn(isActive && 'bg-green-600')}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                </Badge>
+            </div>
         )
     },
      filterFn: (row, id, value) => {
@@ -74,21 +77,21 @@ export const columns: ColumnDef<TenantRow>[] = [
   },
   {
     accessorKey: "tenant.createdAt",
-    header: "Fecha Creación",
+    header: () => <div className="hidden md:table-cell">Fecha Creación</div>,
     cell: ({ row }) => {
         const date = new Date(row.original.tenant.createdAt);
-        return date.toLocaleDateString('es-AR');
+        return <div className="hidden md:table-cell">{date.toLocaleDateString('es-AR')}</div>;
     }
   },
   {
     accessorKey: "license.endDate",
-    header: "Vencimiento Licencia",
+    header: () => <div className="hidden md:table-cell">Vencimiento Licencia</div>,
      cell: ({ row }) => {
         const endDate = row.original.license?.endDate;
-        if(!endDate) return "N/A";
+        if(!endDate) return <div className="hidden md:table-cell">N/A</div>;
         const date = new Date(endDate);
         const isPast = date < new Date();
-        return <span className={cn(isPast && 'text-destructive')}>{date.toLocaleDateString('es-AR')}</span>;
+        return <div className={cn("hidden md:table-cell", isPast && 'text-destructive')}>{date.toLocaleDateString('es-AR')}</div>;
     }
   },
   {
