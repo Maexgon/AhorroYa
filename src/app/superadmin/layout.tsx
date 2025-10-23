@@ -2,7 +2,7 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
@@ -10,7 +10,6 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
-
 
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -96,25 +95,20 @@ export default function SuperAdminLayout({
   const isLoading = isUserLoading || isUserDocLoading;
 
   useEffect(() => {
-    // Wait until loading is fully finished before doing any checks
     if (isLoading) {
       return;
     }
 
-    // If loading is done and there's no user, redirect to login
     if (!user) {
       router.replace('/login');
       return;
     }
 
-    // If loading is done, and we have user data, check for superadmin status
     if (userData) {
-      if (userData.isSuperadmin !== true) {
+      if (userData.isSuperAdmin !== true) {
         router.replace('/dashboard');
       }
     } else {
-        // If userData is null after loading, means the doc doesn't exist or there was an error
-        // that useDoc handles. In any case, not a superadmin.
         router.replace('/dashboard');
     }
   }, [user, userData, isLoading, router]);
@@ -127,7 +121,7 @@ export default function SuperAdminLayout({
     );
   }
 
-  if (userData?.isSuperadmin !== true) {
+  if (userData?.isSuperAdmin !== true) {
      return (
         <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
             <ShieldAlert className="h-16 w-16 text-destructive" />
