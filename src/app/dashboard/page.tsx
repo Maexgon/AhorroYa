@@ -21,7 +21,7 @@ import { DateRange } from 'react-day-picker';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfQuarter, subQuarters, endOfQuarter, subYears, startOfSemester, endOfSemester, isAfter, endOfToday, differenceInDays, eachMonthOfInterval, lastDayOfMonth, addMonths, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area, PieChart, Pie, Sector } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Cell, LabelList, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, ComposedChart, Area, PieChart, Pie, Sector, AreaChart } from 'recharts';
 import { defaultCategories } from '@/lib/default-categories';
 import Link from 'next/link';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -67,6 +67,7 @@ const SAFE_DEFAULTS = {
       totalPending: 0,
       monthlyTotals: [],
     },
+    budgetVsExpensesTimeseries: [],
 };
 
 const CustomizedYAxisTick = (props: any) => {
@@ -448,6 +449,44 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
 
         return { totalPending, monthlyTotals: sortedMonthlyTotals };
     })();
+    
+    const budgetVsExpensesTimeseries = (() => {
+      let cumulativeBudget = 0;
+      let cumulativeExpenses = 0;
+      
+      const monthlyBudget = periodFilteredBudgets.reduce((acc, budget) => {
+        const monthKey = `${budget.year}-${budget.month}`;
+        acc[monthKey] = (acc[monthKey] || 0) + budget.amountARS;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      const totalDays = differenceInDays(toDateFilter, fromDateFilter) + 1;
+      
+      return interval.map((dateItem, index) => {
+        const dayExpenses = periodFilteredExpenses
+            .filter(e => format(new Date(e.date), 'yyyy-MM-dd') === format(dateItem, 'yyyy-MM-dd'))
+            .reduce((sum, e) => sum + e.amountARS, 0);
+            
+        cumulativeExpenses += dayExpenses;
+        
+        if(isMonthlyView) {
+            const dayOfMonth = dateItem.getDate();
+            const daysInMonth = differenceInDays(endOfMonth(dateItem), startOfMonth(dateItem)) + 1;
+            const monthKey = `${dateItem.getFullYear()}-${dateItem.getMonth() + 1}`;
+            const totalMonthBudget = monthlyBudget[monthKey] || 0;
+            cumulativeBudget = (totalMonthBudget / daysInMonth) * dayOfMonth;
+        } else {
+             const monthKey = `${dateItem.getFullYear()}-${dateItem.getMonth() + 1}`;
+             cumulativeBudget += monthlyBudget[monthKey] || 0;
+        }
+
+        return {
+          label: isMonthlyView ? format(dateItem, 'dd MMM', { locale: es }) : format(dateItem, 'MMM yy', { locale: es }),
+          Presupuesto: cumulativeBudget,
+          Gastos: cumulativeExpenses,
+        };
+      });
+    })();
 
     return { 
         barData, 
@@ -466,6 +505,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         totalBudgetForPeriod,
         totalIncomes,
         netBalance,
+        budgetVsExpensesTimeseries,
     };
   }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories, userRole]);
   
@@ -758,7 +798,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <CardTitle>Presupuesto vs. Gastos</CardTitle>
-                            <CardDescription>Comparativo por categoría en el período.</CardDescription>
+                            <CardDescription>Comparativo acumulado en el período.</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
                            <TooltipPrimitive>
@@ -768,13 +808,13 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Compara el monto presupuestado con el gastado para cada categoría.</p>
+                              <p>Compara el monto presupuestado acumulado con el gastado acumulado.</p>
                             </TooltipContent>
                           </TooltipPrimitive>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuesto_vs_gastos")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport(processedData.budgetVsExpensesTimeseries, "presupuesto_vs_gastos_timeseries")}>Exportar a Excel</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => toggleChartVisibility('budgetVsExpenses')}>Cerrar</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -782,9 +822,9 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={350}>
-                             <BarChart data={processedData.budgetChartData}>
+                            <AreaChart data={processedData.budgetVsExpensesTimeseries}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tick={<CustomizedYAxisTick />} interval={0} height={60} />
+                                <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
                                 <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                                 <Tooltip
                                     content={({ active, payload, label }) => {
@@ -792,7 +832,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                             return (
                                                 <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
                                                     <p className="font-bold">{label}</p>
-                                                    <p style={{ color: 'hsl(var(--chart-3))' }}>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                                    <p style={{ color: 'hsl(var(--chart-3))' }}>Presupuesto: {processedData.formatCurrency(payload[0].value as number)}</p>
                                                     <p style={{ color: 'hsl(var(--chart-2))' }}>Gastado: {processedData.formatCurrency(payload[1].value as number)}</p>
                                                 </div>
                                             );
@@ -801,9 +841,9 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                     }}
                                 />
                                 <Legend />
-                                <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="Gastado" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                            </BarChart>
+                                <Area type="monotone" dataKey="Presupuesto" stroke="hsl(var(--chart-3))" fill="hsl(var(--chart-3))" fillOpacity={0.3} />
+                                <Area type="monotone" dataKey="Gastos" stroke="hsl(var(--chart-2))" fill="hsl(var(--chart-2))" fillOpacity={0.3} />
+                            </AreaChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
