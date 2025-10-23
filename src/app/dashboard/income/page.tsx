@@ -5,12 +5,12 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft, Loader2, Calendar as CalendarIcon, Settings } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import type { Income, Membership, User as UserType } from '@/lib/types';
+import type { Income, Membership } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +41,7 @@ export default function IncomePage() {
     const [incomeToDelete, setIncomeToDelete] = React.useState<string | null>(null);
     const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth() + 1);
     const [currentYear, setCurrentYear] = React.useState(new Date().getFullYear());
+    const [isOwnerOrAdmin, setIsOwnerOrAdmin] = React.useState(false);
 
     const membershipQuery = useMemoFirebase(() => {
         if (!firestore || !user?.uid) return null;
@@ -50,27 +51,73 @@ export default function IncomePage() {
     const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQuery);
     const tenantId = memberships?.[0]?.tenantId;
 
+    React.useEffect(() => {
+        if (memberships && memberships.length > 0) {
+            const currentMembership = memberships[0];
+            setIsOwnerOrAdmin(currentMembership.role === 'owner' || currentMembership.role === 'admin');
+        }
+    }, [memberships]);
+
     const incomesQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) return null;
-        return query(
+        if (!firestore || !tenantId || !user) return null;
+
+        const baseQuery = query(
             collection(firestore, 'incomes'), 
             where('tenantId', '==', tenantId),
             where('deleted', '==', false)
         );
-    }, [firestore, tenantId]);
-    const { data: incomes, isLoading: isLoadingIncomes, setData: setIncomes } = useCollection<Income>(incomesQuery);
 
-    const filteredIncomes = React.useMemo(() => {
+        if (isOwnerOrAdmin) {
+            return baseQuery;
+        }
+        
+        return query(baseQuery, where('userId', '==', user.uid));
+
+    }, [firestore, tenantId, user, isOwnerOrAdmin]);
+
+    const { data: incomes, isLoading: isLoadingIncomes, setData: setIncomes } = useCollection<Income>(incomesQuery);
+    
+    const membersQuery = useMemoFirebase(() => {
+        if (!firestore || !tenantId || !isOwnerOrAdmin) return null;
+        return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
+    }, [firestore, tenantId, isOwnerOrAdmin]);
+    const { data: members, isLoading: isLoadingMembers } = useCollection<Membership>(membersQuery);
+
+    const tableData = React.useMemo(() => {
         if (!incomes) return [];
-        return incomes.filter(income => {
-            const incomeDate = new Date(income.date);
-            return incomeDate.getMonth() + 1 === currentMonth && incomeDate.getFullYear() === currentYear;
-        });
-    }, [incomes, currentMonth, currentYear]);
+        
+        const memberMap = new Map<string, string>();
+        if (members) {
+            members.forEach(m => {
+                if (m.uid && m.displayName) {
+                    memberMap.set(m.uid, m.displayName);
+                }
+            });
+        }
+        if (user && memberships) {
+             memberships.forEach(m => {
+                 if (m.uid && m.displayName && !memberMap.has(m.uid)) {
+                    memberMap.set(m.uid, m.displayName);
+                }
+            })
+        }
+
+        return incomes
+            .filter(income => {
+                const incomeDate = new Date(income.date);
+                return incomeDate.getMonth() + 1 === currentMonth && incomeDate.getFullYear() === currentYear;
+            })
+            .map(income => ({
+                ...income,
+                userName: memberMap.get(income.userId) || 'Usuario desconocido',
+            }));
+
+    }, [incomes, members, user, memberships, currentMonth, currentYear]);
+
 
     const totalIncome = React.useMemo(() => {
-        return filteredIncomes.reduce((acc, income) => acc + income.amountARS, 0);
-    }, [filteredIncomes]);
+        return tableData.reduce((acc, income) => acc + income.amountARS, 0);
+    }, [tableData]);
 
     const handleOpenDeleteDialog = (id: string) => {
         setIncomeToDelete(id);
@@ -107,7 +154,7 @@ export default function IncomePage() {
     
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS' }).format(amount);
     
-    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), []);
+    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency, isOwnerOrAdmin, user?.uid || ''), [isOwnerOrAdmin, user?.uid]);
     
     const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
     const uniqueYears = React.useMemo(() => {
@@ -116,7 +163,7 @@ export default function IncomePage() {
         return Array.from(yearsSet).sort((a,b) => b - a);
     }, [incomes]);
 
-    const isLoading = isAuthLoading || isLoadingMemberships || isLoadingIncomes;
+    const isLoading = isAuthLoading || isLoadingMemberships || isLoadingIncomes || (isOwnerOrAdmin && isLoadingMembers);
 
     if (isLoading) {
         return (
@@ -186,7 +233,7 @@ export default function IncomePage() {
                         </div>
                        <DataTable
                             columns={columns}
-                            data={filteredIncomes || []}
+                            data={tableData || []}
                             onDelete={handleOpenDeleteDialog}
                             categories={incomeCategories}
                        />

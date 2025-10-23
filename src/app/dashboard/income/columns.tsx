@@ -1,17 +1,36 @@
+
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, Pencil, Trash2 } from "lucide-react"
+import { ArrowUpDown, Pencil, Trash2, Ban } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import type { Income } from "@/lib/types"
 import Link from "next/link"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
+export type IncomeRow = Income & {
+    userName?: string;
+}
+
+const getInitials = (name: string = "") => {
+    const names = name.split(' ');
+    if (names.length > 1) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+}
+
 
 export const getColumns = (
     onDelete: (id: string) => void,
-    formatCurrency: (amount: number) => string
-): ColumnDef<Income>[] => [
+    formatCurrency: (amount: number) => string,
+    isOwnerOrAdmin: boolean,
+    currentUserId: string
+): ColumnDef<IncomeRow>[] => {
+    const baseColumns: ColumnDef<IncomeRow>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -96,26 +115,78 @@ export const getColumns = (
    {
     id: "actions",
     header: () => <div className="text-center">Acciones</div>,
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const income = row.original
+      const canEdit = income.userId === currentUserId;
+
+      const editButton = (
+        <Button variant="ghost" size="icon" asChild disabled={!canEdit}>
+          <Link href={canEdit ? `/dashboard/income/edit/${income.id}` : '#'}>
+            {canEdit ? <Pencil className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+          </Link>
+        </Button>
+      );
+
+      const deleteButton = (
+         <Button
+            variant="ghost"
+            size="icon"
+            className={canEdit ? "text-destructive hover:text-destructive" : ""}
+            onClick={() => canEdit ? onDelete(income.id) : undefined}
+            disabled={!canEdit}
+          >
+            {canEdit ? <Trash2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+          </Button>
+      );
 
       return (
         <div className="flex items-center justify-center gap-1">
-           <Button variant="ghost" size="icon" asChild>
-                <Link href={`/dashboard/income/edit/${income.id}`}>
-                    <Pencil className="h-4 w-4" />
-                </Link>
-           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:text-destructive"
-            onClick={() => onDelete(income.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            {!canEdit ? (
+              <Tooltip>
+                <TooltipTrigger asChild>{editButton}</TooltipTrigger>
+                <TooltipContent>
+                  <p>No puedes editar ingresos de otros usuarios.</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              editButton
+            )}
+
+            {!canEdit ? (
+              <Tooltip>
+                <TooltipTrigger asChild>{deleteButton}</TooltipTrigger>
+                <TooltipContent>
+                  <p>No puedes eliminar ingresos de otros usuarios.</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              deleteButton
+            )}
+          </TooltipProvider>
         </div>
       )
     },
   },
 ]
+
+    if (isOwnerOrAdmin) {
+        baseColumns.splice(3, 0, {
+            accessorKey: "userName",
+            header: "Usuario",
+            cell: ({ row }) => {
+                const userName = row.original.userName || "";
+                return (
+                    <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                            <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium hidden lg:table-cell">{userName}</span>
+                    </div>
+                )
+            },
+        });
+    }
+
+    return baseColumns;
+}
