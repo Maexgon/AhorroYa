@@ -1668,29 +1668,44 @@ export default function DashboardPageContainer() {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>('loading');
   const [tenantData, setTenantData] = useState<Tenant | null>(null);
 
-  const userDocRef = useMemoFirebase(() => (user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
+  console.log("[DEBUG] Top of DashboardPageContainer. isUserLoading:", isUserLoading, "User:", user);
+
+
+  const userDocRef = useMemoFirebase(() => {
+    console.log("[DEBUG] useMemoFirebase for userDocRef. User:", user, "Firestore:", !!firestore);
+    if (!user || !firestore) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
   const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+  console.log("[DEBUG] useDoc<UserType> hook. isUserDocLoading:", isUserDocLoading, "userData:", userData);
+
 
   const membershipsQuery = useMemoFirebase(() => {
+    console.log("[DEBUG] useMemoFirebase for membershipsQuery. User:", user, "Firestore:", !!firestore);
     if (!user || !firestore) return null;
     return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
   }, [user, firestore]);
   const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipsQuery);
+  console.log("[DEBUG] useCollection<Membership> hook. isLoading:", isLoadingMemberships, "memberships:", memberships);
   
   const derivedTenantId = memberships?.[0]?.tenantId;
   const derivedUserRole = memberships?.[0]?.role as UserRole;
 
   const licenseQuery = useMemoFirebase(() => {
+    console.log("[DEBUG] useMemoFirebase for licenseQuery. derivedTenantId:", derivedTenantId, "Firestore:", !!firestore);
     if (!derivedTenantId || !firestore) return null;
     return query(collection(firestore, 'licenses'), where('tenantId', '==', derivedTenantId));
   }, [derivedTenantId, firestore]);
   const { data: licenses, isLoading: isLoadingLicenses } = useCollection<License>(licenseQuery);
+  console.log("[DEBUG] useCollection<License> hook. isLoading:", isLoadingLicenses, "licenses:", licenses);
 
   const tenantDocRef = useMemoFirebase(() => {
+    console.log("[DEBUG] useMemoFirebase for tenantDocRef. derivedTenantId:", derivedTenantId, "Firestore:", !!firestore);
     if (!derivedTenantId || !firestore) return null;
     return doc(firestore, 'tenants', derivedTenantId);
   }, [derivedTenantId, firestore]);
   const { data: ownerTenantData, isLoading: isLoadingTenant } = useDoc<Tenant>(tenantDocRef);
+  console.log("[DEBUG] useDoc<Tenant> hook. isLoading:", isLoadingTenant, "ownerTenantData:", ownerTenantData);
 
   useEffect(() => {
     if (ownerTenantData) {
@@ -1700,19 +1715,29 @@ export default function DashboardPageContainer() {
 
   useEffect(() => {
     const isLoading = isUserLoading || isLoadingMemberships || isLoadingLicenses || isLoadingTenant || isUserDocLoading;
-    if (isLoading) return;
+    console.log("[DEBUG] Redirection useEffect. Overall isLoading:", isLoading);
+    console.log("[DEBUG] Values: user:", !!user, "userData:", !!userData, "isSuperAdmin:", userData?.isSuperAdmin);
+
+
+    if (isLoading) {
+      console.log("[DEBUG] Still loading data, skipping redirection logic.");
+      return;
+    }
 
     if (!user) {
+      console.log("[DEBUG] No user found, redirecting to /login.");
       router.replace('/login');
       return;
     }
 
-    if (userData?.isSuperAdmin) {
+    if (userData && userData.isSuperAdmin === true) {
+        console.log("[DEBUG] Superadmin detected, redirecting to /superadmin.");
         router.replace('/superadmin');
         return;
     }
 
     if (memberships && memberships.length > 0) {
+      console.log("[DEBUG] Memberships found. Setting tenant and role.");
       setTenantId(derivedTenantId);
       setUserRole(derivedUserRole);
       
@@ -1740,6 +1765,7 @@ export default function DashboardPageContainer() {
       }
       setIsReady(true);
     } else if (!isLoadingMemberships) {
+        console.log("[DEBUG] No memberships found, redirecting to /subscribe.");
         router.push('/subscribe');
     }
 
