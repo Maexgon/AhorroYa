@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 
-
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
@@ -97,26 +96,6 @@ export default function SuperAdminLayout({
 
   const isLoading = isUserLoading || isUserDocLoading;
 
-  useEffect(() => {
-    // Wait until all loading is finished before doing anything.
-    if (isLoading) {
-      return;
-    }
-
-    // If, after loading, there is no user, redirect to login.
-    if (!user) {
-      router.replace('/login');
-      return;
-    }
-    
-    // If, after loading, there is user data and they are not a superadmin, redirect.
-    if (userData?.isSuperAdmin !== true) {
-        router.replace('/dashboard');
-    }
-    
-  }, [user, userData, isLoading, router]);
-  
-  // While any data is loading, show a full-screen spinner.
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -125,17 +104,21 @@ export default function SuperAdminLayout({
     );
   }
 
-  // If loading is complete and user is a superadmin, render the UI.
   if (userData?.isSuperAdmin === true) {
     return <SuperAdminUI>{children}</SuperAdminUI>;
   }
-  
-  // If loading is complete but conditions aren't met (e.g., redirecting), show a placeholder.
+
+  // Fallback for any other case (not loading, but not a superadmin)
+  // This also handles the case where the user is not logged in after loading.
+  if (!isLoading) {
+      router.replace('/dashboard');
+  }
+
   return (
     <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
         <ShieldAlert className="h-16 w-16 text-destructive" />
         <h1 className="mt-4 font-headline text-2xl font-bold">Acceso Denegado</h1>
-        <p className="mt-2 text-muted-foreground">Verificando permisos y redirigiendo...</p>
+        <p className="mt-2 text-muted-foreground">No tienes permisos para acceder a esta página. Serás redirigido.</p>
     </div>
   );
 }
