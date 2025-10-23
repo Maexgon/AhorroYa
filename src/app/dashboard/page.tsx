@@ -525,9 +525,16 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             return (
                 <Card>
                     <CardHeader>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                         <div className="mb-4 sm:mb-0">
-                            <CardTitle>Distribución de Presupuestos</CardTitle>
+                            <TooltipPrimitive>
+                                <TooltipTrigger asChild>
+                                    <CardTitle className="cursor-help">Distribución de Presupuestos</CardTitle>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                <p>Muestra cómo se distribuye tu presupuesto total entre las diferentes categorías.</p>
+                                </TooltipContent>
+                            </TooltipPrimitive>
                             <CardDescription>Total: {processedData.formatCurrency(processedData.totalBudgetForPeriod)}</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
@@ -567,7 +574,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                         );
                                     }}
                                     outerRadius={80}
-                                    innerRadius={60}
+                                    innerRadius={50}
                                     paddingAngle={5}
                                     dataKey="Presupuestado"
                                     nameKey="name"
