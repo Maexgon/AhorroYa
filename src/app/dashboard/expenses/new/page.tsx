@@ -18,7 +18,7 @@ import { useDoc } from '@/firebase/firestore/use-doc';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Plus, Camera, CalculatorIcon } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, UploadCloud, X, File as FileIcon, Plus, Camera, CalculatorIcon, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -111,7 +111,7 @@ export default function NewExpensePage() {
     if (!firestore || !tenantId) return null;
     return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
-  const { data: categories } = useCollection<Category>(categoriesQuery);
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
   const subcategoriesQuery = useMemoFirebase(() => {
     if (!firestore || !tenantId) return null;
@@ -130,6 +130,19 @@ export default function NewExpensePage() {
     return query(collection(firestore, 'entities'), where('tenantId', '==', tenantId));
   }, [firestore, tenantId]);
   const { data: entities, isLoading: isLoadingEntities } = useCollection<Entity>(entitiesQuery);
+
+  const categoriesForAI = React.useMemo(() => {
+    if (!categories || !allSubcategories) return '';
+    const data = categories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      subcategories: allSubcategories.filter(sub => sub.categoryId === cat.id).map(sub => ({ id: sub.id, name: sub.name }))
+    }));
+    return JSON.stringify(data, null, 2);
+  }, [categories, allSubcategories]);
+  
+  const isReadyForUpload = !!user && !!tenantId && !isLoadingCategories && !!categoriesForAI;
+
 
   React.useEffect(() => {
     if (entityNameValue && entityNameValue.length >= 3 && entities) {
@@ -158,17 +171,6 @@ export default function NewExpensePage() {
     return allSubcategories.filter(s => s.categoryId === selectedCategoryId);
   }, [allSubcategories, selectedCategoryId]);
 
-  const categoriesForAI = React.useMemo(() => {
-    if (!categories || !allSubcategories) return '';
-    const data = categories.map(cat => ({
-      id: cat.id,
-      name: cat.name,
-      subcategories: allSubcategories.filter(sub => sub.categoryId === cat.id).map(sub => ({ id: sub.id, name: sub.name }))
-    }));
-    return JSON.stringify(data, null, 2);
-  }, [categories, allSubcategories]);
-
-
   const fileToBase64 = (file: File): Promise<string> => {
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -179,26 +181,21 @@ export default function NewExpensePage() {
   };
 
   const handleReceiptChange = async (files: FileList | null) => {
-      console.log('[DEBUG] handleReceiptChange triggered.');
-      if (!files || files.length === 0) {
+      if (!files || files.length === 0 || !isReadyForUpload) {
+          if (!isReadyForUpload) {
+             toast({
+                variant: "destructive",
+                title: 'Datos no listos',
+                description: 'La información del tenant y las categorías aún se están cargando. Por favor, espera un momento y vuelve a intentarlo.',
+            });
+          }
           return;
-      }
-  
-      if (!user || !tenantId || !categoriesForAI) {
-        console.log('[DEBUG] Pre-condition for processing not met:', { hasFiles: !!files && files.length > 0, hasUser: !!user, hasTenantId: !!tenantId, hasCategories: !!categoriesForAI });
-        toast({
-            variant: "destructive",
-            title: 'Datos no listos',
-            description: 'La información del tenant y las categorías aún se están cargando. Por favor, espera un momento y vuelve a intentarlo.',
-        });
-        return;
       }
 
       setIsProcessingReceipt(true);
       toast({ title: 'Procesando recibo(s)...' });
   
       try {
-          console.log('[DEBUG] Starting receipt processing...');
           const fileList = Array.from(files);
           const isPdfUpload = fileList.some(f => f.type === 'application/pdf');
           let filesToProcess: File[];
@@ -230,20 +227,18 @@ export default function NewExpensePage() {
           setReceiptFiles(prev => [...prev, ...filePreviews]);
           const base64Contents = await Promise.all(base64Promises);
           
-          console.log('[DEBUG] Calling processReceiptAction...');
           const result = await processReceiptAction({
               receiptId: crypto.randomUUID(),
               base64Contents: base64Contents,
-              tenantId,
-              userId: user.uid,
+              tenantId: tenantId!,
+              userId: user!.uid,
               fileType: isPdfUpload ? 'pdf' : 'image',
-              categories: categoriesForAI,
+              categories: categoriesForAI!,
           });
           
           handleAIResult(result);
   
       } catch (error: any) {
-          console.error("[DEBUG] Error processing receipt:", error);
           toast({ variant: 'destructive', title: 'Error Inesperado', description: error.message || 'No se pudo procesar el recibo.' });
           setReceiptFiles([]);
       } finally {
@@ -492,6 +487,7 @@ export default function NewExpensePage() {
                             multiple 
                             onChange={(e) => handleReceiptChange(e.target.files)} 
                             accept="image/png, image/jpeg, application/pdf" 
+                            disabled={!isReadyForUpload || isProcessingReceipt}
                         />
                         {isProcessingReceipt ? (
                              <div className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-primary/50 rounded-md bg-primary/10">
@@ -521,7 +517,7 @@ export default function NewExpensePage() {
                                     </div>
                                 ))}
                                 {receiptFiles.length > 0 && !receiptFiles.some(f => f.file.type === 'application/pdf') && (
-                                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center w-full aspect-square border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50" disabled={!isReadyForUpload || isProcessingReceipt}>
                                     <div className="flex flex-col items-center justify-center">
                                         <Plus className="w-8 h-8 text-muted-foreground" />
                                     </div>
@@ -530,22 +526,17 @@ export default function NewExpensePage() {
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full gap-4">
-                                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <button type="button" onClick={() => {if (fileInputRef.current) {fileInputRef.current.removeAttribute('capture'); fileInputRef.current.click()}}} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50" disabled={!isReadyForUpload || isProcessingReceipt}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
-                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Subir archivo</span></p>
+                                        {!isReadyForUpload ? <Loader2 className="w-8 h-8 mb-2 text-muted-foreground animate-spin" /> : <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />}
+                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">{!isReadyForUpload ? "Cargando..." : "Subir archivo"}</span></p>
                                         <p className="text-xs text-muted-foreground">Imágenes o PDF (MAX 5MB)</p>
                                     </div>
                                 </button>
-                                <button type="button" onClick={() => {
-                                  if (fileInputRef.current) {
-                                      fileInputRef.current.setAttribute('capture', 'environment');
-                                      fileInputRef.current.click();
-                                  }
-                                }} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <button type="button" onClick={() => {if (fileInputRef.current) {fileInputRef.current.setAttribute('capture', 'environment'); fileInputRef.current.click()}}} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50" disabled={!isReadyForUpload || isProcessingReceipt}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
-                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Tomar Foto</span></p>
+                                        {!isReadyForUpload ? <Loader2 className="w-8 h-8 mb-2 text-muted-foreground animate-spin" /> : <Camera className="w-8 h-8 mb-2 text-muted-foreground" />}
+                                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">{!isReadyForUpload ? "Cargando..." : "Tomar Foto"}</span></p>
                                         <p className="text-xs text-muted-foreground">Usa la cámara de tu dispositivo</p>
                                     </div>
                                 </button>
@@ -786,3 +777,5 @@ export default function NewExpensePage() {
     </div>
   );
 }
+
+    
