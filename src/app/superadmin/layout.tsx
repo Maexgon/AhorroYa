@@ -1,14 +1,14 @@
 'use client';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { useDoc } from '@/firebase/firestore/use-doc';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect } from 'react';
 import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Sidebar, SidebarContent, SidebarItem, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton } from '@/components/ui/sidebar';
 
 export default function SuperAdminLayout({
   children,
@@ -18,6 +18,7 @@ export default function SuperAdminLayout({
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+  const pathname = usePathname();
 
   const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -65,13 +66,13 @@ export default function SuperAdminLayout({
             <SidebarContent className="flex flex-col gap-2 p-2">
                  <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton href="/superadmin" isActive={true} tooltip="Dashboard">
+                        <SidebarMenuButton href="/superadmin" isActive={pathname === '/superadmin'} tooltip="Dashboard">
                             <LayoutDashboard />
                             Dashboard
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
-                         <SidebarMenuButton href="#" tooltip="Tenants">
+                         <SidebarMenuButton href="/superadmin/tenants" isActive={pathname.startsWith('/superadmin/tenants')} tooltip="Tenants">
                             <Building />
                             Tenants
                         </SidebarMenuButton>
