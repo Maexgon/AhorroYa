@@ -45,10 +45,10 @@ export const columns: ColumnDef<LicenseRow>[] = [
   },
   {
     accessorKey: "license.plan",
-    header: () => <div className="hidden md:table-cell">Plan</div>,
+    header: "Plan",
     cell: ({ row }) => {
         const plan = row.original.license?.plan || "N/A";
-        return <div className="hidden md:table-cell"><Badge variant="outline" className="capitalize">{plan}</Badge></div>;
+        return <div><Badge variant="outline" className="capitalize">{plan}</Badge></div>;
     },
     filterFn: (row, id, value) => {
         const plan = row.original.license?.plan || "";
