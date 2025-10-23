@@ -11,13 +11,11 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 
-function SuperAdminShell({ children }: { children: React.ReactNode }) {
+function SuperAdminUI({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  console.log('[DEBUG] SuperAdminShell rendering. Pathname:', pathname);
 
   return (
     <SidebarProvider>
-        {console.log('[DEBUG] Inside SidebarProvider')}
       <Sidebar>
         <SidebarContent className="flex flex-col gap-2 p-2">
           <SidebarMenu>
@@ -64,13 +62,12 @@ function SuperAdminShell({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
       </Sidebar>
-
       <SidebarInset>
-         <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="container flex h-14 items-center">
-                <SidebarTrigger />
-                <h1 className="ml-4 font-headline text-xl font-bold">Panel de Superadministrador</h1>
-            </div>
+        <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex h-14 items-center">
+            <SidebarTrigger />
+            <h1 className="ml-4 font-headline text-xl font-bold">Panel de Superadministrador</h1>
+          </div>
         </header>
         {children}
       </SidebarInset>
@@ -84,7 +81,6 @@ export default function SuperAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  console.log('[DEBUG] SuperAdminLayout rendering');
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
@@ -98,23 +94,17 @@ export default function SuperAdminLayout({
 
   useEffect(() => {
     const isLoading = isUserLoading || isUserDocLoading;
-    console.log('[DEBUG] SuperAdminLayout useEffect. isLoading:', isLoading);
     if (isLoading) return;
 
     if (!user) {
-      console.log('[DEBUG] No user found, redirecting to /login');
       router.replace('/login');
     } else if (userData && userData.isSuperAdmin !== true) {
-      console.log('[DEBUG] User is not superadmin, redirecting to /dashboard');
       router.replace('/dashboard');
-    } else {
-        console.log('[DEBUG] User is authenticated and is a superadmin.');
     }
   }, [user, userData, isUserLoading, isUserDocLoading, router]);
 
   const isLoading = isUserLoading || isUserDocLoading;
   if (isLoading) {
-    console.log('[DEBUG] SuperAdminLayout showing loading spinner.');
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -123,7 +113,6 @@ export default function SuperAdminLayout({
   }
 
   if (!userData?.isSuperAdmin) {
-    console.log('[DEBUG] SuperAdminLayout showing access denied message.');
      return (
         <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
             <ShieldAlert className="h-16 w-16 text-destructive" />
@@ -136,6 +125,5 @@ export default function SuperAdminLayout({
     );
   }
   
-  console.log('[DEBUG] SuperAdminLayout rendering SuperAdminShell.');
-  return <SuperAdminShell>{children}</SuperAdminShell>;
+  return <SuperAdminUI>{children}</SuperAdminUI>;
 }
