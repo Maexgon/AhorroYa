@@ -68,7 +68,7 @@ export default function SuperAdminLayout({
                   <SidebarMenu>
                       <SidebarMenuItem>
                           <Link href="/superadmin">
-                            <SidebarMenuButton isActive={pathname === '/superadmin'} tooltip="Dashboard">
+                            <SidebarMenuButton isActive={pathname === '/superadmin'}>
                                 <LayoutDashboard />
                                 Dashboard
                             </SidebarMenuButton>
@@ -76,7 +76,7 @@ export default function SuperAdminLayout({
                       </SidebarMenuItem>
                       <SidebarMenuItem>
                           <Link href="/superadmin/tenants">
-                            <SidebarMenuButton isActive={pathname.startsWith('/superadmin/tenants')} tooltip="Tenants">
+                            <SidebarMenuButton isActive={pathname.startsWith('/superadmin/tenants')}>
                                 <Building />
                                 Tenants
                             </SidebarMenuButton>
@@ -84,7 +84,7 @@ export default function SuperAdminLayout({
                       </SidebarMenuItem>
                       <SidebarMenuItem>
                           <Link href="#">
-                            <SidebarMenuButton tooltip="Users">
+                            <SidebarMenuButton>
                                 <Users />
                                 Usuarios
                             </SidebarMenuButton>
@@ -92,7 +92,7 @@ export default function SuperAdminLayout({
                       </SidebarMenuItem>
                       <SidebarMenuItem>
                           <Link href="#">
-                            <SidebarMenuButton tooltip="Licenses">
+                            <SidebarMenuButton>
                                 <FileKey />
                                 Licencias
                             </SidebarMenuButton>
