@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -24,7 +25,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 
 
 export default function SuperAdminPage() {
-    const { user } = useUser(); // Hook to get user data directly
+    const { user } = useUser();
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
@@ -88,7 +89,7 @@ export default function SuperAdminPage() {
                       <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                           <Avatar className="h-9 w-9">
                               <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "Usuario"} />
-                              <AvatarFallback>{getInitials(user?.displayName || "")}</AvatarFallback>
+                              <AvatarFallback className="bg-blue-950 text-white">{getInitials(user?.displayName || "")}</AvatarFallback>
                           </Avatar>
                       </Button>
                   </DropdownMenuTrigger>
