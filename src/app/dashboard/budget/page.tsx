@@ -32,7 +32,10 @@ import { Input } from '@/components/ui/input';
 
 
 export default function BudgetPage() {
+    console.log('--- Render BudgetPage ---');
     const { user, isUserLoading: isAuthLoading } = useUser();
+    console.log('1. Auth State:', { user: !!user, isAuthLoading });
+
     const firestore = useFirestore();
     const { toast } = useToast();
     const [isDeleting, setIsDeleting] = React.useState(false);
@@ -56,36 +59,47 @@ export default function BudgetPage() {
 
 
     const userDocRef = useMemoFirebase(() => {
-        if (!firestore || !user?.uid) return null;
+        if (!firestore || !user?.uid) {
+            console.log('2a. User doc ref NOT created. Missing firestore or user.uid');
+            return null;
+        };
+        console.log('2a. Creating userDocRef query for user:', user.uid);
         return doc(firestore, 'users', user.uid);
     }, [firestore, user]);
 
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
-
     const tenantId = userData?.tenantIds?.[0];
-
+    console.log('2b. User Data State:', { userData: !!userData, isUserDocLoading, tenantId });
 
     const budgetsQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) {
+            console.log('3a. Budgets query NOT created. Missing firestore or tenantId.');
             return null;
         }
+        console.log('3a. Budgets query CREATED with tenantId:', tenantId);
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
     const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets, error: budgetsError } = useCollection<Budget>(budgetsQuery);
+    console.log('4a. Budgets hook state:', { data: !!budgets, isLoading: isLoadingBudgets, error: budgetsError });
 
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) {
+            console.log('3b. Categories query NOT created. Missing firestore or tenantId.');
             return null;
         }
+        console.log('3b. Categories query CREATED with tenantId:', tenantId);
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
     }, [firestore, tenantId]);
     const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useCollection<Category>(categoriesQuery);
+    console.log('4b. Categories hook state:', { data: !!categories, isLoading: isLoadingCategories, error: categoriesError });
     
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) {
+            console.log('3c. Expenses query NOT created. Missing firestore or tenantId.');
             return null;
         }
+        console.log('3c. Expenses query CREATED with tenantId:', tenantId);
         return query(
             collection(firestore, 'expenses'), 
             where('tenantId', '==', tenantId),
@@ -93,6 +107,7 @@ export default function BudgetPage() {
         );
     }, [firestore, tenantId]);
     const { data: expenses, isLoading: isLoadingExpenses, error: expensesError } = useCollection<Expense>(expensesQuery);
+    console.log('4c. Expenses hook state:', { data: !!expenses, isLoading: isLoadingExpenses, error: expensesError });
 
 
     const budgetData = React.useMemo(() => {
@@ -302,6 +317,8 @@ export default function BudgetPage() {
     
     const isLoading = isAuthLoading || isUserDocLoading || isLoadingBudgets || isLoadingCategories || isLoadingExpenses;
 
+    console.log('5. Final Loading State:', { isLoading, isAuthLoading, isUserDocLoading, isLoadingBudgets, isLoadingCategories, isLoadingExpenses });
+
 
     if (isLoading) {
         return (
@@ -459,13 +476,3 @@ export default function BudgetPage() {
         </>
     );
 }
-
-    
-
-    
-
-    
-
-    
-
-    
