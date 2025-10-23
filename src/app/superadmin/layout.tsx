@@ -114,14 +114,12 @@ export default function SuperAdminLayout({
         setAuthStatus('authorized');
       } else {
         setAuthStatus('unauthorized');
-        router.replace('/dashboard');
       }
     } else {
       setAuthStatus('unauthorized');
-      router.replace('/login');
     }
     
-  }, [isUserLoading, isUserDocLoading, user, userData, router]);
+  }, [isUserLoading, isUserDocLoading, user, userData]);
 
 
   if (authStatus === 'loading') {
