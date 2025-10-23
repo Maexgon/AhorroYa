@@ -24,6 +24,7 @@ export type LicenseRow = {
 
 export const columns: ColumnDef<LicenseRow>[] = [
   {
+    id: "tenant.name",
     accessorKey: "tenant.name",
     header: "Tenant",
      cell: ({ row }) => {
