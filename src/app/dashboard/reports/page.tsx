@@ -78,31 +78,23 @@ export default function ReportsPage() {
     }, []);
 
     // --- Data Fetching ---
-    const userDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return doc(firestore, 'users', user.uid);
-    }, [firestore, user]);
-    const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+    const membershipQuery = useMemoFirebase(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid));
+    }, [firestore, user?.uid]);
 
-    const membershipQueryRef = useMemoFirebase(() => {
-        if (!firestore || !user || !userData?.tenantIds?.[0]) return null;
-        return query(collection(firestore, 'memberships'), where('uid', '==', user.uid), where('tenantId', '==', userData.tenantIds[0]));
-    }, [firestore, user, userData]);
-    const { data: userMemberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQueryRef);
-
+    const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQuery);
 
     React.useEffect(() => {
-        if (userData?.tenantIds && userData.tenantIds.length > 0) {
-            setTenantId(userData.tenantIds[0]);
+        if (memberships && memberships.length > 0) {
+            setTenantId(memberships[0].tenantId);
+            setUserRole(memberships[0].role as any);
         }
-        if (userMemberships && userMemberships.length > 0) {
-            setUserRole(userMemberships[0].role as any);
-        }
-    }, [userData, userMemberships]);
+    }, [memberships]);
     
     // Authorization check
     React.useEffect(() => {
-        const isDataReady = !isUserLoading && !isUserDocLoading && !isLoadingMemberships;
+        const isDataReady = !isUserLoading && !isLoadingMemberships;
         if(isDataReady && userRole && userRole !== 'owner') {
              toast({
                 variant: "destructive",
@@ -111,7 +103,7 @@ export default function ReportsPage() {
             });
             router.replace('/dashboard');
         }
-    }, [isUserLoading, isUserDocLoading, isLoadingMemberships, userRole, router, toast]);
+    }, [isUserLoading, isLoadingMemberships, userRole, router, toast]);
     
     const tenantDocRef = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
@@ -132,19 +124,19 @@ export default function ReportsPage() {
     const categoriesQuery = useMemoFirebase(() => {
         if (!tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId));
-    }, [tenantId]);
+    }, [firestore, tenantId]);
     const { data: expenseCategories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
     const entitiesQuery = useMemoFirebase(() => {
         if (!tenantId) return null;
         return query(collection(firestore, 'entities'), where('tenantId', '==', tenantId));
-    }, [tenantId]);
+    }, [firestore, tenantId]);
     const { data: entities, isLoading: isLoadingEntities } = useCollection<Entity>(entitiesQuery);
     
     const membersQuery = useMemoFirebase(() => {
         if (!tenantId) return null;
         return query(collection(firestore, 'memberships'), where('tenantId', '==', tenantId));
-    }, [tenantId]);
+    }, [firestore, tenantId]);
     const { data: members, isLoading: isLoadingMembers } = useCollection<UserType>(membersQuery);
     
     const entityOptions = React.useMemo<MultiSelectOption[]>(() => {
@@ -301,7 +293,7 @@ export default function ReportsPage() {
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
 
-    const isLoadingData = isUserLoading || isUserDocLoading || isLoadingCategories || isLoadingEntities || isLoadingExpenses || isLoadingIncomes || isLoadingBudgets || (tenantData?.type !== 'PERSONAL' && isLoadingMembers);
+    const isLoadingData = isUserLoading || isLoadingMemberships || isLoadingCategories || isLoadingEntities || isLoadingExpenses || isLoadingIncomes || isLoadingBudgets || (tenantData?.type !== 'PERSONAL' && isLoadingMembers);
 
     const handleToggleColumn = (option: MultiSelectOption) => {
         setSelectedColumns(prev => 
@@ -350,7 +342,7 @@ export default function ReportsPage() {
     const showExpenseTotal = lineKeys.some(k => k.type === 'expense');
     const showBudgetTotal = lineKeys.some(k => k.type === 'budget');
 
-     if (isUserLoading || isUserDocLoading || isLoadingMemberships) {
+     if (isUserLoading || isLoadingMemberships) {
         return (
              <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/50">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
