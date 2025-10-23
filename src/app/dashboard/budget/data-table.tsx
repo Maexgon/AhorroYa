@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -26,7 +25,6 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import Link from 'next/link';
 import { Pencil, Trash2 } from "lucide-react"
 import type { BudgetRow } from './columns';
@@ -35,6 +33,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 interface DataTableProps<TData extends BudgetRow, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  isOwner: boolean
   onDelete: (id: string) => void
   rowSelection: Record<string, boolean>
   setRowSelection: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
@@ -51,6 +50,7 @@ interface DataTableProps<TData extends BudgetRow, TValue> {
 export function DataTable<TData extends BudgetRow, TValue>({
   columns,
   data,
+  isOwner,
   onDelete,
   rowSelection,
   setRowSelection,
@@ -182,39 +182,43 @@ export function DataTable<TData extends BudgetRow, TValue>({
                             <Table>
                                 <TableHeader>
                                   <TableRow>
-                                    <TableHead className="w-10 py-2"></TableHead>
-                                    <TableHead className="w-[60%] text-xs py-2">Descripción</TableHead>
+                                    {isOwner && <TableHead className="w-10 py-2"></TableHead>}
+                                    <TableHead className="text-xs py-2">Descripción</TableHead>
                                     <TableHead className="text-right text-xs py-2">Monto</TableHead>
-                                    <TableHead className="text-right text-xs py-2 w-24">Acciones</TableHead>
+                                    {isOwner && <TableHead className="text-right text-xs py-2 w-24">Acciones</TableHead>}
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {row.original.details.map((detail: any) => (
                                       <TableRow key={detail.id} className="hover:bg-muted/60">
-                                          <TableCell className="py-1">
-                                            <Checkbox
-                                                checked={detailRowSelection[detail.id]}
-                                                onCheckedChange={(value) => {
-                                                  setDetailRowSelection(prev => ({
-                                                      ...prev,
-                                                      [detail.id]: !!value,
-                                                  }));
-                                                }}
-                                                aria-label={`Select detail ${detail.id}`}
-                                            />
-                                          </TableCell>
+                                          {isOwner && (
+                                            <TableCell className="py-1">
+                                              <Checkbox
+                                                  checked={detailRowSelection[detail.id]}
+                                                  onCheckedChange={(value) => {
+                                                    setDetailRowSelection(prev => ({
+                                                        ...prev,
+                                                        [detail.id]: !!value,
+                                                    }));
+                                                  }}
+                                                  aria-label={`Select detail ${detail.id}`}
+                                              />
+                                            </TableCell>
+                                          )}
                                           <TableCell className="text-xs text-muted-foreground py-1">{detail.description || 'Sin descripción'}</TableCell>
                                           <TableCell className="text-right font-mono text-xs py-1">{formatCurrency(detail.amountARS)}</TableCell>
-                                          <TableCell className="text-right py-1">
-                                              <Button variant="ghost" size="icon" asChild className="h-7 w-7">
-                                                  <Link href={`/dashboard/budget/edit/${detail.id}`}>
-                                                      <Pencil className="h-3 w-3"/>
-                                                  </Link>
-                                              </Button>
-                                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(detail.id)}>
-                                                  <Trash2 className="h-3 w-3"/>
-                                              </Button>
-                                          </TableCell>
+                                          {isOwner && (
+                                            <TableCell className="text-right py-1">
+                                                <Button variant="ghost" size="icon" asChild className="h-7 w-7">
+                                                    <Link href={`/dashboard/budget/edit/${detail.id}`}>
+                                                        <Pencil className="h-3 w-3"/>
+                                                    </Link>
+                                                </Button>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(detail.id)}>
+                                                    <Trash2 className="h-3 w-3"/>
+                                                </Button>
+                                            </TableCell>
+                                          )}
                                       </TableRow>
                                   ))}
                                 </TableBody>
@@ -236,10 +240,16 @@ export function DataTable<TData extends BudgetRow, TValue>({
         </Table>
       </div>
       <div className="flex items-center justify-between space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} de{" "}
-          {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
-        </div>
+        {isOwner ? (
+          <div className="flex-1 text-sm text-muted-foreground">
+            {table.getFilteredSelectedRowModel().rows.length} de{" "}
+            {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
+          </div>
+        ) : (
+          <div className="flex-1 text-sm text-muted-foreground">
+            {table.getFilteredRowModel().rows.length} presupuestos.
+          </div>
+        )}
         <div className="flex items-center space-x-2">
             <Select
             value={`${table.getState().pagination.pageSize}`}

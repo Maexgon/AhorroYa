@@ -1,16 +1,14 @@
-
 'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowLeft, Loader2, Repeat, Settings, Banknote } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, Repeat, Banknote } from 'lucide-react';
 import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, doc, deleteDoc, writeBatch, getDocs, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import type { Budget, Category, Expense, User as UserType, Membership } from '@/lib/types';
-import { useDoc } from '@/firebase/firestore/use-doc';
+import type { Budget, Category, Expense, Membership } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +18,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useToast } from '@/hooks/use-toast';
 import { getColumns, type BudgetRow } from './columns';
@@ -38,6 +35,7 @@ export default function BudgetPage() {
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
     const [budgetToDelete, setBudgetToDelete] = React.useState<string | null>(null);
+    const [userRole, setUserRole] = React.useState<'owner' | 'admin' | 'member' | null>(null);
     
     // State for duplication dialog
     const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = React.useState(false);
@@ -64,17 +62,25 @@ export default function BudgetPage() {
     const { data: memberships, isLoading: isLoadingMemberships } = useCollection<Membership>(membershipQuery);
     const tenantId = memberships?.[0]?.tenantId;
 
+    React.useEffect(() => {
+        if (memberships && memberships.length > 0) {
+            setUserRole(memberships[0].role as any);
+        }
+    }, [memberships]);
+
+    const isOwner = userRole === 'owner';
+
     const budgetsQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'budgets'), where('tenantId', '==', tenantId));
     }, [firestore, tenantId]);
-    const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets, error: budgetsError } = useCollection<Budget>(budgetsQuery);
+    const { data: budgets, isLoading: isLoadingBudgets, setData: setBudgets } = useCollection<Budget>(budgetsQuery);
 
     const categoriesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
         return query(collection(firestore, 'categories'), where('tenantId', '==', tenantId), orderBy('order'));
     }, [firestore, tenantId]);
-    const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useCollection<Category>(categoriesQuery);
+    const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
     
     const expensesQuery = useMemoFirebase(() => {
         if (!firestore || !tenantId) return null;
@@ -84,7 +90,7 @@ export default function BudgetPage() {
             where('deleted', '==', false)
         );
     }, [firestore, tenantId]);
-    const { data: expenses, isLoading: isLoadingExpenses, error: expensesError } = useCollection<Expense>(expensesQuery);
+    const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
 
     const budgetData = React.useMemo(() => {
@@ -281,7 +287,7 @@ export default function BudgetPage() {
     
     const formatCurrency = (amount: number) => new Intl.NumberFormat("es-AR", { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(amount);
     
-    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency), []);
+    const columns = React.useMemo(() => getColumns(handleOpenDeleteDialog, formatCurrency, isOwner), [isOwner]);
 
     const months = Array.from({length: 12}, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('es', { month: 'long' }) }));
     const uniqueYearsInBudgets = React.useMemo(() => {
@@ -341,76 +347,79 @@ export default function BudgetPage() {
                                 <CardTitle>Mis Presupuestos</CardTitle>
                                 <CardDescription>Administra tus presupuestos por categoría para cada mes.</CardDescription>
                             </div>
-                            <div className="flex gap-2">
-                                <AlertDialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="outline" disabled={selectedItemsForDuplication.length === 0}>
-                                            <Repeat className="mr-2 h-4 w-4" />
-                                            Duplicar ({selectedItemsForDuplication.length})
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Duplicar Presupuestos</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Selecciona el mes y año de inicio, y cuántas veces repetir la operación para los
-                                                <span className="font-bold"> {selectedItemsForDuplication.length}</span> items seleccionados.
-                                                Los items que ya existan en un mes de destino no se duplicarán.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <div className="grid grid-cols-2 gap-4 py-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="target-month">Mes de Inicio</Label>
-                                                <Select value={String(targetMonth)} onValueChange={(val) => setTargetMonth(Number(val))}>
-                                                    <SelectTrigger id="target-month"><SelectValue/></SelectTrigger>
-                                                    <SelectContent>
-                                                        {months.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.name.charAt(0).toUpperCase() + m.name.slice(1)}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
+                            {isOwner && (
+                                <div className="flex gap-2">
+                                    <AlertDialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="outline" disabled={selectedItemsForDuplication.length === 0}>
+                                                <Repeat className="mr-2 h-4 w-4" />
+                                                Duplicar ({selectedItemsForDuplication.length})
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Duplicar Presupuestos</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Selecciona el mes y año de inicio, y cuántas veces repetir la operación para los
+                                                    <span className="font-bold"> {selectedItemsForDuplication.length}</span> items seleccionados.
+                                                    Los items que ya existan en un mes de destino no se duplicarán.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <div className="grid grid-cols-2 gap-4 py-4">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="target-month">Mes de Inicio</Label>
+                                                    <Select value={String(targetMonth)} onValueChange={(val) => setTargetMonth(Number(val))}>
+                                                        <SelectTrigger id="target-month"><SelectValue/></SelectTrigger>
+                                                        <SelectContent>
+                                                            {months.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.name.charAt(0).toUpperCase() + m.name.slice(1)}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="target-year">Año de Inicio</Label>
+                                                    <Select value={String(targetYear)} onValueChange={(val) => setTargetYear(Number(val))}>
+                                                        <SelectTrigger id="target-year"><SelectValue/></SelectTrigger>
+                                                        <SelectContent>
+                                                            {uniqueYearsInBudgets.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2 col-span-2">
+                                                    <Label htmlFor="repeat-count">Repetir (veces)</Label>
+                                                    <Input 
+                                                        id="repeat-count" 
+                                                        type="number" 
+                                                        min="0"
+                                                        value={repeatCount}
+                                                        onChange={(e) => setRepeatCount(Number(e.target.value))}
+                                                        placeholder="0"
+                                                    />
+                                                    <p className="text-xs text-muted-foreground">0 = solo el mes de inicio, 1 = mes de inicio + 1 mes extra.</p>
+                                                </div>
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="target-year">Año de Inicio</Label>
-                                                <Select value={String(targetYear)} onValueChange={(val) => setTargetYear(Number(val))}>
-                                                    <SelectTrigger id="target-year"><SelectValue/></SelectTrigger>
-                                                    <SelectContent>
-                                                        {uniqueYearsInBudgets.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2 col-span-2">
-                                                <Label htmlFor="repeat-count">Repetir (veces)</Label>
-                                                <Input 
-                                                    id="repeat-count" 
-                                                    type="number" 
-                                                    min="0"
-                                                    value={repeatCount}
-                                                    onChange={(e) => setRepeatCount(Number(e.target.value))}
-                                                    placeholder="0"
-                                                />
-                                                <p className="text-xs text-muted-foreground">0 = solo el mes de inicio, 1 = mes de inicio + 1 mes extra.</p>
-                                            </div>
-                                        </div>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                            <AlertDialogAction onClick={handleDuplicateBudgets} disabled={isDuplicating}>
-                                                {isDuplicating ? 'Duplicando...' : 'Confirmar Duplicación'}
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                                <Button asChild>
-                                    <Link href="/dashboard/budget/new">
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Crear Presupuesto
-                                    </Link>
-                                </Button>
-                            </div>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleDuplicateBudgets} disabled={isDuplicating}>
+                                                    {isDuplicating ? 'Duplicando...' : 'Confirmar Duplicación'}
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                    <Button asChild>
+                                        <Link href="/dashboard/budget/new">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Crear Presupuesto
+                                        </Link>
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </CardHeader>
                     <CardContent>
                        <DataTable
                             columns={columns}
                             data={filteredBudgetData}
+                            isOwner={isOwner}
                             onDelete={handleOpenDeleteDialog}
                             rowSelection={rowSelection}
                             setRowSelection={setRowSelection}
