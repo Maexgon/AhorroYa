@@ -66,7 +66,7 @@ export default function SuperAdminUsersPage() {
 
     const tableMeta: TableMeta = {
       onViewDetails: handleViewDetails,
-    }
+    };
 
 
     const getInitials = (name: string = "") => {
