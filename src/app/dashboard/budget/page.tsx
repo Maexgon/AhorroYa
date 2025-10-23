@@ -58,11 +58,11 @@ export default function BudgetPage() {
     const userDocRef = useMemoFirebase(() => {
         if (!firestore || !user?.uid) return null;
         return doc(firestore, 'users', user.uid);
-    }, [firestore, user?.uid]);
+    }, [firestore, user]);
 
     const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
 
-    const tenantId = userData?.data?.tenantIds?.[0];
+    const tenantId = userData?.tenantIds?.[0];
 
 
     const budgetsQuery = useMemoFirebase(() => {
@@ -459,6 +459,8 @@ export default function BudgetPage() {
         </>
     );
 }
+
+    
 
     
 
