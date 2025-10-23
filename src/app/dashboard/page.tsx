@@ -201,7 +201,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
     { id: 'budgetDistribution', name: 'Distribución de Presupuestos', visible: true },
     { id: 'pendingInstallments', name: 'Cuotas Pendientes', visible: true },
     { id: 'monthlyFlow', name: 'Flujo de Caja Mensual', visible: true },
-    { id: 'cumulativeBalance', name: 'Balance Acumulado', visible: true },
+    { id: 'budgetVsExpenses', name: 'Presupuesto vs. Gastos', visible: true },
     { id: 'expenseAnalysis', name: 'Análisis de Gastos', visible: true },
     { id: 'budgets', name: 'Presupuestos', visible: true },
   ]);
@@ -542,9 +542,9 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         case 'budgetDistribution':
             return (
                 <Card className="h-full">
-                     <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
+                    <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                         <div className="mb-4 sm:mb-0">
-                            <TooltipPrimitive>
+                           <TooltipPrimitive>
                                 <TooltipTrigger asChild>
                                     <CardTitle className="cursor-help">Distribución de Presupuestos</CardTitle>
                                 </TooltipTrigger>
@@ -752,13 +752,13 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                     </CardContent>
                 </Card>
             );
-        case 'cumulativeBalance':
+        case 'budgetVsExpenses':
             return (
                 <Card className="h-full">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
-                            <CardTitle>Balance Acumulado</CardTitle>
-                            <CardDescription>Evolución de ingresos y gastos acumulados en el período.</CardDescription>
+                            <CardTitle>Presupuesto vs. Gastos</CardTitle>
+                            <CardDescription>Comparativo por categoría en el período.</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
                            <TooltipPrimitive>
@@ -768,35 +768,32 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Muestra cómo tu balance (ingresos menos gastos) ha evolucionado a lo largo del tiempo seleccionado.</p>
+                              <p>Compara el monto presupuestado con el gastado para cada categoría.</p>
                             </TooltipContent>
                           </TooltipPrimitive>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleExport(processedData.cumulativeChartData, "balance_acumulado")}>Exportar a Excel</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleChartVisibility('cumulativeBalance')}>Cerrar</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport(processedData.budgetChartData, "presupuesto_vs_gastos")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleChartVisibility('budgetVsExpenses')}>Cerrar</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={350}>
-                            <ComposedChart data={processedData.cumulativeChartData}>
+                             <BarChart data={processedData.budgetChartData}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
+                                <XAxis dataKey="name" stroke="hsl(var(--foreground))" fontSize={12} tick={<CustomizedYAxisTick />} interval={0} height={60} />
                                 <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
                                 <Tooltip
                                     content={({ active, payload, label }) => {
                                         if (active && payload && payload.length) {
-                                            const income = payload.find(p => p.dataKey === 'ingresosAcumulados')?.value || 0;
-                                            const expense = payload.find(p => p.dataKey === 'gastosAcumulados')?.value || 0;
                                             return (
                                                 <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
                                                     <p className="font-bold">{label}</p>
-                                                    <p style={{ color: 'hsl(var(--chart-3))' }}>Ing. Acum: {processedData.formatCurrency(income as number)}</p>
-                                                    <p style={{ color: 'hsl(var(--destructive))' }}>Gas. Acum: {processedData.formatCurrency(expense as number)}</p>
-                                                    <p className="font-semibold mt-1">Balance: {processedData.formatCurrency(income as number - (expense as number))}</p>
+                                                    <p style={{ color: 'hsl(var(--chart-3))' }}>Presupuestado: {processedData.formatCurrency(payload[0].value as number)}</p>
+                                                    <p style={{ color: 'hsl(var(--chart-2))' }}>Gastado: {processedData.formatCurrency(payload[1].value as number)}</p>
                                                 </div>
                                             );
                                         }
@@ -804,11 +801,9 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                     }}
                                 />
                                 <Legend />
-                                <Area type="monotone" dataKey="gastosAcumulados" fill="hsl(var(--destructive) / 0.1)" stroke="transparent" name="Gastos Acumulados" />
-                                <Area type="monotone" dataKey="ingresosAcumulados" fill="hsl(var(--chart-3) / 0.1)" stroke="transparent" name="Ingresos Acumulados" />
-                                <Line type="monotone" dataKey="ingresosAcumulados" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} name="Ingresos Acum." />
-                                <Line type="monotone" dataKey="gastosAcumulados" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} name="Gastos Acum." />
-                            </ComposedChart>
+                                <Bar dataKey="Presupuestado" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="Gastado" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                            </BarChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
