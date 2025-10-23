@@ -180,11 +180,20 @@ export default function NewExpensePage() {
 
   const handleReceiptChange = async (files: FileList | null) => {
       console.log('[DEBUG] handleReceiptChange triggered.');
-      if (!files || files.length === 0 || !user || !tenantId || !categoriesForAI) {
-          console.log('[DEBUG] Pre-condition for processing not met:', { hasFiles: !!files && files.length > 0, hasUser: !!user, hasTenantId: !!tenantId, hasCategories: !!categoriesForAI });
+      if (!files || files.length === 0) {
           return;
       }
   
+      if (!user || !tenantId || !categoriesForAI) {
+        console.log('[DEBUG] Pre-condition for processing not met:', { hasFiles: !!files && files.length > 0, hasUser: !!user, hasTenantId: !!tenantId, hasCategories: !!categoriesForAI });
+        toast({
+            variant: "destructive",
+            title: 'Datos no listos',
+            description: 'La información del tenant y las categorías aún se están cargando. Por favor, espera un momento y vuelve a intentarlo.',
+        });
+        return;
+      }
+
       setIsProcessingReceipt(true);
       toast({ title: 'Procesando recibo(s)...' });
   
@@ -521,12 +530,7 @@ export default function NewExpensePage() {
                             </div>
                         ) : (
                             <div className="flex items-center justify-center w-full gap-4">
-                                <button type="button" onClick={() => {
-                                    if(fileInputRef.current) {
-                                        fileInputRef.current.removeAttribute('capture');
-                                        fileInputRef.current.click();
-                                    }
-                                }} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-secondary/50">
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Subir archivo</span></p>

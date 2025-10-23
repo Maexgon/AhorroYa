@@ -31,7 +31,7 @@ export async function processReceiptAction(
         return { success: true, data: result };
 
     } catch (e: any) {
-        console.error('Error in processReceiptAction:', e);
+        console.error('[ACTION] Error in processReceiptAction:', e);
         return { success: false, error: e.message || 'An unknown error occurred during receipt processing.' };
     }
 }
