@@ -2,7 +2,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, Pencil, Trash2 } from "lucide-react"
+import { ArrowUpDown, Pencil, Trash2, Ban } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
@@ -157,7 +157,7 @@ export const columns = (isOwnerOrAdmin: boolean, currentUserId: string): ColumnD
         const editButton = (
           <Button variant="ghost" size="icon" asChild disabled={!canEdit}>
             <Link href={canEdit ? `/dashboard/expenses/edit/${expense.id}` : '#'}>
-              <Pencil className="h-4 w-4" />
+              {canEdit ? <Pencil className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
             </Link>
           </Button>
         );
@@ -166,11 +166,11 @@ export const columns = (isOwnerOrAdmin: boolean, currentUserId: string): ColumnD
            <Button
               variant="ghost"
               size="icon"
-              className="text-destructive hover:text-destructive"
-              onClick={() => onDelete(expense.id)}
+              className={canEdit ? "text-destructive hover:text-destructive" : ""}
+              onClick={() => canEdit ? onDelete(expense.id) : undefined}
               disabled={!canEdit}
             >
-              <Trash2 className="h-4 w-4" />
+              {canEdit ? <Trash2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
             </Button>
         );
 
