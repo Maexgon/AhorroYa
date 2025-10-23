@@ -12,7 +12,6 @@ import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButto
 
 
 function SuperAdminUI({ children }: { children: React.ReactNode }) {
-  console.log("SuperAdminUI: Rendering UI component.");
   const pathname = usePathname();
 
   return (
@@ -79,19 +78,15 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
   );
 }
 
-let renderCount = 0;
 
 export default function SuperAdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  renderCount++;
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
-
-  console.log(`SuperAdminLayout Render #${renderCount}: isUserLoading: ${isUserLoading}, user: ${user?.uid || 'null'}`);
 
   const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -103,37 +98,26 @@ export default function SuperAdminLayout({
   const isLoading = isUserLoading || isUserDocLoading;
 
   useEffect(() => {
-    console.log(`SuperAdminLayout useEffect triggered. isLoading: ${isLoading}`);
-
+    // Wait until all loading is finished before doing anything.
     if (isLoading) {
-      console.log("--> Still loading, returning from useEffect.");
       return;
     }
 
+    // If, after loading, there is no user, redirect to login.
     if (!user) {
-      console.log("--> No user found, redirecting to /login.");
       router.replace('/login');
       return;
     }
     
-    console.log(`--> Data loaded. user: ${user?.uid}, userData: ${JSON.stringify(userData)}`);
-
-    if (userData) {
-      if (userData.isSuperAdmin === true) {
-        console.log("--> User is SuperAdmin. Access granted.");
-      } else {
-        console.log(`--> User is NOT a superadmin (isSuperAdmin: ${userData.isSuperAdmin}), redirecting to /dashboard.`);
-        router.replace('/dashboard');
-      }
-    } else {
-        // This case is critical. If userData is null after loading, it means the user doc doesn't exist or there was an error.
-        console.log("--> User is authenticated but userData is not available. Redirecting to /dashboard");
+    // If, after loading, there is user data and they are not a superadmin, redirect.
+    if (userData?.isSuperAdmin !== true) {
         router.replace('/dashboard');
     }
-  }, [user, userData, isLoading, router, isUserLoading, isUserDocLoading]);
+    
+  }, [user, userData, isLoading, router]);
   
+  // While any data is loading, show a full-screen spinner.
   if (isLoading) {
-    console.log("Render: Showing main loading indicator.");
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -141,17 +125,17 @@ export default function SuperAdminLayout({
     );
   }
 
-  if (userData?.isSuperAdmin !== true) {
-    console.log(`Render: Showing 'Access Denied' screen. userData.isSuperAdmin: ${userData?.isSuperAdmin}`);
-     return (
-        <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
-            <ShieldAlert className="h-16 w-16 text-destructive" />
-            <h1 className="mt-4 font-headline text-2xl font-bold">Acceso Denegado</h1>
-            <p className="mt-2 text-muted-foreground">Verificando permisos...</p>
-        </div>
-    );
+  // If loading is complete and user is a superadmin, render the UI.
+  if (userData?.isSuperAdmin === true) {
+    return <SuperAdminUI>{children}</SuperAdminUI>;
   }
   
-  console.log("Render: Showing SuperAdminUI.");
-  return <SuperAdminUI>{children}</SuperAdminUI>;
+  // If loading is complete but conditions aren't met (e.g., redirecting), show a placeholder.
+  return (
+    <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
+        <ShieldAlert className="h-16 w-16 text-destructive" />
+        <h1 className="mt-4 font-headline text-2xl font-bold">Acceso Denegado</h1>
+        <p className="mt-2 text-muted-foreground">Verificando permisos y redirigiendo...</p>
+    </div>
+  );
 }
