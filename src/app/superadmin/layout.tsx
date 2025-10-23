@@ -23,36 +23,42 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <Link href="/superadmin" passHref>
                 <SidebarMenuButton asChild isActive={pathname === '/superadmin'}>
-                  <a>
+                  <div>
                     <LayoutDashboard />
                     Dashboard
-                  </a>
+                  </div>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <Link href="/superadmin/tenants" passHref>
                 <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/tenants')}>
-                  <Link href="/superadmin/tenants">
+                  <div>
                     <Building />
                     Tenants
-                  </Link>
+                  </div>
                 </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <Link href="#" passHref>
                 <SidebarMenuButton asChild>
-                  <Link href="#">
+                  <div>
                     <Users />
                     Usuarios
-                  </Link>
+                  </div>
                 </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <Link href="#" passHref>
                 <SidebarMenuButton asChild>
-                  <Link href="#">
+                  <div>
                     <FileKey />
                     Licencias
-                  </Link>
+                  </div>
                 </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
