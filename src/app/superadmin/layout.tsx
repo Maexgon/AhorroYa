@@ -2,16 +2,49 @@
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState, useRef } from 'react';
-import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey } from 'lucide-react';
+import { getAuth, signOut } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, ShieldAlert, LayoutDashboard, Users, Building, FileKey, LogOut, User as UserIcon } from 'lucide-react';
 import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-function SuperAdminUI({ children }: { children: React.ReactNode }) {
+
+function SuperAdminUI({ children, user }: { children: React.ReactNode; user: UserType | null }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const getInitials = (name: string = "") => {
+    const names = name.split(' ');
+    if (names.length > 1) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }
+
+  const handleLogout = async () => {
+    const auth = getAuth();
+    try {
+      await signOut(auth);
+      toast({
+        title: 'Sesión cerrada',
+        description: 'Has cerrado sesión correctamente.',
+      });
+      router.push('/login');
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo cerrar la sesión. Inténtalo de nuevo.',
+      });
+    }
+  };
   
   return (
     <SidebarProvider>
@@ -69,6 +102,29 @@ function SuperAdminUI({ children }: { children: React.ReactNode }) {
           <div className="container flex h-14 items-center">
             <SidebarTrigger />
             <h1 className="ml-4 font-headline text-xl font-bold">Panel de Superadministrador</h1>
+            <div className="ml-auto flex items-center space-x-4">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                          <Avatar className="h-9 w-9">
+                              <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "Usuario"} />
+                              <AvatarFallback>{getInitials(user?.displayName || "")}</AvatarFallback>
+                          </Avatar>
+                      </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>
+                          <p className="font-medium">{user?.displayName}</p>
+                          <p className="text-xs text-muted-foreground">{user?.email}</p>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleLogout}>
+                          <LogOut className="mr-2 h-4 w-4" />
+                          <span>Cerrar Sesión</span>
+                      </DropdownMenuItem>
+                  </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </header>
         {children}
@@ -114,10 +170,10 @@ export default function SuperAdminLayout({
     } else if (!user) {
       setAuthStatus('unauthorized');
       router.replace('/login');
+    } else {
+        setAuthStatus('unauthorized');
+        router.replace('/dashboard');
     }
-    // If user exists but userData doesn't, it could be a race condition that resolves,
-    // or a genuine issue. For now, we let it stay loading until both are resolved.
-    // This prevents premature redirection.
     
   }, [isUserLoading, isUserDocLoading, user, userData, router]);
 
@@ -131,11 +187,9 @@ export default function SuperAdminLayout({
   }
 
   if (authStatus === 'authorized') {
-    return <SuperAdminUI>{children}</SuperAdminUI>;
+    return <SuperAdminUI user={user}>{children}</SuperAdminUI>;
   }
 
-  // For 'unauthorized' or any other case, show access denied.
-  // The useEffect will handle the redirection.
   return (
     <div className="flex h-screen flex-col items-center justify-center bg-secondary/50 p-4 text-center">
         <ShieldAlert className="h-16 w-16 text-destructive" />
