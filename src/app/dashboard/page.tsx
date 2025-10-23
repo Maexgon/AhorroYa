@@ -12,7 +12,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import type { WithId } from '@/firebase/firestore/use-collection';
 import type { Tenant, License, Membership, Category, User as UserType, Expense, Budget, Income, Subcategory } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert, View, FileBarChart, Info, BarChart2 } from 'lucide-react';
+import { MoreVertical, UserPlus, FileText, Repeat, XCircle, Plus, Calendar as CalendarIcon, Utensils, ShoppingCart, Bus, Film, Home, Sparkles, Loader2, Settings, ArrowLeft, Banknote, GripVertical, User as UserIcon, LogOut, ShieldAlert, View, FileBarChart, Info, BarChart2, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -294,6 +294,8 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
     
     const totalExpenses = periodFilteredExpenses.reduce((acc, expense) => acc + expense.amountARS, 0);
     const totalExpensesUSD = periodFilteredExpenses.reduce((acc, expense) => acc + (expense.amountUSD || 0), 0);
+    const totalIncomes = periodFilteredIncomes.reduce((acc, income) => acc + income.amountARS, 0);
+    const netBalance = totalIncomes - totalExpenses;
 
     const periodFilteredBudgets = allBudgets.filter(b => {
         const budgetDate = new Date(b.year, b.month - 1);
@@ -366,6 +368,7 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         ? eachDayOfInterval({ start: fromDateFilter, end: toDateFilter })
         : eachMonthOfInterval({ start: fromDateFilter, end: toDateFilter });
 
+    let cumulativeBalance = 0;
     const periodData = interval.map(dateItem => {
         const key = isMonthlyView ? format(dateItem, 'yyyy-MM-dd') : format(dateItem, 'yyyy-MM');
         const label = isMonthlyView ? format(dateItem, 'dd MMM', { locale: es }) : format(dateItem, 'MMM yy', { locale: es });
@@ -379,15 +382,17 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             const d = new Date(inc.date);
             return isMonthlyView ? format(d, 'yyyy-MM-dd') === key : (d.getMonth() === dateItem.getMonth() && d.getFullYear() === dateItem.getFullYear());
         }).reduce((sum, inc) => sum + inc.amountARS, 0);
+        
+        cumulativeBalance += (incomesForPeriod - expensesForPeriod);
 
         return {
           label: label,
           ingresos: incomesForPeriod,
           gastos: expensesForPeriod,
+          saldoAcumulado: cumulativeBalance,
         };
     });
     
-
     let cumulativeIncomes = 0;
     let cumulativeExpenses = 0;
     const cumulativeChartData = periodData.map(data => {
@@ -448,6 +453,8 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         isOwner: userRole === 'owner',
         installmentsChartData,
         totalBudgetForPeriod,
+        totalIncomes,
+        netBalance,
     };
   }, [isLoading, allExpenses, allBudgets, categories, date, selectedCategoryId, allIncomes, activeTenant, user, allSubcategories, userRole]);
   
@@ -556,21 +563,6 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
                                     cx="50%"
                                     cy="50%"
                                     labelLine={false}
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
-                                        const RADIAN = Math.PI / 180;
-                                        if (typeof innerRadius !== 'number' || typeof outerRadius !== 'number' || typeof cx !== 'number' || typeof cy !== 'number' || typeof midAngle !== 'number' || typeof percent !== 'number') {
-                                            return null;
-                                        }
-                                        const radius = outerRadius + 15;
-                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-                                        return (
-                                            <text x={x} y={y} fill="hsl(var(--foreground))" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
-                                                {`${(percent * 100).toFixed(0)}%`}
-                                            </text>
-                                        );
-                                    }}
                                     outerRadius={80}
                                     innerRadius={50}
                                     paddingAngle={5}
@@ -669,57 +661,84 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
         case 'monthlyFlow':
              return (
                 <Card className="h-full">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Resumen de Flujo de Caja</CardTitle>
-                        <CardDescription>Ingresos vs. Gastos del período.</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <TooltipPrimitive>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
-                            <Info className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Compara el total de tus ingresos y gastos para cada mes o día en el período seleccionado.</p>
-                        </TooltipContent>
-                      </TooltipPrimitive>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleExport(processedData.periodData, "flujo_de_caja_mensual")}>Exportar a Excel</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleChartVisibility('monthlyFlow')}>Cerrar</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <ResponsiveContainer width="100%" height={350}>
-                    <BarChart data={processedData.periodData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
-                        <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                        <Tooltip
-                            content={({ active, payload, label }) => {
-                                if (active && payload && payload.length) {
-                                    return (
-                                        <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
-                                            <p className="font-bold">{label}</p>
-                                            <p style={{ color: 'hsl(var(--chart-3))' }}>Ingresos: {processedData.formatCurrency(payload[0].value as number)}</p>
-                                            <p style={{ color: 'hsl(var(--destructive))' }}>Gastos: {processedData.formatCurrency(payload[1].value as number)}</p>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            }}
-                        />
-                        <Legend />
-                        <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="gastos" name="Gastos" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                    </ResponsiveContainer>
-                </CardContent>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Resumen de Flujo de Caja</CardTitle>
+                            <CardDescription>Ingresos vs. Gastos del período.</CardDescription>
+                        </div>
+                         <div className="flex items-center gap-2">
+                           <TooltipPrimitive>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.preventDefault()}>
+                                <Info className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Compara el total de tus ingresos y gastos para cada mes o día en el período seleccionado.</p>
+                            </TooltipContent>
+                          </TooltipPrimitive>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleExport(processedData.periodData, "flujo_de_caja_mensual")}>Exportar a Excel</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleChartVisibility('monthlyFlow')}>Cerrar</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 text-center">
+                            <Card className="p-4">
+                                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                    <TrendingUp className="h-4 w-4 text-green-500" />
+                                    Ingresos
+                                </div>
+                                <p className="text-2xl font-bold font-mono">{processedData.formatCurrency(processedData.totalIncomes)}</p>
+                            </Card>
+                             <Card className="p-4">
+                                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                    <TrendingDown className="h-4 w-4 text-red-500" />
+                                    Gastos
+                                </div>
+                                <p className="text-2xl font-bold font-mono">{processedData.formatCurrency(processedData.totalExpenses)}</p>
+                            </Card>
+                             <Card className={cn("p-4", processedData.netBalance >= 0 ? "border-green-500/50" : "border-red-500/50")}>
+                                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                    <DollarSign className="h-4 w-4" />
+                                    Balance
+                                </div>
+                                <p className={cn("text-2xl font-bold font-mono", processedData.netBalance >= 0 ? "text-green-600" : "text-red-600")}>
+                                    {processedData.formatCurrency(processedData.netBalance)}
+                                </p>
+                            </Card>
+                        </div>
+                        <ResponsiveContainer width="100%" height={250}>
+                        <ComposedChart data={processedData.periodData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="label" stroke="hsl(var(--foreground))" fontSize={12} />
+                            <YAxis stroke="hsl(var(--foreground))" fontSize={12} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <Tooltip
+                                content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                        return (
+                                            <div className="rounded-lg border bg-card p-2 shadow-sm text-sm">
+                                                <p className="font-bold">{label}</p>
+                                                {payload.map(p => (
+                                                  <p key={p.name} style={{ color: p.color }}>{p.name}: {processedData.formatCurrency(p.value as number)}</p>
+                                                ))}
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
+                            />
+                            <Legend />
+                            <Bar dataKey="ingresos" name="Ingresos" fill="#ef4444" radius={[4, 4, 0, 0]}/>
+                            <Bar dataKey="gastos" name="Gastos" fill="#22c55e" radius={[4, 4, 0, 0]}/>
+                            <Line type="monotone" dataKey="saldoAcumulado" name="Saldo Acumulado" stroke="#facc15" strokeWidth={3} dot={false} />
+                        </ComposedChart>
+                        </ResponsiveContainer>
+                    </CardContent>
                 </Card>
             );
         case 'cumulativeBalance':
@@ -1773,7 +1792,33 @@ export default function DashboardPageContainer() {
           <div className="container flex h-16 items-center">
             <div  className="mr-6 flex items-center space-x-2">
               <AhorroYaLogo className="h-10 w-10 text-primary" />
-              <span className="font-bold font-headline text-foreground">Ahorro Ya</span>
+              <span className="hidden font-bold font-headline text-foreground md:inline-block">Ahorro Ya</span>
+            </div>
+             <div className="hidden md:flex flex-wrap items-center gap-2">
+                <Button asChild variant="ghost" size="sm" className="hidden lg:inline-flex">
+                    <Link href="/dashboard/budget">
+                       Presupuestos
+                    </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm" className="hidden lg:inline-flex">
+                    <Link href="/dashboard/expenses">
+                       Gastos
+                    </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm" className="hidden lg:inline-flex">
+                    <Link href="/dashboard/income">
+                        Ingresos
+                    </Link>
+                </Button>
+                 {userRole === 'owner' && (
+                    <>
+                        <Button asChild variant="ghost" size="sm" className="hidden lg:inline-flex">
+                            <Link href="/dashboard/reports">
+                                Reportes
+                            </Link>
+                        </Button>
+                    </>
+                )}
             </div>
             <div className="flex flex-1 items-center justify-end space-x-4">
               {licenses && licenses.length > 0 && userRole === 'owner' && (
