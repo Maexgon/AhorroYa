@@ -62,45 +62,54 @@ export default function SuperAdminLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex">
+      <div className="flex min-h-screen">
         <Sidebar>
           <SidebarContent className="flex flex-col gap-2 p-2">
             <SidebarMenu>
               <SidebarMenuItem>
                 <Link href="/superadmin" passHref>
                   <SidebarMenuButton asChild isActive={pathname === '/superadmin'}>
-                    <LayoutDashboard />
-                    Dashboard
+                    <a>
+                      <LayoutDashboard />
+                      Dashboard
+                    </a>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <Link href="/superadmin/tenants" passHref>
                   <SidebarMenuButton asChild isActive={pathname.startsWith('/superadmin/tenants')}>
-                    <Building />
-                    Tenants
+                    <a>
+                      <Building />
+                      Tenants
+                    </a>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <Link href="#" passHref>
                   <SidebarMenuButton asChild>
-                    <Users />
-                    Usuarios
+                    <a>
+                      <Users />
+                      Usuarios
+                    </a>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <Link href="#" passHref>
                   <SidebarMenuButton asChild>
-                    <FileKey />
-                    Licencias
+                    <a>
+                      <FileKey />
+                      Licencias
+                    </a>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarContent>
         </Sidebar>
+
         <SidebarInset>
            <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <div className="container flex h-14 items-center">
