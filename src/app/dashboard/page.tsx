@@ -1148,8 +1148,8 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
             ))}
         </div>
         
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-            <Card className={cn("lg:col-span-4", userRole !== 'owner' && 'lg:col-span-7')}>
+        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-7">
+            <Card className="lg:col-span-7">
             <CardHeader className="flex flex-row items-center justify-between pb-4">
               <div>
                 <CardTitle>Gastos Recientes</CardTitle>
@@ -1186,32 +1186,6 @@ function AdminOrOwnerDashboard({ tenantId, licenseStatus, userRole, tenantData }
               </Table>
             </CardContent>
           </Card>
-          {userRole === 'owner' && (
-            <Card className="lg:col-span-3 flex flex-col">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-accent" />
-                  Recomendaciones IA
-                </CardTitle>
-                <CardDescription>Sugerencias para optimizar tus finanzas.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 flex items-center justify-center">
-                  <div className="text-center p-4 border-2 border-dashed rounded-lg">
-                      <p className="text-sm text-muted-foreground">
-                          Notamos que tus gastos en <span className="text-foreground font-medium">"Vida y Entretenimiento"</span> superaron el presupuesto.
-                      </p>
-                      <p className="mt-2 font-medium text-foreground">
-                          Considera reasignar <span className="text-primary">{processedData.formatCurrency(2500)}</span> de esta categoría a <span className="text-primary">"Ahorros"</span> el próximo mes.
-                      </p>
-                  </div>
-              </CardContent>
-              <CardFooter>
-                  <Button variant="outline" className="w-full" asChild>
-                      <Link href="/dashboard/insights">Ver más insights</Link>
-                  </Button>
-              </CardFooter>
-            </Card>
-          )}
         </div>
 
 
