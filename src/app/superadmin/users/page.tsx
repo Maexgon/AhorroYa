@@ -77,7 +77,7 @@ export default function SuperAdminUsersPage() {
     <div className="flex min-h-screen flex-col bg-secondary/50">
         <header className="sticky top-0 z-30 w-full border-b bg-background">
           <div className="container flex h-14 items-center">
-            <SidebarTrigger />
+            <SidebarTrigger className="md:flex hidden" />
             <h1 className="font-headline text-xl font-bold ml-2">Usuarios</h1>
             <div className="ml-auto flex items-center space-x-4">
                 <DropdownMenu>
