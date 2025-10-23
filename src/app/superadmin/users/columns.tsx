@@ -55,6 +55,7 @@ export const columns: ColumnDef<MembershipRow>[] = [
     },
   },
   {
+    id: "tenant.name",
     accessorKey: "tenant.name",
     header: "Tenant",
      cell: ({ row }) => {
