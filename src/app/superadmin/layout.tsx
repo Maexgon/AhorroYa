@@ -9,7 +9,7 @@ import type { User as UserType } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarMenuItem, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 
 export default function SuperAdminLayout({
   children,
@@ -94,9 +94,15 @@ export default function SuperAdminLayout({
                   </SidebarMenu>
               </SidebarContent>
           </Sidebar>
-          <main className="flex-1">
-              {children}
-          </main>
+          <SidebarInset>
+             <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div className="container flex h-14 items-center">
+                    <SidebarTrigger />
+                    <h1 className="ml-4 font-headline text-xl font-bold">Panel de Superadministrador</h1>
+                </div>
+            </header>
+            {children}
+          </SidebarInset>
       </div>
     </SidebarProvider>
     );
